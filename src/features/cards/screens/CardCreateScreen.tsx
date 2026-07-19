@@ -46,7 +46,7 @@ export function CardCreateScreen() {
       return [];
     }
     const set = new Set(selectedAssetIds);
-    return data.photos.filter((p) => set.has(p.assetId));
+    return data.allPhotos.filter((p) => set.has(p.assetId));
   }, [data, selectedAssetIds]);
 
   const mapSnapshot: MapSnapshot = useMemo(() => {
@@ -124,7 +124,7 @@ export function CardCreateScreen() {
     );
   }
 
-  if (data.photos.length === 0) {
+  if (data.allPhotos.length === 0) {
     return (
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
         <ScreenHeader title={strings.cards.createTitle} />
@@ -214,7 +214,7 @@ export function CardCreateScreen() {
               ) : null}
             </View>
             <PhotoSelectGrid
-              photos={data.photos}
+              photos={data.allPhotos}
               selectedAssetIds={selectedAssetIds}
               onToggle={onToggle}
             />

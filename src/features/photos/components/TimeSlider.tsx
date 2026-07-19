@@ -28,20 +28,37 @@ function clamp01(n: number): number {
  */
 export function TimeSlider({ bounds, value, onChange }: TimeSliderProps) {
   const [trackWidth, setTrackWidth] = useState(1);
+  /** Live thumb position while dragging; null when the parent value governs. */
+  const [dragRatio, setDragRatio] = useState<number | null>(null);
   const startMs = Date.parse(bounds.from);
   const endMs = Date.parse(bounds.to);
   const span = Math.max(1, endMs - startMs);
-  const ratio = clamp01((Date.parse(value.to) - startMs) / span);
+  const valueRatio = clamp01((Date.parse(value.to) - startMs) / span);
+  const ratio = dragRatio ?? valueRatio;
 
-  const updateFromX = (locationX: number) => {
-    const nextRatio = clamp01(locationX / trackWidth);
+  const ratioFromX = (locationX: number) => clamp01(locationX / trackWidth);
+
+  const emit = (nextRatio: number) => {
     onChange({
       from: bounds.from,
       to: new Date(startMs + nextRatio * span).toISOString(),
     });
   };
 
-  const label = new Date(value.to).toLocaleString('ko-KR', {
+  /** Drag: keep the thumb on local state so it never lags the parent render. */
+  const drag = (locationX: number) => {
+    const next = ratioFromX(locationX);
+    setDragRatio(next);
+    emit(next);
+  };
+
+  const release = (locationX: number) => {
+    emit(ratioFromX(locationX));
+    setDragRatio(null);
+  };
+
+  // Follows the thumb, not the parent value, so it can't lag mid-drag.
+  const label = new Date(startMs + ratio * span).toLocaleString('ko-KR', {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -61,12 +78,18 @@ export function TimeSlider({ bounds, value, onChange }: TimeSliderProps) {
         }}
         onStartShouldSetResponder={() => true}
         onMoveShouldSetResponder={() => true}
-        onResponderGrant={(e) => updateFromX(e.nativeEvent.locationX)}
-        onResponderMove={(e) => updateFromX(e.nativeEvent.locationX)}
+        // Keep the gesture once it starts — the map's pan/pinch sits behind.
+        onResponderTerminationRequest={() => false}
+        onResponderGrant={(e) => drag(e.nativeEvent.locationX)}
+        onResponderMove={(e) => drag(e.nativeEvent.locationX)}
+        onResponderRelease={(e) => release(e.nativeEvent.locationX)}
+        onResponderTerminate={() => setDragRatio(null)}
       >
-        <View style={styles.trackBg} />
-        <View style={[styles.fill, { width: `${ratio * 100}%` }]} />
-        <View style={[styles.thumb, { left: `${ratio * 100}%` }]} />
+        {/* pointerEvents none keeps the track itself the touch target, so
+            locationX stays track-relative instead of flipping to a child. */}
+        <View style={styles.trackBg} pointerEvents="none" />
+        <View style={[styles.fill, { width: `${ratio * 100}%` }]} pointerEvents="none" />
+        <View style={[styles.thumb, { left: `${ratio * 100}%` }]} pointerEvents="none" />
       </View>
     </View>
   );

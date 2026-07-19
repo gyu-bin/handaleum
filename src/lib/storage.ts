@@ -3,6 +3,7 @@ import Storage from 'expo-sqlite/kv-store';
 const LAST_VIEWED_MONTH_KEY = 'lastViewedMonth';
 const MAP_THEME_KEY = 'mapThemeId';
 const PIN_COVERS_PREFIX = 'pinCovers:';
+const HOME_LOCATION_KEY = 'homeLocation';
 
 /**
  * Synchronous key-value facade backed by expo-sqlite/kv-store
@@ -49,4 +50,17 @@ export function getPinCoversRaw(month: string): string | null {
 
 export function setPinCoversRaw(month: string, json: string): void {
   storage.set(`${PIN_COVERS_PREFIX}${month}`, json);
+}
+
+/** JSON `{ lat, lng, radiusM }` — photos near home are kept out of recaps. */
+export function getHomeLocationRaw(): string | null {
+  return storage.getString(HOME_LOCATION_KEY) ?? null;
+}
+
+export function setHomeLocationRaw(json: string): void {
+  storage.set(HOME_LOCATION_KEY, json);
+}
+
+export function clearHomeLocationRaw(): void {
+  storage.remove(HOME_LOCATION_KEY);
 }

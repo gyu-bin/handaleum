@@ -4,6 +4,7 @@ import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
 import type { VisitAdminLevel } from '../types';
+import { VisitChipRow } from './VisitChipRow';
 
 export interface VisitScopeBarProps {
   level: VisitAdminLevel;
@@ -35,9 +36,7 @@ export function VisitScopeBar({
   return (
     <View style={styles.bar} accessibilityRole="summary">
       <Text style={styles.level}>{strings.map.visitScope[level]}</Text>
-      <Text style={styles.labels} numberOfLines={3}>
-        {labels.join(' · ')}
-      </Text>
+      <VisitChipRow labels={labels} tone="quiet" />
     </View>
   );
 }
@@ -57,13 +56,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.2,
     color: theme.colors.subtle,
-  },
-  labels: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: theme.colors.ink,
-    fontWeight: '500',
-    letterSpacing: -0.2,
   },
   empty: {
     fontSize: 13,

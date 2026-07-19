@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   ResumableZoom,
@@ -43,6 +43,12 @@ export interface MapCanvasProps {
   themeId?: MapThemeId;
   /** placeKey → cover assetId */
   pinCovers?: Record<string, string>;
+  /**
+   * Identity of the photo set the camera should frame — the month key.
+   * Deliberately NOT the filtered photos: the time slider must repaint pins
+   * without yanking the camera back to the fit view on every drag frame.
+   */
+  frameKey: string;
 }
 
 export function MapCanvas({
@@ -53,6 +59,7 @@ export function MapCanvas({
   selectedClusterId,
   themeId = 'dawn',
   pinCovers = {},
+  frameKey,
 }: MapCanvasProps) {
   const [size, setSize] = useState({ width: 0, height: 0 });
   const zoomRef = useRef<ResumableZoomRefType>(null);
@@ -62,12 +69,6 @@ export function MapCanvas({
 
   const { koreaPath, provincePaths, cityPaths, labels, pinPositions } =
     useMapProjection(size, clusters);
-
-  const photosKey = useMemo(() => {
-    const ids = clusters.flatMap((c) => c.photos.map((p) => p.assetId));
-    ids.sort();
-    return ids.join('|');
-  }, [clusters]);
 
   const reportScale = (scale: number) => {
     onZoomChange(zoomFromScale(scale));
@@ -97,19 +98,23 @@ export function MapCanvas({
     if (size.width === 0 || size.height === 0) {
       return;
     }
-    // Frame only when the photo set changes — never when layout height
-    // shifts (VisitScopeBar / footer growing after zoom would otherwise
-    // snap the camera back to the fit view).
-    if (photosKey === framedKeyRef.current) {
+    // Wait for pins to land before framing, or the fit would run on an empty set.
+    if (pinPositions.length === 0) {
       return;
     }
-    framedKeyRef.current = photosKey;
+    // Frame once per month. Not on layout shifts (footer growing after zoom),
+    // and not on time-slider filtering — both would snap the camera back to
+    // the fit view and read as the map blinking.
+    if (frameKey === framedKeyRef.current) {
+      return;
+    }
+    framedKeyRef.current = frameKey;
     const id = requestAnimationFrame(() => {
       frameMonth(true);
     });
     return () => cancelAnimationFrame(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- photosKey guards framing; size only gates readiness
-  }, [size.width, size.height, photosKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- frameKey guards framing; size/pins only gate readiness
+  }, [size.width, size.height, frameKey, pinPositions.length]);
 
   const onLayout = (event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;

@@ -52,8 +52,12 @@ export const strings = {
   },
   map: {
     emptyMonth: '이 달에는 위치가 있는 사진이 없습니다',
+    emptyAllHome: '이 달은 집에서 찍은 사진만 있습니다. 카드는 만들 수 있어요',
     noLocationNotice: (count: number) =>
       `위치 정보가 있는 사진만 표시됩니다 (제외 ${count}장)`,
+    homeExcludedNotice: (count: number) =>
+      `집에서 찍은 ${count}장은 지도에만 안 띄웁니다 (카드에는 쓸 수 있어요)`,
+    settings: '설정',
     timeFilter: '이 날짜까지',
     timeFilterHint: '슬라이더로 월 안에서 사진 기간을 줄입니다',
     clusterCount: (count: number) => `사진 ${count}장`,
@@ -65,7 +69,12 @@ export const strings = {
       steps > 0
         ? `${monthLabel} — ${MONTH_NAMES[monthNumber - 1]}의 기록 · ${countWord(steps)} 걸음`
         : `${monthLabel} — ${MONTH_NAMES[monthNumber - 1]}의 기록`,
-    /** e.g. "이번 달엔 성남시, 서울 - 마포구, 용인시에 갔어요~" */
+    /**
+     * Headline above the visit chips. Count-based so the line height stays
+     * fixed no matter how many places the month holds — the places themselves
+     * are rendered as chips below it.
+     * e.g. "이번 달엔 다섯 곳에 갔어요~"
+     */
     monthJourney: (places: string[]) => {
       if (places.length === 0) {
         return '';
@@ -73,7 +82,7 @@ export const strings = {
       if (places.length === 1) {
         return `이번 달엔 ${places[0]}에 갔어요~`;
       }
-      return `이번 달엔 ${places.join(', ')}에 갔어요~`;
+      return `이번 달엔 ${countWord(places.length)} 곳에 갔어요~`;
     },
     navSeparator: '·',
     themePicker: '지도 색감',
@@ -87,6 +96,24 @@ export const strings = {
     setAsCoverShort: '대표',
     coverSelected: '대표 사진',
     coverBadge: '대표',
+  },
+  settings: {
+    title: '설정',
+    homeSection: '집 위치',
+    homeDescription:
+      '집 근처에서 찍은 사진은 지도에 핀으로 뜨지 않습니다. 매일 같은 자리에 찍히는 핀은 알려주는 게 없으니까요. 카드를 만들 때는 그대로 고를 수 있습니다.',
+    homeUnset: '아직 지정하지 않았습니다',
+    homeSet: (radiusM: number) =>
+      radiusM >= 1000
+        ? `지정됨 · 반경 ${(radiusM / 1000).toFixed(1)}km`
+        : `지정됨 · 반경 ${radiusM}m`,
+    useCurrentLocation: '지금 위치를 집으로 지정',
+    locating: '위치 확인 중',
+    clearHome: '집 위치 해제',
+    radiusLabel: '제외 반경',
+    radiusHint: '집이 아파트 단지 안이면 넓게, 골목이면 좁게 잡으세요.',
+    locationDenied: '위치 권한이 없어 집 위치를 지정할 수 없습니다',
+    locationFailed: '위치를 확인하지 못했습니다. 다시 시도해 주세요',
   },
   months: {
     title: '월 선택',

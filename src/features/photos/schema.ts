@@ -49,6 +49,17 @@ export const pinCoverSchema = z.object({
   assetId: z.string().min(1),
 });
 
+/**
+ * Home location (persisted app setting). Photos inside `radiusM` are dropped
+ * from every recap surface — map, journey labels, and cards — because the
+ * place you sleep is not somewhere you "went" (decision 2026-07-19).
+ */
+export const homeLocationSchema = z.object({
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
+  radiusM: z.number().int().min(50).max(5000),
+});
+
 /** Zoom-scoped visit list admin grain. */
 export const visitAdminLevelSchema = z.enum(['province', 'city', 'dong']);
 

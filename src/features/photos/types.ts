@@ -1,6 +1,7 @@
 import type { z } from 'zod';
 
 import type {
+  homeLocationSchema,
   mapThemeIdSchema,
   monthKeySchema,
   monthlyPhotosSchema,
@@ -21,3 +22,4 @@ export type MapThemeId = z.infer<typeof mapThemeIdSchema>;
 export type PinCover = z.infer<typeof pinCoverSchema>;
 export type VisitAdminLevel = z.infer<typeof visitAdminLevelSchema>;
 export type VisitPlace = z.infer<typeof visitPlaceSchema>;
+export type HomeLocation = z.infer<typeof homeLocationSchema>;

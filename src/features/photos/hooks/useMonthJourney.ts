@@ -6,6 +6,9 @@ import {
   resolveVisitPlaces,
 } from '../utils/placeJourney';
 
+/** Long enough to swallow a time-slider drag, short enough to feel immediate. */
+const RESOLVE_DEBOUNCE_MS = 250;
+
 /**
  * Reverse-geocodes month photos once; exposes journey labels and zoom-scoped lists.
  */
@@ -32,15 +35,20 @@ export function useMonthJourney(photos: PhotoRef[]): {
     }
 
     setIsResolving(true);
-    void resolveVisitPlaces(photos).then((next) => {
-      if (!cancelled) {
-        setVisitPlaces(next);
-        setIsResolving(false);
-      }
-    });
+    // Settle before geocoding: dragging the time slider changes the photo set
+    // on every frame, and each resolve awaits a permission check per call.
+    const timer = setTimeout(() => {
+      void resolveVisitPlaces(photos).then((next) => {
+        if (!cancelled) {
+          setVisitPlaces(next);
+          setIsResolving(false);
+        }
+      });
+    }, RESOLVE_DEBOUNCE_MS);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by photosKey
   }, [photosKey]);

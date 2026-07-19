@@ -17,6 +17,7 @@ import {
 import { MapThemePicker } from '../components/MapThemePicker';
 import { PhotoPreviewSheet } from '../components/PhotoPreviewSheet';
 import { TimeSlider, type TimeRange } from '../components/TimeSlider';
+import { VisitChipRow } from '../components/VisitChipRow';
 import { VisitScopeBar } from '../components/VisitScopeBar';
 import { useCurrentMonth } from '../hooks/useCurrentMonth';
 import { useMapTheme } from '../hooks/useMapTheme';
@@ -126,6 +127,7 @@ export function MonthlyMapScreen() {
     { href: '/months' as const, label: strings.months.title },
     { href: '/playback' as const, label: strings.playback.title },
     { href: '/cards' as const, label: strings.cards.listTitle },
+    { href: '/settings' as const, label: strings.map.settings },
   ];
 
   return (
@@ -143,9 +145,14 @@ export function MonthlyMapScreen() {
           </View>
 
           {journeyLine ? (
-            <Text style={styles.journey} numberOfLines={2}>
-              {journeyLine}
-            </Text>
+            <View style={styles.journeyBlock}>
+              <Text style={styles.journey} numberOfLines={1}>
+                {journeyLine}
+              </Text>
+              {journeyPlaces.length > 1 ? (
+                <VisitChipRow labels={journeyPlaces} />
+              ) : null}
+            </View>
           ) : null}
 
           <View style={styles.navRow}>
@@ -161,23 +168,56 @@ export function MonthlyMapScreen() {
             ))}
           </View>
 
-          {data.noLocationCount > 0 ? (
-            <View style={styles.noticeChip}>
-              <Text style={styles.notice}>
-                {strings.map.noLocationNotice(data.noLocationCount)}
-              </Text>
+          {data.noLocationCount > 0 || data.homeExcludedCount > 0 ? (
+            <View style={styles.noticeRow}>
+              {data.noLocationCount > 0 ? (
+                <View style={styles.noticeChip}>
+                  <Text style={styles.notice}>
+                    {strings.map.noLocationNotice(data.noLocationCount)}
+                  </Text>
+                </View>
+              ) : null}
+              {data.homeExcludedCount > 0 ? (
+                <Pressable
+                  onPress={() => router.push('/settings')}
+                  hitSlop={6}
+                  style={({ pressed }) => [
+                    styles.noticeChip,
+                    pressed && styles.noticeChipPressed,
+                  ]}
+                >
+                  <Text style={styles.notice}>
+                    {strings.map.homeExcludedNotice(data.homeExcludedCount)}
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : null}
         </View>
 
         {data.photos.length === 0 ? (
           <View style={styles.empty}>
-            <StateView icon="📷" title={strings.map.emptyMonth} />
+            <StateView
+              icon="📷"
+              title={
+                data.homeExcludedCount > 0
+                  ? strings.map.emptyAllHome
+                  : strings.map.emptyMonth
+              }
+            />
+            {data.allPhotos.length > 0 ? (
+              <Button
+                title={strings.cards.createTitle}
+                variant="accent"
+                onPress={() => router.push('/cards/create')}
+              />
+            ) : null}
           </View>
         ) : (
           <>
             <MapCanvas
               clusters={clusters}
+              frameKey={month}
               onZoomChange={setZoom}
               onScaleChange={setMapScale}
               onSelectCluster={onSelectCluster}
@@ -256,6 +296,9 @@ const styles = StyleSheet.create({
     color: theme.colors.inkSoft,
     letterSpacing: 0.2,
   },
+  journeyBlock: {
+    gap: theme.spacing.sm,
+  },
   journey: {
     fontSize: 14,
     lineHeight: 20,
@@ -285,6 +328,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.1,
   },
+  noticeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  noticeChipPressed: {
+    backgroundColor: theme.colors.accentSoft,
+  },
   noticeChip: {
     alignSelf: 'flex-start',
     paddingHorizontal: 10,
@@ -302,6 +353,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     padding: theme.spacing.lg,
+    gap: theme.spacing.md,
   },
   footer: {
     paddingTop: theme.spacing.md,

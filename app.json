@@ -37,7 +37,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "사진이 찍힌 장소 이름(예: 용인시 - 동천동)을 보여주기 위해 위치가 필요합니다."
+          "locationWhenInUsePermission": "사진이 찍힌 장소 이름(예: 용인시 - 동천동)을 보여주고, 집 위치를 지정해 집에서 찍은 사진을 회고에서 빼기 위해 위치가 필요합니다."
         }
       ],
       [
