@@ -148,18 +148,16 @@ const styles = StyleSheet.create({
     ...theme.shadows.card,
   },
   sectionTitle: {
-    fontSize: 16,
+    ...theme.type.title,
     fontWeight: '700',
     color: theme.colors.ink,
-    letterSpacing: -0.2,
   },
   description: {
-    fontSize: 13,
-    lineHeight: 19,
+    ...theme.type.label,
     color: theme.colors.inkSoft,
   },
   status: {
-    fontSize: 13,
+    ...theme.type.label,
     fontWeight: '600',
     color: theme.colors.subtle,
     paddingVertical: theme.spacing.xs,
@@ -168,8 +166,7 @@ const styles = StyleSheet.create({
     color: theme.colors.accent,
   },
   error: {
-    fontSize: 12,
-    lineHeight: 17,
+    ...theme.type.micro,
     color: theme.colors.ink,
   },
   radiusBlock: {
@@ -179,10 +176,9 @@ const styles = StyleSheet.create({
     borderTopColor: theme.colors.hairline,
   },
   radiusLabel: {
-    fontSize: 12,
+    ...theme.type.micro,
     fontWeight: '600',
     color: theme.colors.subtle,
-    letterSpacing: 0.2,
   },
   radiusRow: {
     flexDirection: 'row',
@@ -204,7 +200,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   radiusChipText: {
-    fontSize: 13,
+    ...theme.type.label,
     fontWeight: '600',
     color: theme.colors.inkSoft,
   },
@@ -212,8 +208,7 @@ const styles = StyleSheet.create({
     color: theme.colors.accent,
   },
   hint: {
-    fontSize: 11,
-    lineHeight: 16,
+    ...theme.type.micro,
     color: theme.colors.subtle,
   },
 });

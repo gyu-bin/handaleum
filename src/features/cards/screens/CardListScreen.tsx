@@ -99,10 +99,9 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing.sm,
   },
   heading: {
+    ...theme.type.display,
     color: theme.colors.ink,
-    fontSize: 28,
     fontWeight: '800',
-    letterSpacing: -0.5,
   },
   list: {
     paddingHorizontal: theme.spacing.lg,
@@ -127,13 +126,13 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   title: {
+    ...theme.type.title,
     color: theme.colors.ink,
-    fontSize: 17,
     fontWeight: '700',
   },
   meta: {
+    ...theme.type.label,
     color: theme.colors.inkSoft,
-    fontSize: 13,
   },
   chevron: {
     color: theme.colors.subtle,

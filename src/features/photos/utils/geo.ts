@@ -9,6 +9,14 @@ export interface GeoBBox {
 
 export interface Projection {
   project: (lngLat: LngLat) => [number, number];
+  /** Exact inverse of project — pixel back to lng/lat. */
+  unproject: (xy: [number, number]) => LngLat;
+  /**
+   * Fit coefficient: pixels per projected radian, uniform on both axes.
+   * The ratio of two projections' coeffs is their relative magnification —
+   * the map rebase math and the effective-zoom report both build on it.
+   */
+  coeff: number;
   bbox: GeoBBox;
 }
 
@@ -24,6 +32,42 @@ export interface PackedGeometry {
 function mercatorY(lat: number): number {
   const rad = (lat * Math.PI) / 180;
   return Math.log(Math.tan(Math.PI / 4 + rad / 2));
+}
+
+/** Inverse of mercatorY — projected y (radians) back to latitude in degrees. */
+function latFromMercatorY(y: number): number {
+  return ((2 * Math.atan(Math.exp(y)) - Math.PI / 2) * 180) / Math.PI;
+}
+
+/** BBox spans in projected units (lng radians x, mercator y). */
+export function projectedSpans(bbox: GeoBBox): { x: number; y: number } {
+  return {
+    x: ((bbox.maxLng - bbox.minLng) * Math.PI) / 180,
+    y: mercatorY(bbox.maxLat) - mercatorY(bbox.minLat),
+  };
+}
+
+/**
+ * Expand a bbox symmetrically about its center in PROJECTED space.
+ * Working in projected units (not degrees) keeps the expanded bbox's
+ * pixel-space aspect identical to the original — the exactness of the
+ * zoom rebase depends on this.
+ */
+export function expandBBoxProjected(bbox: GeoBBox, factor: number): GeoBBox {
+  const x0 = (bbox.minLng * Math.PI) / 180;
+  const x1 = (bbox.maxLng * Math.PI) / 180;
+  const y0 = mercatorY(bbox.minLat);
+  const y1 = mercatorY(bbox.maxLat);
+  const cx = (x0 + x1) / 2;
+  const cy = (y0 + y1) / 2;
+  const hx = ((x1 - x0) / 2) * factor;
+  const hy = ((y1 - y0) / 2) * factor;
+  return {
+    minLng: ((cx - hx) * 180) / Math.PI,
+    maxLng: ((cx + hx) * 180) / Math.PI,
+    minLat: latFromMercatorY(cy - hy),
+    maxLat: latFromMercatorY(cy + hy),
+  };
 }
 
 export function bboxOf(geometry: PackedGeometry): GeoBBox {
@@ -50,46 +94,6 @@ export function centroidOf(geometry: PackedGeometry): LngLat {
   return [(b.minLng + b.maxLng) / 2, (b.minLat + b.maxLat) / 2];
 }
 
-function pointInRing(lng: number, lat: number, ring: LngLat[]): boolean {
-  // Ray casting; ring may be closed (first==last) or open.
-  let inside = false;
-  const n = ring.length;
-  for (let i = 0, j = n - 1; i < n; j = i++) {
-    const xi = ring[i]![0];
-    const yi = ring[i]![1];
-    const xj = ring[j]![0];
-    const yj = ring[j]![1];
-    const intersect =
-      yi > lat !== yj > lat &&
-      lng < ((xj - xi) * (lat - yi)) / (yj - yi + Number.EPSILON) + xi;
-    if (intersect) {
-      inside = !inside;
-    }
-  }
-  return inside;
-}
-
-/**
- * True if (lng, lat) lies inside the geometry (exterior rings only;
- * holes are ignored — fine for municipality/province labels).
- */
-export function pointInGeometry(
-  lng: number,
-  lat: number,
-  geometry: PackedGeometry,
-): boolean {
-  for (const polygon of geometry.coordinates) {
-    const exterior = polygon[0];
-    if (!exterior || exterior.length < 3) {
-      continue;
-    }
-    if (pointInRing(lng, lat, exterior)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 /** Fit a lon/lat bbox into a pixel viewport (Web Mercator, radians). */
 export function createProjection(
   bbox: GeoBBox,
@@ -114,10 +118,16 @@ export function createProjection(
 
   return {
     bbox,
+    coeff: scale,
     project: ([lng, lat]) => {
       const x = pad + innerW / 2 + ((lng * Math.PI) / 180 - cx) * scale;
       const y = pad + innerH / 2 - (mercatorY(lat) - cy) * scale;
       return [x, y];
+    },
+    unproject: ([x, y]) => {
+      const radLng = cx + (x - pad - innerW / 2) / scale;
+      const my = cy + (pad + innerH / 2 - y) / scale;
+      return [(radLng * 180) / Math.PI, latFromMercatorY(my)];
     },
   };
 }
@@ -138,38 +148,6 @@ export function geometryToPath(
       });
       parts.push('Z');
     }
-  }
-  return parts.join(' ');
-}
-
-/**
- * Smooth Catmull-Rom spline through projected points, as cubic Beziers.
- * Used for the paper-map footpath (time-ordered pin trail).
- */
-export function catmullRomPath(points: Array<[number, number]>): string {
-  if (points.length < 2) {
-    return '';
-  }
-  if (points.length === 2) {
-    const [a, b] = points;
-    return `M${a[0].toFixed(2)} ${a[1].toFixed(2)} L${b[0].toFixed(2)} ${b[1].toFixed(2)}`;
-  }
-
-  const parts: string[] = [
-    `M${points[0][0].toFixed(2)} ${points[0][1].toFixed(2)}`,
-  ];
-  for (let i = 0; i < points.length - 1; i++) {
-    const p0 = points[i === 0 ? 0 : i - 1];
-    const p1 = points[i];
-    const p2 = points[i + 1];
-    const p3 = points[i + 2] ?? p2;
-    const c1x = p1[0] + (p2[0] - p0[0]) / 6;
-    const c1y = p1[1] + (p2[1] - p0[1]) / 6;
-    const c2x = p2[0] - (p3[0] - p1[0]) / 6;
-    const c2y = p2[1] - (p3[1] - p1[1]) / 6;
-    parts.push(
-      `C${c1x.toFixed(2)} ${c1y.toFixed(2)} ${c2x.toFixed(2)} ${c2y.toFixed(2)} ${p2[0].toFixed(2)} ${p2[1].toFixed(2)}`,
-    );
   }
   return parts.join(' ');
 }

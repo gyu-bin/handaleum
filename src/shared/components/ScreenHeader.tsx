@@ -76,17 +76,16 @@ const styles = StyleSheet.create({
     marginTop: -1,
   },
   backLabel: {
-    color: theme.colors.ink,
-    fontSize: 14,
+    ...theme.type.label,
+    color: theme.colors.inkSoft,
     fontWeight: '600',
   },
   title: {
+    ...theme.type.title,
     flex: 1,
     textAlign: 'center',
     color: theme.colors.ink,
-    fontSize: 17,
     fontWeight: '700',
-    letterSpacing: -0.2,
   },
   trailing: {
     minWidth: HIT + 24,

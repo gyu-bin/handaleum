@@ -58,15 +58,14 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.xs,
   },
   title: {
+    ...theme.type.title,
     color: theme.colors.ink,
-    fontSize: 17,
     fontWeight: '700',
     textAlign: 'center',
   },
   description: {
+    ...theme.type.body,
     color: theme.colors.inkSoft,
-    fontSize: 14,
-    lineHeight: 21,
     textAlign: 'center',
   },
   action: {

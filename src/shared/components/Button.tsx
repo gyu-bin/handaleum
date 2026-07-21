@@ -113,9 +113,8 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   label: {
-    fontSize: 16,
+    ...theme.type.body,
     fontWeight: '700',
-    letterSpacing: 0.2,
   },
   labelOnSolid: {
     color: theme.colors.surface,

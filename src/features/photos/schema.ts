@@ -35,8 +35,15 @@ export const placeClusterSchema = z.object({
   photos: z.array(photoRefSchema).min(1),
 });
 
-/** Paper map palette id (persisted app setting). */
-export const mapThemeIdSchema = z.enum(['dawn', 'ink', 'warm']);
+/**
+ * Paper map palette id (persisted app setting).
+ *
+ * One palette on purpose — the dawn paper map is the app's identity, not a
+ * preference. The id and its plumbing are kept so a future theme pack can add
+ * entries here without rewiring. Values persisted by older builds ('ink',
+ * 'warm') fail this schema and fall back to the default on read.
+ */
+export const mapThemeIdSchema = z.enum(['dawn']);
 
 /**
  * Per-place cover photo for a pin.

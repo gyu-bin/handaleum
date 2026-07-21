@@ -36,18 +36,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: theme.spacing.md,
   },
+  /** The loading screen has no content to compete with — the brand is the one loud thing here. */
   wordmark: {
+    ...theme.type.display,
     fontFamily: theme.fonts.serif,
-    fontSize: 30,
     fontWeight: '700',
     color: theme.colors.ink,
-    letterSpacing: -0.5,
   },
   spinner: {
     transform: [{ scale: 1.1 }],
   },
   message: {
-    fontSize: 13,
+    ...theme.type.micro,
     color: theme.colors.subtle,
     letterSpacing: 1,
   },

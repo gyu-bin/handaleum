@@ -1,9 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -74,11 +73,11 @@ export function CardCreateScreen() {
     };
   }, [selectedPhotos]);
 
-  const onToggle = (assetId: string) => {
+  const onToggle = useCallback((assetId: string) => {
     setSelectedAssetIds((prev) =>
       prev.includes(assetId) ? prev.filter((id) => id !== assetId) : [...prev, assetId],
     );
-  };
+  }, []);
 
   const onSave = async () => {
     setFormError(null);
@@ -135,6 +134,82 @@ export function CardCreateScreen() {
 
   const selectedCount = selectedAssetIds.length;
 
+  const listHeader = (
+    <View style={styles.formHeader}>
+      <View style={styles.section}>
+        <Text style={styles.label}>{strings.cards.titlePlaceholder}</Text>
+        <TextInput
+          value={title}
+          onChangeText={setTitle}
+          placeholder={strings.cards.titlePlaceholder}
+          placeholderTextColor={theme.colors.subtle}
+          maxLength={40}
+          style={styles.input}
+        />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.label}>{strings.cards.commentPlaceholder}</Text>
+        <TextInput
+          value={comment}
+          onChangeText={setComment}
+          placeholder={strings.cards.commentPlaceholder}
+          placeholderTextColor={theme.colors.subtle}
+          maxLength={300}
+          multiline
+          style={[styles.input, styles.comment]}
+        />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.label}>{strings.cards.templateLabel}</Text>
+        <View style={styles.templateRow}>
+          <Pressable
+            onPress={() => setTemplate('feed')}
+            style={[styles.templateChip, template === 'feed' && styles.templateChipOn]}
+          >
+            <Text
+              style={[styles.templateText, template === 'feed' && styles.templateTextOn]}
+            >
+              {strings.cards.templateFeed}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setTemplate('story')}
+            style={[styles.templateChip, template === 'story' && styles.templateChipOn]}
+          >
+            <Text
+              style={[styles.templateText, template === 'story' && styles.templateTextOn]}
+            >
+              {strings.cards.templateStory}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+
+      <View style={styles.labelRow}>
+        <Text style={styles.label}>{strings.cards.photoLabel}</Text>
+        {selectedCount > 0 ? (
+          <Text style={styles.selectedCount}>
+            {strings.cards.selectedCount(selectedCount)}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+
+  const listFooter = (
+    <View style={styles.formFooter}>
+      {formError ? <Text style={styles.error}>{formError}</Text> : null}
+      <Button
+        title={strings.cards.save}
+        variant="primary"
+        loading={saveCard.isPending}
+        onPress={() => void onSave()}
+      />
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView
@@ -142,94 +217,15 @@ export function CardCreateScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScreenHeader title={strings.cards.createTitle} />
-        <ScrollView
-          contentContainerStyle={styles.scroll}
+        <PhotoSelectGrid
+          photos={data.allPhotos}
+          selectedAssetIds={selectedAssetIds}
+          onToggle={onToggle}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.section}>
-            <Text style={styles.label}>{strings.cards.titlePlaceholder}</Text>
-            <TextInput
-              value={title}
-              onChangeText={setTitle}
-              placeholder={strings.cards.titlePlaceholder}
-              placeholderTextColor={theme.colors.subtle}
-              maxLength={40}
-              style={styles.input}
-            />
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.label}>{strings.cards.commentPlaceholder}</Text>
-            <TextInput
-              value={comment}
-              onChangeText={setComment}
-              placeholder={strings.cards.commentPlaceholder}
-              placeholderTextColor={theme.colors.subtle}
-              maxLength={300}
-              multiline
-              style={[styles.input, styles.comment]}
-            />
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.label}>{strings.cards.templateLabel}</Text>
-            <View style={styles.templateRow}>
-              <Pressable
-                onPress={() => setTemplate('feed')}
-                style={[styles.templateChip, template === 'feed' && styles.templateChipOn]}
-              >
-                <Text
-                  style={[
-                    styles.templateText,
-                    template === 'feed' && styles.templateTextOn,
-                  ]}
-                >
-                  {strings.cards.templateFeed}
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setTemplate('story')}
-                style={[styles.templateChip, template === 'story' && styles.templateChipOn]}
-              >
-                <Text
-                  style={[
-                    styles.templateText,
-                    template === 'story' && styles.templateTextOn,
-                  ]}
-                >
-                  {strings.cards.templateStory}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <View style={styles.labelRow}>
-              <Text style={styles.label}>{strings.cards.photoLabel}</Text>
-              {selectedCount > 0 ? (
-                <Text style={styles.selectedCount}>
-                  {strings.cards.selectedCount(selectedCount)}
-                </Text>
-              ) : null}
-            </View>
-            <PhotoSelectGrid
-              photos={data.allPhotos}
-              selectedAssetIds={selectedAssetIds}
-              onToggle={onToggle}
-            />
-          </View>
-
-          {formError ? <Text style={styles.error}>{formError}</Text> : null}
-
-          <Button
-            title={strings.cards.save}
-            variant="primary"
-            loading={saveCard.isPending}
-            onPress={() => void onSave()}
-            style={styles.saveBtn}
-          />
-        </ScrollView>
+          contentContainerStyle={styles.scroll}
+          ListHeaderComponent={listHeader}
+          ListFooterComponent={listFooter}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -245,18 +241,24 @@ const styles = StyleSheet.create({
   },
   scroll: {
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.sm,
-    gap: theme.spacing.lg,
     paddingBottom: theme.spacing.xl,
+  },
+  formHeader: {
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.lg,
+    gap: theme.spacing.lg,
+  },
+  formFooter: {
+    paddingTop: theme.spacing.lg,
+    gap: theme.spacing.sm,
   },
   section: {
     gap: theme.spacing.sm,
   },
   label: {
+    ...theme.type.label,
     color: theme.colors.inkSoft,
-    fontSize: 13,
     fontWeight: '700',
-    letterSpacing: 0.2,
   },
   labelRow: {
     flexDirection: 'row',
@@ -264,8 +266,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   selectedCount: {
+    ...theme.type.label,
     color: theme.colors.accent,
-    fontSize: 13,
     fontWeight: '700',
   },
   input: {
@@ -276,7 +278,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     paddingVertical: 14,
     color: theme.colors.ink,
-    fontSize: 16,
+    // fontSize only — spreading a type token would add lineHeight, which
+    // mis-centers text vertically inside a TextInput on Android.
+    fontSize: theme.type.body.fontSize,
   },
   comment: {
     minHeight: 96,
@@ -300,19 +304,16 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.accent,
   },
   templateText: {
+    ...theme.type.label,
     color: theme.colors.inkSoft,
     fontWeight: '700',
-    fontSize: 14,
   },
   templateTextOn: {
     color: theme.colors.surface,
   },
-  saveBtn: {
-    marginTop: theme.spacing.xs,
-  },
   error: {
+    ...theme.type.label,
     color: theme.colors.accent,
-    fontSize: 14,
     fontWeight: '600',
   },
 });

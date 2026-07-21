@@ -60,9 +60,8 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.hairline,
   },
   chipText: {
-    fontSize: 12,
+    ...theme.type.label,
     fontWeight: '600',
-    letterSpacing: -0.1,
     color: theme.colors.accent,
   },
   chipTextQuiet: {

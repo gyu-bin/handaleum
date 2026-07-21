@@ -14,7 +14,6 @@ import {
   DEFAULT_MAP_ZOOM,
   MapCanvas,
 } from '../components/MapCanvas';
-import { MapThemePicker } from '../components/MapThemePicker';
 import { PhotoPreviewSheet } from '../components/PhotoPreviewSheet';
 import { TimeSlider, type TimeRange } from '../components/TimeSlider';
 import { VisitChipRow } from '../components/VisitChipRow';
@@ -54,7 +53,7 @@ export function MonthlyMapScreen() {
   const { status, isReady } = usePhotoPermission();
   const hasAccess = status === 'granted' || status === 'limited';
   const { month } = useCurrentMonth();
-  const { themeId, setThemeId } = useMapTheme();
+  const { themeId } = useMapTheme();
   const { covers, setCover } = usePinCovers(month);
   const { data, isPending, isError, refetch, isRefetching } = useMonthlyPhotos(month, {
     enabled: isReady && hasAccess,
@@ -134,14 +133,14 @@ export function MonthlyMapScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <View style={styles.panel}>
         <View style={styles.header}>
-          <View style={styles.topRow}>
-            <View style={styles.titleBlock}>
-              <Text style={styles.wordmark}>{strings.brand}</Text>
-              <Text style={styles.monthLabel} numberOfLines={1}>
-                {strings.map.monthRecord(monthLabel, monthNumber, clusters.length)}
-              </Text>
-            </View>
-            <MapThemePicker themeId={themeId} onChange={setThemeId} />
+          <View style={styles.titleBlock}>
+            <Text style={styles.wordmark}>{strings.brand}</Text>
+            <Text style={styles.monthTitle} numberOfLines={1}>
+              {strings.map.monthTitle(monthNumber)}
+            </Text>
+            <Text style={styles.monthMeta} numberOfLines={1}>
+              {strings.map.monthMeta(monthLabel, clusters.length)}
+            </Text>
           </View>
 
           {journeyLine ? (
@@ -274,37 +273,31 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing.md,
     gap: theme.spacing.sm,
   },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: theme.spacing.md,
-  },
   titleBlock: {
-    flex: 1,
-    gap: 4,
+    gap: theme.spacing.xs,
   },
+  /** Eyebrow, not a headline — the month below it is the loud thing. */
   wordmark: {
-    fontFamily: theme.fonts.serif,
-    fontSize: 26,
-    fontWeight: '700',
-    color: theme.colors.ink,
-    letterSpacing: -0.8,
+    ...theme.type.micro,
+    color: theme.colors.subtle,
+    letterSpacing: 3.2,
   },
-  monthLabel: {
-    fontSize: 13,
-    color: theme.colors.inkSoft,
-    letterSpacing: 0.2,
+  monthTitle: {
+    ...theme.type.display,
+    fontFamily: theme.fonts.serif,
+    color: theme.colors.ink,
+  },
+  monthMeta: {
+    ...theme.type.micro,
+    color: theme.colors.subtle,
   },
   journeyBlock: {
     gap: theme.spacing.sm,
   },
   journey: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: theme.colors.ink,
+    ...theme.type.body,
+    color: theme.colors.inkSoft,
     fontWeight: '500',
-    letterSpacing: -0.2,
   },
   navRow: {
     flexDirection: 'row',
@@ -323,10 +316,9 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.accentSoft,
   },
   navChipText: {
-    color: theme.colors.ink,
-    fontSize: 13,
+    ...theme.type.label,
+    color: theme.colors.inkSoft,
     fontWeight: '600',
-    letterSpacing: 0.1,
   },
   noticeRow: {
     flexDirection: 'row',
@@ -344,10 +336,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surfaceAlt,
   },
   notice: {
+    ...theme.type.micro,
     color: theme.colors.subtle,
-    fontSize: 11,
-    letterSpacing: 0.1,
-    lineHeight: 15,
   },
   empty: {
     flex: 1,

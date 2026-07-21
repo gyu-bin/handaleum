@@ -158,18 +158,17 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   title: {
+    ...theme.type.title,
     color: theme.colors.ink,
-    fontSize: 18,
     fontWeight: '600',
   },
   hint: {
+    ...theme.type.micro,
     color: theme.colors.inkSoft,
-    fontSize: 12,
-    lineHeight: 16,
   },
   close: {
+    ...theme.type.body,
     color: theme.colors.accent,
-    fontSize: 16,
     fontWeight: '600',
     marginTop: 2,
   },

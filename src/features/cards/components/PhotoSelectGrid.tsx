@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState, type ReactElement } from 'react';
 import {
   FlatList,
   Pressable,
@@ -6,6 +6,8 @@ import {
   Text,
   useWindowDimensions,
   View,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
 import { Image } from 'expo-image';
 
@@ -18,9 +20,15 @@ export interface PhotoSelectGridProps {
   photos: PhotoRef[];
   selectedAssetIds: string[];
   onToggle: (assetId: string) => void;
+  /** Rendered above the grid, inside the same (virtualized) scroll container. */
+  ListHeaderComponent?: ReactElement | null;
+  /** Rendered below the grid, inside the same scroll container. */
+  ListFooterComponent?: ReactElement | null;
+  contentContainerStyle?: StyleProp<ViewStyle>;
+  keyboardShouldPersistTaps?: 'always' | 'never' | 'handled';
 }
 
-function Cell({
+const Cell = memo(function Cell({
   photo,
   selected,
   size,
@@ -29,7 +37,7 @@ function Cell({
   photo: PhotoRef;
   selected: boolean;
   size: number;
-  onToggle: () => void;
+  onToggle: (assetId: string) => void;
 }) {
   const [uri, setUri] = useState<string | null>(null);
 
@@ -47,7 +55,7 @@ function Cell({
 
   return (
     <Pressable
-      onPress={onToggle}
+      onPress={() => onToggle(photo.assetId)}
       style={{ width: size, height: size, padding: 2 }}
       accessibilityRole="checkbox"
       accessibilityState={{ checked: selected }}
@@ -64,15 +72,24 @@ function Cell({
       ) : null}
     </Pressable>
   );
-}
+});
 
+/**
+ * Virtualized 3-up photo picker. Owns its own scroll so off-screen cells are
+ * recycled — a month with hundreds of photos stays light. The screen's form
+ * and save button ride along as header/footer so the whole page scrolls as one.
+ */
 export function PhotoSelectGrid({
   photos,
   selectedAssetIds,
   onToggle,
+  ListHeaderComponent,
+  ListFooterComponent,
+  contentContainerStyle,
+  keyboardShouldPersistTaps,
 }: PhotoSelectGridProps) {
   const { width } = useWindowDimensions();
-  const size = (width - theme.spacing.md * 2) / 3;
+  const size = (width - theme.spacing.lg * 2) / 3;
   const selected = new Set(selectedAssetIds);
 
   return (
@@ -80,13 +97,18 @@ export function PhotoSelectGrid({
       data={photos}
       keyExtractor={(item) => item.assetId}
       numColumns={3}
-      scrollEnabled={false}
+      extraData={selectedAssetIds}
+      keyboardShouldPersistTaps={keyboardShouldPersistTaps}
+      showsVerticalScrollIndicator={false}
+      ListHeaderComponent={ListHeaderComponent}
+      ListFooterComponent={ListFooterComponent}
+      contentContainerStyle={contentContainerStyle}
       renderItem={({ item }) => (
         <Cell
           photo={item}
           selected={selected.has(item.assetId)}
           size={size}
-          onToggle={() => onToggle(item.assetId)}
+          onToggle={onToggle}
         />
       )}
     />

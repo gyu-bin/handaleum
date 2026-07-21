@@ -52,13 +52,12 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.hairline,
   },
   level: {
-    fontSize: 11,
+    ...theme.type.micro,
     fontWeight: '600',
-    letterSpacing: 0.2,
     color: theme.colors.subtle,
   },
   empty: {
-    fontSize: 13,
+    ...theme.type.label,
     color: theme.colors.inkSoft,
   },
 });

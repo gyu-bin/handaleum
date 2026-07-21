@@ -46,9 +46,13 @@ export const strings = {
   },
   permission: {
     title: '사진 접근 권한이 필요합니다',
-    description: '한 달의 사진을 지도 위에 펼쳐 보려면 사진 접근을 허용해 주세요.',
+    // Explicit break: left to wrap on its own, this line orphans its last
+    // syllable ("요.") on a second line at every width we ship.
+    description: '한 달의 사진을 지도 위에 펼쳐 보려면\n사진 접근을 허용해 주세요.',
     request: '권한 허용하기',
-    denied: '설정에서 사진 접근을 허용하면 다시 시작할 수 있습니다.',
+    denied: '한 번 거부하면 앱에서 다시 물어볼 수 없습니다.\n설정에서 사진 접근을 켜 주세요.',
+    /** Denied is terminal in-app — the only way back is the system settings app. */
+    openSettings: '설정에서 허용하기',
   },
   map: {
     emptyMonth: '이 달에는 위치가 있는 사진이 없습니다',
@@ -65,10 +69,14 @@ export const strings = {
     zoomIn: '확대',
     zoomOut: '축소',
     resetView: '처음으로',
-    monthRecord: (monthLabel: string, monthNumber: number, steps: number) =>
-      steps > 0
-        ? `${monthLabel} — ${MONTH_NAMES[monthNumber - 1]}의 기록 · ${countWord(steps)} 걸음`
-        : `${monthLabel} — ${MONTH_NAMES[monthNumber - 1]}의 기록`,
+    /**
+     * The one loud line on the map screen. Everything else about the month —
+     * the year, the step count — is evidence and belongs in `monthMeta`.
+     */
+    monthTitle: (monthNumber: number) => `${MONTH_NAMES[monthNumber - 1]}의 기록`,
+    /** Evidence line under the title: reads as an instrument, not a sentence. */
+    monthMeta: (monthLabel: string, steps: number) =>
+      steps > 0 ? `${monthLabel} · ${countWord(steps)} 걸음` : monthLabel,
     /**
      * Headline above the visit chips. Count-based so the line height stays
      * fixed no matter how many places the month holds — the places themselves
@@ -85,7 +93,6 @@ export const strings = {
       return `이번 달엔 ${countWord(places.length)} 곳에 갔어요~`;
     },
     navSeparator: '·',
-    themePicker: '지도 색감',
     visitScope: {
       province: '이번 달 · 도',
       city: '이번 달 · 시',
@@ -132,8 +139,9 @@ export const strings = {
     commentPlaceholder: '한 달을 한마디로',
     templateLabel: '템플릿',
     photoLabel: '사진 선택',
-    templateFeed: '피드 1:1',
+    templateFeed: '피드 4:5',
     templateStory: '스토리 9:16',
+    shareFormatLabel: '공유 형식',
     save: '저장',
     saveToAlbum: '앨범에 저장',
     saved: '앨범에 저장했습니다',

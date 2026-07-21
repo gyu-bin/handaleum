@@ -44,7 +44,9 @@ export function PermissionScreen() {
       </View>
       <View style={styles.footer}>
         <Button
-          title={isDenied ? strings.common.confirm : strings.permission.request}
+          title={
+            isDenied ? strings.permission.openSettings : strings.permission.request
+          }
           variant="accent"
           onPress={() =>
             isDenied ? void Linking.openSettings() : void onRequest()
@@ -81,17 +83,20 @@ const styles = StyleSheet.create({
   icon: {
     fontSize: 44,
   },
+  /**
+   * `title`, not `display` — the display step is tuned for short strings like
+   * a month name. A full Korean sentence at that size fills the line box edge
+   * to edge and orphans its last syllable.
+   */
   title: {
+    ...theme.type.title,
     color: theme.colors.ink,
-    fontSize: 24,
     fontWeight: '800',
     textAlign: 'center',
-    letterSpacing: -0.4,
   },
   bodyText: {
+    ...theme.type.body,
     color: theme.colors.inkSoft,
-    fontSize: 16,
-    lineHeight: 25,
     textAlign: 'center',
     paddingHorizontal: theme.spacing.sm,
   },

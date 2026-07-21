@@ -154,8 +154,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   counter: {
+    ...theme.type.body,
     color: theme.colors.inkSoft,
-    fontSize: 14,
     fontWeight: '700',
   },
   slide: {
@@ -177,15 +177,14 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surfaceAlt,
   },
   meta: {
+    ...theme.type.title,
     marginTop: theme.spacing.md,
     color: theme.colors.ink,
-    fontSize: 18,
     fontWeight: '800',
-    letterSpacing: -0.3,
   },
   date: {
+    ...theme.type.label,
     marginTop: 2,
     color: theme.colors.inkSoft,
-    fontSize: 14,
   },
 });

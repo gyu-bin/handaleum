@@ -173,17 +173,6 @@ function extractProvince(
   return cityShort || null;
 }
 
-/**
- * Clean journey labels:
- * - 서울·광역시 → "서울 - 마포구" (구 required when available)
- * - 그 외 → "성남시" / "용인시" (시 only)
- */
-export function formatAlbumPlaceLabel(
-  addr: Location.LocationGeocodedAddress,
-): string | null {
-  return parseGeocodedPlace(addr)?.journeyLabel ?? null;
-}
-
 export function parseGeocodedPlace(
   addr: Location.LocationGeocodedAddress,
 ): ParsedPlace | null {

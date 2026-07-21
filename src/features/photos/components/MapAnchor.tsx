@@ -42,9 +42,13 @@ export function MapAnchor({
     const s = camera.scale.value;
     const cx = width / 2;
     const cy = height / 2;
-    const left = cx + camera.translateX.value + s * (x - cx);
-    const top = cy + camera.translateY.value + s * (y - cy);
-    return { left, top };
+    // Drive position with transform, not left/top: layout props animate on the
+    // layout path (a Yoga pass per pin per frame), which stutters the whole
+    // canvas during pan/zoom. translate composites on the UI thread with no
+    // layout. The 0x0 anchor still centers its child on (tx, ty).
+    const tx = cx + camera.translateX.value + s * (x - cx);
+    const ty = cy + camera.translateY.value + s * (y - cy);
+    return { transform: [{ translateX: tx }, { translateY: ty }] };
   });
 
   return (
@@ -60,6 +64,9 @@ export function MapAnchor({
 const styles = StyleSheet.create({
   anchor: {
     position: 'absolute',
+    // Fixed transform origin so translateX/Y map to absolute canvas coords.
+    top: 0,
+    left: 0,
     width: 0,
     height: 0,
     alignItems: 'center',

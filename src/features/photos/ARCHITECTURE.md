@@ -40,6 +40,10 @@
 | 지도 테마: **종이 팔레트 3종** (dawn/ink/warm). SVG 유지 | MapLibre 타일 / 테마 1개 고정 | Discovery 2-A. 이전 "프리셋 1개" 결정 갱신 | 2026-07-18 |
 | 하단 방문지: 줌에 따라 **도→시→동** | 고정 시 목록 / 헤더만 | Discovery 3-B | 2026-07-18 |
 | 테마·커버 저장: sqlite kv + useSyncExternalStore | Zustand | 기존 month 패턴 재사용. Zustand 미도입 | 2026-07-18 |
+| 지도 테마: **dawn 단일** (ink/warm 제거, 스키마 `z.enum(['dawn'])`) | 3종 유지 | 사용자 결정. 정체성 단일화 + 팔레트 유지비 절감. 구조는 유지해 테마팩 복원 여지 | 2026-07-20 |
+| 줌 선명도: **정착 시 재투영(rebase)** — `utils/rebase.ts` 순수 수학 + `useMapProjection(baseBBox)` + settle 오케스트레이션. 카메라 정착 시 보이는 영역×2(headroom)로 base를 갈아끼우고 카메라를 {scale:2,0,0}으로 리셋 (당시엔 오버샘플 병행했으나 07-21에 제거 — 아래 항목) | 래스터 오버샘플만 (배율 제곱 메모리, 상한 3 이상 흐림) / 타일링 | Mercator가 (radLng, mercY)에서 아핀이라 swap이 항등 (수치검증: 200 랜덤 카메라 드리프트 5.7e-11px, 5연쇄 누적 없음). zoom-toolkit이 minScale<1을 throw하므로 줌아웃은 headroom으로 해결. 유효 배율 상한 18은 base별 동적 maxScale로 보존 | 2026-07-20 |
+| 오버샘플 **제거** (SVG 1:1 렌더) + 기본 줌 상향 (fit 1.6–5) | 오버샘플 4배 | 오버샘플(SVG를 N배로 그린 뒤 레이어 transform으로 1/N 축소)은 이 react-native-svg 버전에서 **역효과** — 축소 다운샘플이 오히려 흐리게 만듦. 1:1 네이티브 크롭 A/B로 확정(oversample=1이 =4보다 확연히 선명). 선명도는 rebase가 카메라 배율을 낮게(≤headroom) 유지하는 것만으로 충분. react-native-svg는 낮은 합성 배율에서 벡터를 매번 선명하게 재래스터함 | 2026-07-21 |
+| 팬/줌 부드러움: ① 핀 `MapAnchor`를 `left/top`→`transform`(레이아웃 패스 제거) ② 제스처 중 지도 레이어 `shouldRasterizeIOS`/`renderToHardwareTextureAndroid` 토글 | 아무 것도 안 함 / 상시 래스터화 | 프레임당 핀 레이아웃 스래싱이 끊김 주원인. 래스터화는 제스처 동안만 켜 벡터맵을 비트맵 캐시(핀치 중 약간 흐림은 감수, settle rebase가 선명 복원). 상시 켜면 정지 상태도 흐려짐 | 2026-07-21 |
 
 ## 경계
 

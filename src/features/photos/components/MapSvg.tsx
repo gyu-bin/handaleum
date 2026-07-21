@@ -1,10 +1,20 @@
-import Svg, { G, Path, Rect, Text as SvgText } from 'react-native-svg';
+import Svg, { G, Line, Path, Rect, Text as SvgText } from 'react-native-svg';
 
 import {
   getMapPalette,
   type MapPalette,
 } from '@/shared/constants/mapThemes';
+import type { GraticuleLine } from '../hooks/useMapProjection';
 import type { MapThemeId } from '../types';
+
+/**
+ * Coastline echoes — the shore repeated outward at falling strength, the way a
+ * survey plate accumulates contour. Offsets are in viewBox units.
+ */
+const COAST_ECHOES: { dx: number; opacity: number }[] = [
+  { dx: 6, opacity: 0.05 },
+  { dx: 2.8, opacity: 0.08 },
+];
 
 export interface ProjectedLabel {
   key: string;
@@ -23,6 +33,8 @@ export interface MapSvgProps {
   cityPaths: { id: string; d: string }[];
   /** Soft 도 / 시 names — painted with the map so they never desync. */
   labels: ProjectedLabel[];
+  /** Whole-degree rule under the land. Omit to draw no graticule. */
+  graticule?: GraticuleLine[];
   themeId?: MapThemeId;
 }
 
@@ -42,7 +54,8 @@ function labelStyle(
 
 /**
  * Paper map. Labels live in the SVG so they stick to geography.
- * Strokes scale with zoom so boundaries stay smooth when pinched in.
+ * The parent re-projects (rebases) at zoom settle, so stroke widths and label
+ * sizes here are screen-space constants — they look the same at every depth.
  */
 export function MapSvg({
   width,
@@ -51,6 +64,7 @@ export function MapSvg({
   provincePaths,
   cityPaths,
   labels,
+  graticule = [],
   themeId = 'dawn',
 }: MapSvgProps) {
   const palette = getMapPalette(themeId);
@@ -66,21 +80,34 @@ export function MapSvg({
         fill={palette.water}
       />
 
+      {graticule.map((line) => (
+        <Line
+          key={line.key}
+          x1={line.x1}
+          y1={line.y1}
+          x2={line.x2}
+          y2={line.y2}
+          stroke={palette.provinceStroke}
+          strokeOpacity={0.09}
+          strokeWidth={0.4}
+        />
+      ))}
+
       {koreaPath ? (
         <G>
-          <Path
-            d={koreaPath}
-            fill={palette.landShadow}
-            transform="translate(1, 2)"
-          />
-          <Path
-            d={koreaPath}
-            fill={palette.land}
-            stroke={palette.border}
-            strokeWidth={0.9}
-            strokeLinejoin="round"
-            strokeLinecap="round"
-          />
+          {COAST_ECHOES.map((echo) => (
+            <Path
+              key={`echo-${echo.dx}`}
+              d={koreaPath}
+              fill="none"
+              stroke={palette.provinceStroke}
+              strokeOpacity={echo.opacity}
+              strokeWidth={0.6}
+              strokeLinejoin="round"
+              transform={`translate(${echo.dx}, ${echo.dx * 0.6})`}
+            />
+          ))}
+          <Path d={koreaPath} fill={palette.land} />
         </G>
       ) : null}
 
@@ -89,9 +116,9 @@ export function MapSvg({
           key={city.id}
           d={city.d}
           fill="none"
-          stroke={palette.cityStroke}
-          strokeOpacity={0.5}
-          strokeWidth={0.35}
+          stroke={palette.provinceStroke}
+          strokeOpacity={0.14}
+          strokeWidth={0.32}
           strokeLinejoin="round"
           strokeLinecap="round"
         />
@@ -103,12 +130,25 @@ export function MapSvg({
           d={province.d}
           fill="none"
           stroke={palette.provinceStroke}
-          strokeOpacity={0.28}
-          strokeWidth={0.55}
+          strokeOpacity={0.3}
+          strokeWidth={0.5}
           strokeLinejoin="round"
           strokeLinecap="round"
         />
       ))}
+
+      {/* Coast last, so no inland boundary ever crosses the shore. */}
+      {koreaPath ? (
+        <Path
+          d={koreaPath}
+          fill="none"
+          stroke={palette.provinceStroke}
+          strokeOpacity={0.66}
+          strokeWidth={0.85}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      ) : null}
 
       {labels.map((label) => {
         const s = styles[label.tier];

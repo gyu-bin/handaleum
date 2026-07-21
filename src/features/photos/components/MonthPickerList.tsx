@@ -75,8 +75,8 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   month: {
+    ...theme.type.title,
     color: theme.colors.ink,
-    fontSize: 17,
     fontWeight: '700',
   },
   monthSelected: {
@@ -88,8 +88,8 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
   },
   count: {
+    ...theme.type.body,
     color: theme.colors.inkSoft,
-    fontSize: 15,
     fontWeight: '600',
   },
   countSelected: {
