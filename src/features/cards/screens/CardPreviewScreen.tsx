@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -6,6 +6,7 @@ import {
   Share,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { saveToLibraryAsync } from 'expo-media-library';
@@ -21,7 +22,7 @@ import { theme } from '@/shared/constants/theme';
 
 import { CardTemplateFeed } from '../components/CardTemplateFeed';
 import { CardTemplateStory } from '../components/CardTemplateStory';
-import { useCard, useDeleteCard } from '../hooks/useCards';
+import { useCard, useDeleteCard, useUpdateCard } from '../hooks/useCards';
 import { captureCardImage, EXPORT_RENDER_WIDTH } from '../services/cardExport';
 import type { CardTemplate } from '../types';
 
@@ -45,11 +46,49 @@ export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
   const router = useRouter();
   const { data, isPending, isError, refetch } = useCard(cardId);
   const deleteCard = useDeleteCard();
+  const updateCard = useUpdateCard();
   const captureTarget = useRef<View>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   // null = follow the card's stored template; a value = user override.
   const [formatOverride, setFormatOverride] = useState<CardTemplate | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editComment, setEditComment] = useState('');
+  const [editError, setEditError] = useState<string | null>(null);
+
+  const beginEdit = () => {
+    if (!data) {
+      return;
+    }
+    setEditTitle(data.title);
+    setEditComment(data.comment);
+    setEditError(null);
+    setEditing(true);
+  };
+
+  const saveEdit = async () => {
+    const title = editTitle.trim();
+    if (title.length === 0) {
+      setEditError(strings.cards.errorTitleRequired);
+      return;
+    }
+    try {
+      await updateCard.mutateAsync({
+        id: cardId,
+        fields: { title, comment: editComment.trim() },
+      });
+      setEditing(false);
+    } catch (error) {
+      console.error('updateCard failed', error);
+      setEditError(strings.common.error);
+    }
+  };
+
+  // Drop edit state if the card changes underneath (e.g. refetch).
+  useEffect(() => {
+    setEditing(false);
+  }, [cardId]);
 
   const capture = async (): Promise<string | null> => {
     if (!captureTarget.current) {
@@ -150,8 +189,9 @@ export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
 
   const draft = {
     month: data.month,
-    title: data.title,
-    comment: data.comment,
+    // Live-preview the in-progress edits so changes are visible as they type.
+    title: editing ? editTitle : data.title,
+    comment: editing ? editComment : data.comment,
     photoRefs: data.photoRefs,
     template: data.template,
     mapSnapshot: data.mapSnapshot,
@@ -171,57 +211,104 @@ export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
         onBack={() => router.replace('/cards')}
       />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <View
-          style={styles.formatRow}
-          accessibilityRole="radiogroup"
-          accessibilityLabel={strings.cards.shareFormatLabel}
-        >
-          {formatOptions.map((opt) => {
-            const selected = opt.id === format;
-            return (
-              <Pressable
-                key={opt.id}
-                onPress={() => setFormatOverride(opt.id)}
-                accessibilityRole="radio"
-                accessibilityState={{ selected }}
-                style={[styles.formatChip, selected && styles.formatChipActive]}
-              >
-                <Text
-                  style={[styles.formatText, selected && styles.formatTextActive]}
+        {!editing ? (
+          <View
+            style={styles.formatRow}
+            accessibilityRole="radiogroup"
+            accessibilityLabel={strings.cards.shareFormatLabel}
+          >
+            {formatOptions.map((opt) => {
+              const selected = opt.id === format;
+              return (
+                <Pressable
+                  key={opt.id}
+                  onPress={() => setFormatOverride(opt.id)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                  style={[styles.formatChip, selected && styles.formatChipActive]}
                 >
-                  {opt.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+                  <Text
+                    style={[styles.formatText, selected && styles.formatTextActive]}
+                  >
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
 
         <View style={styles.preview}>
           <Template card={draft} width={PREVIEW_WIDTH[format]} />
         </View>
 
-        {actionError ? <Text style={styles.error}>{actionError}</Text> : null}
+        {editing ? (
+          <View style={styles.editPanel}>
+            <Text style={styles.editLabel}>{strings.cards.titlePlaceholder}</Text>
+            <TextInput
+              value={editTitle}
+              onChangeText={setEditTitle}
+              placeholder={strings.cards.titlePlaceholder}
+              placeholderTextColor={theme.colors.subtle}
+              maxLength={40}
+              style={styles.input}
+            />
+            <Text style={styles.editLabel}>{strings.cards.commentPlaceholder}</Text>
+            <TextInput
+              value={editComment}
+              onChangeText={setEditComment}
+              placeholder={strings.cards.commentPlaceholder}
+              placeholderTextColor={theme.colors.subtle}
+              maxLength={300}
+              multiline
+              style={[styles.input, styles.inputMultiline]}
+            />
+            {editError ? <Text style={styles.error}>{editError}</Text> : null}
+            <Button
+              title={strings.cards.save}
+              variant="primary"
+              loading={updateCard.isPending}
+              onPress={() => void saveEdit()}
+            />
+            <Button
+              title={strings.common.cancel}
+              variant="ghost"
+              disabled={updateCard.isPending}
+              onPress={() => setEditing(false)}
+            />
+          </View>
+        ) : (
+          <>
+            {actionError ? <Text style={styles.error}>{actionError}</Text> : null}
 
-        <View style={styles.actions}>
-          <Button
-            title={strings.cards.share}
-            variant="primary"
-            loading={busy}
-            onPress={() => void onShare()}
-          />
-          <Button
-            title={strings.cards.saveToAlbum}
-            variant="secondary"
-            disabled={busy}
-            onPress={() => void onSaveImage()}
-          />
-          <Button
-            title={strings.cards.delete}
-            variant="ghost"
-            onPress={onDelete}
-            style={styles.deleteBtn}
-          />
-        </View>
+            <View style={styles.actions}>
+              <Button
+                title={strings.cards.share}
+                variant="primary"
+                loading={busy}
+                onPress={() => void onShare()}
+              />
+              <Button
+                title={strings.cards.saveToAlbum}
+                variant="secondary"
+                disabled={busy}
+                onPress={() => void onSaveImage()}
+              />
+              <Button
+                title={strings.cards.edit}
+                variant="secondary"
+                disabled={busy}
+                onPress={beginEdit}
+              />
+              <Button
+                title={strings.cards.delete}
+                variant="ghost"
+                onPress={onDelete}
+                style={styles.deleteBtn}
+              />
+            </View>
+          </>
+        )}
       </ScrollView>
 
       {/*
@@ -287,6 +374,29 @@ const styles = StyleSheet.create({
   actions: {
     width: '100%',
     gap: theme.spacing.sm,
+  },
+  editPanel: {
+    width: '100%',
+    gap: theme.spacing.sm,
+  },
+  editLabel: {
+    ...theme.type.label,
+    color: theme.colors.inkSoft,
+    marginTop: theme.spacing.xs,
+  },
+  input: {
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 12,
+    color: theme.colors.ink,
+    fontSize: theme.type.body.fontSize,
+  },
+  inputMultiline: {
+    minHeight: 80,
+    textAlignVertical: 'top',
   },
   deleteBtn: {
     marginTop: theme.spacing.xs,

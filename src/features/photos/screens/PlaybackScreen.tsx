@@ -3,6 +3,7 @@ import {
   FlatList,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  Pressable,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -67,16 +68,23 @@ function ClusterSlide({
   );
 }
 
+/** Dwell time per place when auto-playing, in ms. */
+const AUTOPLAY_MS = 2800;
+
 /**
- * Storytelling view: map moves through clusters in chronological order.
- * Manual swipe first; auto-play deferred (discovery assumption, 2026-07-17).
+ * Storytelling view: steps through clusters in chronological order, by manual
+ * swipe or auto-play. A drag pauses auto-play so the user is never fought.
  */
 export function PlaybackScreen() {
   const { width } = useWindowDimensions();
   const { month } = useCurrentMonth();
   const { data, isPending, isError, refetch } = useMonthlyPhotos(month);
   const [index, setIndex] = useState(0);
+  const [playing, setPlaying] = useState(false);
   const listRef = useRef<FlatList<PlaceCluster>>(null);
+  // Read the live index inside the interval without re-arming it every step.
+  const indexRef = useRef(0);
+  indexRef.current = index;
 
   const clusters = useMemo(() => {
     if (!data) {
@@ -89,8 +97,36 @@ export function PlaybackScreen() {
 
   useEffect(() => {
     setIndex(0);
+    setPlaying(false);
     listRef.current?.scrollToOffset({ offset: 0, animated: false });
   }, [month]);
+
+  useEffect(() => {
+    if (!playing) {
+      return;
+    }
+    const timer = setInterval(() => {
+      const next = indexRef.current + 1;
+      if (next >= clusters.length) {
+        setPlaying(false); // stop at the end of the recap
+        return;
+      }
+      listRef.current?.scrollToIndex({ index: next, animated: true });
+      setIndex(next);
+    }, AUTOPLAY_MS);
+    return () => clearInterval(timer);
+  }, [playing, clusters.length]);
+
+  const togglePlay = () => {
+    setPlaying((prev) => {
+      if (!prev && index >= clusters.length - 1) {
+        // Restart from the beginning when replaying from the end.
+        listRef.current?.scrollToIndex({ index: 0, animated: false });
+        setIndex(0);
+      }
+      return !prev;
+    });
+  };
 
   if (isPending) {
     return <LoadingView />;
@@ -129,9 +165,20 @@ export function PlaybackScreen() {
       <ScreenHeader
         title={strings.playback.title}
         trailing={
-          <Text style={styles.counter}>
-            {index + 1}/{clusters.length}
-          </Text>
+          <View style={styles.trailing}>
+            <Pressable
+              onPress={togglePlay}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={playing ? strings.playback.pause : strings.playback.play}
+              style={({ pressed }) => [styles.playBtn, pressed && styles.playBtnPressed]}
+            >
+              <Text style={styles.playIcon}>{playing ? '❚❚' : '▶'}</Text>
+            </Pressable>
+            <Text style={styles.counter}>
+              {index + 1}/{clusters.length}
+            </Text>
+          </View>
         }
       />
       <FlatList
@@ -142,6 +189,8 @@ export function PlaybackScreen() {
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={onScrollEnd}
+        onScrollBeginDrag={() => setPlaying(false)}
+        getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
         renderItem={({ item }) => <ClusterSlide cluster={item} width={width} />}
       />
     </SafeAreaView>
@@ -152,6 +201,27 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: theme.colors.background,
+  },
+  trailing: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  playBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: theme.radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.accentSoft,
+  },
+  playBtnPressed: {
+    opacity: 0.6,
+  },
+  playIcon: {
+    fontSize: 12,
+    color: theme.colors.accent,
+    fontWeight: '700',
   },
   counter: {
     ...theme.type.body,

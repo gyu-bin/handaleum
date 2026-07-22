@@ -57,6 +57,22 @@ export async function saveCard(draft: RecapCardDraft): Promise<RecapCard> {
   return validated;
 }
 
+/** Edit an existing card's text. Other fields (photos, map, template) are fixed. */
+export async function updateCard(
+  id: string,
+  fields: Pick<RecapCardDraft, 'title' | 'comment'>,
+): Promise<RecapCard> {
+  const cards = readAll();
+  const index = cards.findIndex((card) => card.id === id);
+  if (index === -1) {
+    throw new Error(`Card not found: ${id}`);
+  }
+  const updated = recapCardSchema.parse({ ...cards[index], ...fields });
+  cards[index] = updated;
+  writeAll(cards);
+  return updated;
+}
+
 export async function deleteCard(id: string): Promise<void> {
   writeAll(readAll().filter((card) => card.id !== id));
 }

@@ -1,6 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { deleteCard, getCard, listCards, saveCard } from '../services/cardStorage';
+import type { RecapCardDraft } from '../types';
+import {
+  deleteCard,
+  getCard,
+  listCards,
+  saveCard,
+  updateCard,
+} from '../services/cardStorage';
 import { cardsQueryKeys } from './cardsQueryKeys';
 
 export function useCards() {
@@ -22,6 +29,18 @@ export function useSaveCard() {
   return useMutation({
     mutationFn: saveCard,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: cardsQueryKeys.all }),
+  });
+}
+
+export function useUpdateCard() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      id: string;
+      fields: Pick<RecapCardDraft, 'title' | 'comment'>;
+    }) => updateCard(input.id, input.fields),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: cardsQueryKeys.all }),
   });
 }
 

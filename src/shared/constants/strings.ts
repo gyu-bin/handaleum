@@ -130,6 +130,8 @@ export const strings = {
   playback: {
     title: '몰아보기',
     empty: '이 달에는 보여줄 사진이 없습니다',
+    play: '자동 재생',
+    pause: '멈춤',
   },
   cards: {
     listTitle: '내 회고',
@@ -143,6 +145,7 @@ export const strings = {
     templateStory: '스토리 9:16',
     shareFormatLabel: '공유 형식',
     save: '저장',
+    edit: '제목·코멘트 편집',
     saveToAlbum: '앨범에 저장',
     saved: '앨범에 저장했습니다',
     share: '공유',
