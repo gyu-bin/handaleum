@@ -69,6 +69,8 @@ export const strings = {
     zoomIn: '확대',
     zoomOut: '축소',
     resetView: '처음으로',
+    /** Accessibility label for the "!" button that reveals the map notices. */
+    infoToggle: '안내 보기',
     /**
      * The one loud line on the map screen. Everything else about the month —
      * the year, the step count — is evidence and belongs in `monthMeta`.

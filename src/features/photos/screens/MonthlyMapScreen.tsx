@@ -57,6 +57,9 @@ export function MonthlyMapScreen() {
   const [timeRange, setTimeRange] = useTimeRangeForMonth(month);
   const [zoom, setZoom] = useState(DEFAULT_MAP_ZOOM);
   const [selected, setSelected] = useState<PlaceCluster | null>(null);
+  // The "위치 없는 사진 / 집 제외" notices are collapsed behind a "!" so the
+  // header stays quiet; they're reference info, not something to read every time.
+  const [showNotices, setShowNotices] = useState(false);
 
   const filteredPhotos = useMemo(() => {
     if (!data) {
@@ -161,27 +164,49 @@ export function MonthlyMapScreen() {
           ) : null}
 
           {data.noLocationCount > 0 || data.homeExcludedCount > 0 ? (
-            <View style={styles.noticeRow}>
-              {data.noLocationCount > 0 ? (
-                <View style={styles.noticeChip}>
-                  <Text style={styles.notice}>
-                    {strings.map.noLocationNotice(data.noLocationCount)}
-                  </Text>
-                </View>
-              ) : null}
-              {data.homeExcludedCount > 0 ? (
-                <Pressable
-                  onPress={() => router.push('/settings')}
-                  hitSlop={6}
-                  style={({ pressed }) => [
-                    styles.noticeChip,
-                    pressed && styles.noticeChipPressed,
-                  ]}
+            <View style={styles.noticeBlock}>
+              <Pressable
+                onPress={() => setShowNotices((v) => !v)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: showNotices }}
+                accessibilityLabel={strings.map.infoToggle}
+                style={({ pressed }) => [
+                  styles.infoBtn,
+                  showNotices && styles.infoBtnActive,
+                  pressed && styles.infoBtnPressed,
+                ]}
+              >
+                <Text
+                  style={[styles.infoBtnText, showNotices && styles.infoBtnTextActive]}
                 >
-                  <Text style={styles.notice}>
-                    {strings.map.homeExcludedNotice(data.homeExcludedCount)}
-                  </Text>
-                </Pressable>
+                  !
+                </Text>
+              </Pressable>
+              {showNotices ? (
+                <View style={styles.noticeRow}>
+                  {data.noLocationCount > 0 ? (
+                    <View style={styles.noticeChip}>
+                      <Text style={styles.notice}>
+                        {strings.map.noLocationNotice(data.noLocationCount)}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {data.homeExcludedCount > 0 ? (
+                    <Pressable
+                      onPress={() => router.push('/settings')}
+                      hitSlop={6}
+                      style={({ pressed }) => [
+                        styles.noticeChip,
+                        pressed && styles.noticeChipPressed,
+                      ]}
+                    >
+                      <Text style={styles.notice}>
+                        {strings.map.homeExcludedNotice(data.homeExcludedCount)}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </View>
               ) : null}
             </View>
           ) : null}
@@ -311,6 +336,36 @@ const styles = StyleSheet.create({
     ...theme.type.body,
     color: theme.colors.inkSoft,
     fontWeight: '500',
+  },
+  noticeBlock: {
+    alignItems: 'flex-start',
+    gap: theme.spacing.sm,
+  },
+  infoBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.surfaceAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.hairline,
+  },
+  infoBtnActive: {
+    backgroundColor: theme.colors.accent,
+    borderColor: theme.colors.accent,
+  },
+  infoBtnPressed: {
+    backgroundColor: theme.colors.accentSoft,
+  },
+  infoBtnText: {
+    ...theme.type.micro,
+    fontWeight: '700',
+    color: theme.colors.subtle,
+    lineHeight: 14,
+  },
+  infoBtnTextActive: {
+    color: theme.colors.white,
   },
   noticeRow: {
     flexDirection: 'row',

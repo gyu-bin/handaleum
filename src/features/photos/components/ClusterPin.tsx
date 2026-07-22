@@ -8,11 +8,11 @@ import { resolveAssetUri } from '../services/mediaLibrary';
 import type { PlaceCluster } from '../types';
 
 /** Photo card edge length (reference-style square pin). */
-const CARD = 64;
-const CARD_RADIUS = 14;
-const BORDER = 3;
-const CARET_W = 15;
-const CARET_H = 9;
+const CARD = 52;
+const CARD_RADIUS = 11;
+const BORDER = 2.5;
+const CARET_W = 13;
+const CARET_H = 8;
 const TOTAL_H = CARD + CARET_H;
 
 export interface ClusterPinProps {
@@ -120,15 +120,15 @@ const styles = StyleSheet.create({
   },
   countChip: {
     position: 'absolute',
-    left: 4,
-    bottom: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 1.5,
-    borderRadius: 7,
+    left: 3,
+    bottom: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 6,
     backgroundColor: theme.colors.overlayDark,
   },
   count: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.2,
     color: theme.colors.white,
