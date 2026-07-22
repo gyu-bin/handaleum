@@ -35,13 +35,6 @@ export interface MapSvgProps {
   labels: ProjectedLabel[];
   /** Whole-degree rule under the land. Omit to draw no graticule. */
   graticule?: GraticuleLine[];
-  /**
-   * Raster oversampling factor. The SVG is laid out this many times larger in
-   * native points while keeping the same viewBox coordinate system, so the
-   * parent can scale it up by the same amount without softening the strokes.
-   * Geometry and coordinates are unaffected — only the backing raster density.
-   */
-  resolution?: number;
   themeId?: MapThemeId;
 }
 
@@ -72,18 +65,13 @@ export function MapSvg({
   cityPaths,
   labels,
   graticule = [],
-  resolution = 1,
   themeId = 'dawn',
 }: MapSvgProps) {
   const palette = getMapPalette(themeId);
   const styles = labelStyle(palette);
 
   return (
-    <Svg
-      width={width * resolution}
-      height={height * resolution}
-      viewBox={`0 0 ${width} ${height}`}
-    >
+    <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
       <Rect
         x={-width * 2}
         y={-height * 2}

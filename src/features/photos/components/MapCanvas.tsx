@@ -293,32 +293,23 @@ export function MapCanvas({
             >
               <View style={{ width: size.width, height: size.height }}>
                 {/*
-                 * Oversampled by the headroom factor and scaled back down:
-                 * the SVG rasterizes at headroom x density, so the settled
-                 * camera (scale == headroom) shows it 1:1 crisp.
+                 * Rendered 1:1 — no raster oversampling. react-native-svg
+                 * re-rasterizes the vector paths crisply at the composited
+                 * scale, and rebase keeps the settled camera low (~headroom),
+                 * so the map stays sharp at every depth. Oversampling here was
+                 * counter-productive: an up-scaled SVG scaled back down by a
+                 * layer transform is softened by the downsample, not sharpened.
                  */}
-                <View
-                  style={{
-                    position: 'absolute',
-                    left: (size.width - size.width * REBASE_HEADROOM) / 2,
-                    top: (size.height - size.height * REBASE_HEADROOM) / 2,
-                    width: size.width * REBASE_HEADROOM,
-                    height: size.height * REBASE_HEADROOM,
-                    transform: [{ scale: 1 / REBASE_HEADROOM }],
-                  }}
-                >
-                  <MapSvg
-                    width={size.width}
-                    height={size.height}
-                    koreaPath={koreaPath}
-                    provincePaths={provincePaths}
-                    cityPaths={cityPaths}
-                    labels={labels}
-                    graticule={graticule}
-                    resolution={REBASE_HEADROOM}
-                    themeId={themeId}
-                  />
-                </View>
+                <MapSvg
+                  width={size.width}
+                  height={size.height}
+                  koreaPath={koreaPath}
+                  provincePaths={provincePaths}
+                  cityPaths={cityPaths}
+                  labels={labels}
+                  graticule={graticule}
+                  themeId={themeId}
+                />
               </View>
             </ResumableZoom>
 
