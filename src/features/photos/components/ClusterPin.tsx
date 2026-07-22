@@ -8,11 +8,11 @@ import { resolveAssetUri } from '../services/mediaLibrary';
 import type { PlaceCluster } from '../types';
 
 /** Photo card edge length (reference-style square pin). */
-const CARD = 44;
-const CARD_RADIUS = 10;
-const BORDER = 2.5;
-const CARET_W = 12;
-const CARET_H = 8;
+const CARD = 64;
+const CARD_RADIUS = 14;
+const BORDER = 3;
+const CARET_W = 15;
+const CARET_H = 9;
 const TOTAL_H = CARD + CARET_H;
 
 export interface ClusterPinProps {
@@ -74,9 +74,11 @@ export function ClusterPin({
           <View style={[styles.thumb, styles.thumbPlaceholder]} />
         )}
         {count > 1 ? (
-          <Text style={styles.count} numberOfLines={1}>
-            {count}
-          </Text>
+          <View style={styles.countChip}>
+            <Text style={styles.count} numberOfLines={1}>
+              {count.toLocaleString('ko-KR')}
+            </Text>
+          </View>
         ) : null}
       </View>
       <View
@@ -116,16 +118,20 @@ const styles = StyleSheet.create({
   thumbPlaceholder: {
     backgroundColor: theme.colors.landDeep,
   },
-  count: {
+  countChip: {
     position: 'absolute',
-    left: 5,
+    left: 4,
     bottom: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 7,
+    backgroundColor: theme.colors.overlayDark,
+  },
+  count: {
     fontSize: 11,
     fontWeight: '700',
+    letterSpacing: 0.2,
     color: theme.colors.white,
-    textShadowColor: theme.colors.overlayDark,
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
   caret: {
     width: 0,
