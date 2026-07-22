@@ -253,6 +253,80 @@ export function parseGeocodedPlace(
   };
 }
 
+/** City name in its "…시" form: 서울 → 서울시, 부산 → 부산시, 수원시 → 수원시. */
+function toSiForm(cityShort: string): string {
+  return /시$/.test(cityShort) ? cityShort : `${cityShort}시`;
+}
+
+/**
+ * Detail-sheet location label. Seoul is shown to district grain (서울시 서대문구);
+ * everywhere else to dong grain (수원시 영통동), falling back to the city alone
+ * (성남시) when no finer part is found.
+ */
+export function formatDetailPlaceLabel(
+  addr: Location.LocationGeocodedAddress,
+): string | null {
+  const rawCity =
+    cleanPart(addr.city) ??
+    cleanPart(addr.subregion) ??
+    cleanPart(addr.region);
+  if (!rawCity) {
+    return null;
+  }
+
+  if (looksLikeSeoul(addr, rawCity)) {
+    const gu = extractGu(
+      addr.district,
+      addr.name,
+      addr.street,
+      addr.subregion,
+      addr.city,
+      addr.formattedAddress,
+    );
+    return gu ? `서울시 ${gu}` : '서울시';
+  }
+
+  const si = toSiForm(shortCityName(rawCity));
+  const dong = extractDong(
+    addr.district,
+    addr.name,
+    addr.street,
+    addr.formattedAddress,
+  );
+  return dong && !endsWithGu(dong) ? `${si} ${dong}` : si;
+}
+
+const detailLabelCache = new Map<string, string | null>();
+
+/** Reverse-geocode a cluster center to its detail-sheet label. Cached per bucket. */
+export async function resolveClusterDetailLabel(
+  lat: number,
+  lng: number,
+): Promise<string | null> {
+  const key = placeBucketKey(lat, lng);
+  if (detailLabelCache.has(key)) {
+    return detailLabelCache.get(key) ?? null;
+  }
+
+  const permission = await Location.getForegroundPermissionsAsync();
+  if (permission.status !== 'granted') {
+    return null; // don't prompt from the detail sheet
+  }
+
+  try {
+    const results = await Location.reverseGeocodeAsync({
+      latitude: lat,
+      longitude: lng,
+    });
+    const label = results[0] ? formatDetailPlaceLabel(results[0]) : null;
+    detailLabelCache.set(key, label);
+    return label;
+  } catch {
+    detailLabelCache.set(key, null);
+    return null;
+  }
+}
+
 async function reverseParsed(lat: number, lng: number): Promise<ParsedPlace | null> {
   const key = `v6:${placeBucketKey(lat, lng)}`;
   if (labelCache.has(key)) {

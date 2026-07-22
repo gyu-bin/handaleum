@@ -16,7 +16,7 @@ import { theme } from '@/shared/constants/theme';
 
 import { resolveAssetUri } from '../services/mediaLibrary';
 import type { PlaceCluster, PhotoRef } from '../types';
-import { placeBucketKey } from '../utils/placeJourney';
+import { placeBucketKey, resolveClusterDetailLabel } from '../utils/placeJourney';
 
 export interface PhotoPreviewSheetProps {
   /** null closes the sheet */
@@ -94,6 +94,26 @@ export function PhotoPreviewSheet({
   const placeKey = cluster
     ? placeBucketKey(cluster.centerLat, cluster.centerLng)
     : null;
+  const [placeLabel, setPlaceLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!cluster) {
+      setPlaceLabel(null);
+      return;
+    }
+    let cancelled = false;
+    setPlaceLabel(null);
+    void resolveClusterDetailLabel(cluster.centerLat, cluster.centerLng).then(
+      (label) => {
+        if (!cancelled) {
+          setPlaceLabel(label);
+        }
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [cluster]);
 
   return (
     <Modal
@@ -105,11 +125,17 @@ export function PhotoPreviewSheet({
       <View style={[styles.sheet, { paddingTop: insets.top + theme.spacing.md }]}>
         <View style={styles.header}>
           <View style={styles.titleBlock}>
-            <Text style={styles.title}>
-              {cluster ? strings.map.clusterCount(cluster.photos.length) : ''}
+            <Text style={styles.title} numberOfLines={1}>
+              {placeLabel ??
+                (cluster ? strings.map.clusterCount(cluster.photos.length) : '')}
             </Text>
+            {cluster && placeLabel ? (
+              <Text style={styles.meta} numberOfLines={1}>
+                {strings.map.clusterCount(cluster.photos.length)}
+              </Text>
+            ) : null}
             {onSetCover ? (
-              <Text style={styles.hint}>{strings.map.coverHint}</Text>
+              <Text style={styles.meta}>{strings.map.coverHint}</Text>
             ) : null}
           </View>
           <Pressable onPress={onClose} accessibilityRole="button">
@@ -162,7 +188,7 @@ const styles = StyleSheet.create({
     color: theme.colors.ink,
     fontWeight: '600',
   },
-  hint: {
+  meta: {
     ...theme.type.micro,
     color: theme.colors.inkSoft,
   },
