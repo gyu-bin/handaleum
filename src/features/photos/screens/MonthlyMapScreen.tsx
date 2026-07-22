@@ -14,7 +14,6 @@ import {
   DEFAULT_MAP_ZOOM,
   MapCanvas,
 } from '../components/MapCanvas';
-import { HomeNavBar } from '../components/HomeNavBar';
 import { PhotoPreviewSheet } from '../components/PhotoPreviewSheet';
 import { TimeSlider, type TimeRange } from '../components/TimeSlider';
 import { VisitChipRow } from '../components/VisitChipRow';
@@ -123,40 +122,25 @@ export function MonthlyMapScreen() {
 
   const monthLabel = formatMonthLabel(month);
   const monthNumber = Number(month.split('-')[1]);
-  // Content destinations live in the thumb-reachable bottom bar; settings is a
-  // low-frequency config, so it sits as a quiet link in the header instead.
   const navItems = [
     { href: '/months' as const, label: strings.months.title },
     { href: '/playback' as const, label: strings.playback.title },
     { href: '/cards' as const, label: strings.cards.listTitle },
+    { href: '/settings' as const, label: strings.map.settings },
   ];
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <View style={styles.panel}>
         <View style={styles.header}>
-          <View style={styles.topRow}>
-            <View style={styles.titleBlock}>
-              <Text style={styles.wordmark}>{strings.brand}</Text>
-              <Text style={styles.monthTitle} numberOfLines={1}>
-                {strings.map.monthTitle(monthNumber)}
-              </Text>
-              <Text style={styles.monthMeta} numberOfLines={1}>
-                {strings.map.monthMeta(monthLabel, clusters.length)}
-              </Text>
-            </View>
-            <Pressable
-              onPress={() => router.push('/settings')}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={strings.map.settings}
-              style={({ pressed }) => [
-                styles.settingsBtn,
-                pressed && styles.settingsBtnPressed,
-              ]}
-            >
-              <Text style={styles.settingsText}>{strings.map.settings}</Text>
-            </Pressable>
+          <View style={styles.titleBlock}>
+            <Text style={styles.wordmark}>{strings.brand}</Text>
+            <Text style={styles.monthTitle} numberOfLines={1}>
+              {strings.map.monthTitle(monthNumber)}
+            </Text>
+            <Text style={styles.monthMeta} numberOfLines={1}>
+              {strings.map.monthMeta(monthLabel, clusters.length)}
+            </Text>
           </View>
 
           {journeyLine ? (
@@ -169,6 +153,19 @@ export function MonthlyMapScreen() {
               ) : null}
             </View>
           ) : null}
+
+          <View style={styles.navRow}>
+            {navItems.map((item) => (
+              <Pressable
+                key={item.href}
+                onPress={() => router.push(item.href)}
+                hitSlop={6}
+                style={({ pressed }) => [styles.navChip, pressed && styles.navChipPressed]}
+              >
+                <Text style={styles.navChipText}>{item.label}</Text>
+              </Pressable>
+            ))}
+          </View>
 
           {data.noLocationCount > 0 || data.homeExcludedCount > 0 ? (
             <View style={styles.noticeRow}>
@@ -244,8 +241,6 @@ export function MonthlyMapScreen() {
         )}
       </View>
 
-      <HomeNavBar items={navItems} />
-
       <PhotoPreviewSheet
         cluster={selected}
         onClose={() => setSelected(null)}
@@ -278,32 +273,8 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing.md,
     gap: theme.spacing.sm,
   },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: theme.spacing.sm,
-  },
   titleBlock: {
-    flex: 1,
     gap: theme.spacing.xs,
-  },
-  settingsBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.surfaceAlt,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.hairline,
-  },
-  settingsBtnPressed: {
-    backgroundColor: theme.colors.accentSoft,
-  },
-  settingsText: {
-    ...theme.type.micro,
-    color: theme.colors.subtle,
-    fontWeight: '600',
-    letterSpacing: 0.4,
   },
   /** Eyebrow, not a headline — the month below it is the loud thing. */
   wordmark: {
@@ -327,6 +298,27 @@ const styles = StyleSheet.create({
     ...theme.type.body,
     color: theme.colors.inkSoft,
     fontWeight: '500',
+  },
+  navRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  navChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: theme.radius.sm,
+    backgroundColor: theme.colors.surfaceAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.hairline,
+  },
+  navChipPressed: {
+    backgroundColor: theme.colors.accentSoft,
+  },
+  navChipText: {
+    ...theme.type.label,
+    color: theme.colors.inkSoft,
+    fontWeight: '600',
   },
   noticeRow: {
     flexDirection: 'row',

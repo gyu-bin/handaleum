@@ -1,8 +1,9 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -73,11 +74,11 @@ export function CardCreateScreen() {
     };
   }, [selectedPhotos]);
 
-  const onToggle = useCallback((assetId: string) => {
+  const onToggle = (assetId: string) => {
     setSelectedAssetIds((prev) =>
       prev.includes(assetId) ? prev.filter((id) => id !== assetId) : [...prev, assetId],
     );
-  }, []);
+  };
 
   const onSave = async () => {
     setFormError(null);
@@ -134,82 +135,6 @@ export function CardCreateScreen() {
 
   const selectedCount = selectedAssetIds.length;
 
-  const listHeader = (
-    <View style={styles.formHeader}>
-      <View style={styles.section}>
-        <Text style={styles.label}>{strings.cards.titlePlaceholder}</Text>
-        <TextInput
-          value={title}
-          onChangeText={setTitle}
-          placeholder={strings.cards.titlePlaceholder}
-          placeholderTextColor={theme.colors.subtle}
-          maxLength={40}
-          style={styles.input}
-        />
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.label}>{strings.cards.commentPlaceholder}</Text>
-        <TextInput
-          value={comment}
-          onChangeText={setComment}
-          placeholder={strings.cards.commentPlaceholder}
-          placeholderTextColor={theme.colors.subtle}
-          maxLength={300}
-          multiline
-          style={[styles.input, styles.comment]}
-        />
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.label}>{strings.cards.templateLabel}</Text>
-        <View style={styles.templateRow}>
-          <Pressable
-            onPress={() => setTemplate('feed')}
-            style={[styles.templateChip, template === 'feed' && styles.templateChipOn]}
-          >
-            <Text
-              style={[styles.templateText, template === 'feed' && styles.templateTextOn]}
-            >
-              {strings.cards.templateFeed}
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setTemplate('story')}
-            style={[styles.templateChip, template === 'story' && styles.templateChipOn]}
-          >
-            <Text
-              style={[styles.templateText, template === 'story' && styles.templateTextOn]}
-            >
-              {strings.cards.templateStory}
-            </Text>
-          </Pressable>
-        </View>
-      </View>
-
-      <View style={styles.labelRow}>
-        <Text style={styles.label}>{strings.cards.photoLabel}</Text>
-        {selectedCount > 0 ? (
-          <Text style={styles.selectedCount}>
-            {strings.cards.selectedCount(selectedCount)}
-          </Text>
-        ) : null}
-      </View>
-    </View>
-  );
-
-  const listFooter = (
-    <View style={styles.formFooter}>
-      {formError ? <Text style={styles.error}>{formError}</Text> : null}
-      <Button
-        title={strings.cards.save}
-        variant="primary"
-        loading={saveCard.isPending}
-        onPress={() => void onSave()}
-      />
-    </View>
-  );
-
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView
@@ -217,15 +142,94 @@ export function CardCreateScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScreenHeader title={strings.cards.createTitle} />
-        <PhotoSelectGrid
-          photos={data.allPhotos}
-          selectedAssetIds={selectedAssetIds}
-          onToggle={onToggle}
-          keyboardShouldPersistTaps="handled"
+        <ScrollView
           contentContainerStyle={styles.scroll}
-          ListHeaderComponent={listHeader}
-          ListFooterComponent={listFooter}
-        />
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.section}>
+            <Text style={styles.label}>{strings.cards.titlePlaceholder}</Text>
+            <TextInput
+              value={title}
+              onChangeText={setTitle}
+              placeholder={strings.cards.titlePlaceholder}
+              placeholderTextColor={theme.colors.subtle}
+              maxLength={40}
+              style={styles.input}
+            />
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.label}>{strings.cards.commentPlaceholder}</Text>
+            <TextInput
+              value={comment}
+              onChangeText={setComment}
+              placeholder={strings.cards.commentPlaceholder}
+              placeholderTextColor={theme.colors.subtle}
+              maxLength={300}
+              multiline
+              style={[styles.input, styles.comment]}
+            />
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.label}>{strings.cards.templateLabel}</Text>
+            <View style={styles.templateRow}>
+              <Pressable
+                onPress={() => setTemplate('feed')}
+                style={[styles.templateChip, template === 'feed' && styles.templateChipOn]}
+              >
+                <Text
+                  style={[
+                    styles.templateText,
+                    template === 'feed' && styles.templateTextOn,
+                  ]}
+                >
+                  {strings.cards.templateFeed}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setTemplate('story')}
+                style={[styles.templateChip, template === 'story' && styles.templateChipOn]}
+              >
+                <Text
+                  style={[
+                    styles.templateText,
+                    template === 'story' && styles.templateTextOn,
+                  ]}
+                >
+                  {strings.cards.templateStory}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>{strings.cards.photoLabel}</Text>
+              {selectedCount > 0 ? (
+                <Text style={styles.selectedCount}>
+                  {strings.cards.selectedCount(selectedCount)}
+                </Text>
+              ) : null}
+            </View>
+            <PhotoSelectGrid
+              photos={data.allPhotos}
+              selectedAssetIds={selectedAssetIds}
+              onToggle={onToggle}
+            />
+          </View>
+
+          {formError ? <Text style={styles.error}>{formError}</Text> : null}
+
+          <Button
+            title={strings.cards.save}
+            variant="primary"
+            loading={saveCard.isPending}
+            onPress={() => void onSave()}
+            style={styles.saveBtn}
+          />
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -241,16 +245,9 @@ const styles = StyleSheet.create({
   },
   scroll: {
     paddingHorizontal: theme.spacing.lg,
-    paddingBottom: theme.spacing.xl,
-  },
-  formHeader: {
     paddingTop: theme.spacing.sm,
-    paddingBottom: theme.spacing.lg,
     gap: theme.spacing.lg,
-  },
-  formFooter: {
-    paddingTop: theme.spacing.lg,
-    gap: theme.spacing.sm,
+    paddingBottom: theme.spacing.xl,
   },
   section: {
     gap: theme.spacing.sm,
@@ -310,6 +307,9 @@ const styles = StyleSheet.create({
   },
   templateTextOn: {
     color: theme.colors.surface,
+  },
+  saveBtn: {
+    marginTop: theme.spacing.xs,
   },
   error: {
     ...theme.type.label,

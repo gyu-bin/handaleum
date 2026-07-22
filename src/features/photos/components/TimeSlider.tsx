@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { strings } from '@/shared/constants/strings';
@@ -26,20 +26,10 @@ function clamp01(n: number): number {
  * Single-thumb slider controlling the upper bound (`to`).
  * `from` stays at the month start (bounds.from).
  */
-/**
- * Cap on how often a drag pushes a new range to the parent. The thumb tracks
- * the finger via local state every frame regardless; this only rate-limits the
- * downstream cost (re-filter + re-cluster) so a big month can't stutter the
- * drag. The exact release value is always emitted, so the final set is correct.
- */
-const EMIT_THROTTLE_MS = 110;
-
 export function TimeSlider({ bounds, value, onChange }: TimeSliderProps) {
   const [trackWidth, setTrackWidth] = useState(1);
   /** Live thumb position while dragging; null when the parent value governs. */
   const [dragRatio, setDragRatio] = useState<number | null>(null);
-  /** Timestamp (ms) of the last range pushed to the parent, for throttling. */
-  const lastEmitRef = useRef(0);
   const startMs = Date.parse(bounds.from);
   const endMs = Date.parse(bounds.to);
   const span = Math.max(1, endMs - startMs);
@@ -55,22 +45,14 @@ export function TimeSlider({ bounds, value, onChange }: TimeSliderProps) {
     });
   };
 
-  /**
-   * Drag: move the thumb every frame (local state), but throttle the parent
-   * emit so re-filtering/re-clustering can't drop frames on a large month.
-   */
+  /** Drag: keep the thumb on local state so it never lags the parent render. */
   const drag = (locationX: number) => {
     const next = ratioFromX(locationX);
     setDragRatio(next);
-    const now = Date.now();
-    if (now - lastEmitRef.current >= EMIT_THROTTLE_MS) {
-      lastEmitRef.current = now;
-      emit(next);
-    }
+    emit(next);
   };
 
   const release = (locationX: number) => {
-    lastEmitRef.current = 0;
     emit(ratioFromX(locationX));
     setDragRatio(null);
   };
