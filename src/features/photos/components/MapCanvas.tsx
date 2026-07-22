@@ -32,11 +32,14 @@ const MIN_FIT_SCALE = 1.6;
 const ZOOM_STEP = 1.55;
 
 /**
- * Total zoom budget relative to the full-Korea view — same ceiling the old
- * single-projection map had. The camera's per-gesture maxScale is derived
- * from this so chained rebases can never exceed it.
+ * Total zoom budget relative to the full-Korea view. Rebase re-projects at each
+ * settle, so the map stays crisp all the way in; this just sets how deep a user
+ * can go (≈ Korea's ~400km width / this = smallest visible span, so 60 ≈ a few
+ * km across — neighborhood level, enough to pull nearby pins apart). The
+ * camera's per-gesture maxScale is derived from this so chained rebases can
+ * never exceed it.
  */
-const MAX_EFFECTIVE_SCALE = 18;
+const MAX_EFFECTIVE_SCALE = 60;
 
 /**
  * Zoom-out allowance of a rebased base: the settled camera sits at this scale
