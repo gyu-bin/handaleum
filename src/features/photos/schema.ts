@@ -77,6 +77,7 @@ export const visitPlaceSchema = z.object({
   level: visitAdminLevelSchema,
   province: z.string().min(1).optional(),
   city: z.string().min(1).optional(),
+  gu: z.string().min(1).optional(),
   dong: z.string().min(1).optional(),
   firstTakenAt: z.iso.datetime(),
 });

@@ -16,8 +16,70 @@ type ParsedPlace = {
   journeyLabel: string;
   province: string | null;
   city: string | null;
+  gu: string | null;
   dong: string | null;
 };
+
+/**
+ * Familiar colloquial area names so the finest label reads like a place people
+ * know (판교) instead of an official dong (삼평동). Entries also cover dongs that
+ * are themselves the well-known name (성수동 → 성수). Anything not listed falls
+ * back to the 구. Keyed by dong; a "구 동" key disambiguates repeated dongs.
+ * Extend freely.
+ */
+const AREA_ALIAS: Record<string, string> = {
+  삼평동: '판교',
+  백현동: '판교',
+  판교동: '판교',
+  서교동: '홍대',
+  동교동: '홍대',
+  연남동: '연남동',
+  성수동1가: '성수',
+  성수동2가: '성수',
+  이태원동: '이태원',
+  한남동: '한남',
+  여의도동: '여의도',
+  잠실동: '잠실',
+  압구정동: '압구정',
+  청담동: '청담',
+  '강남구 신사동': '가로수길',
+};
+
+/** Colloquial alias for a dong, if we have one. */
+function areaAlias(gu: string | null, dong: string | null): string | null {
+  if (!dong) {
+    return null;
+  }
+  if (gu && AREA_ALIAS[`${gu} ${dong}`]) {
+    return AREA_ALIAS[`${gu} ${dong}`]!;
+  }
+  return AREA_ALIAS[dong] ?? null;
+}
+
+/**
+ * Finest-grain label people recognize: a famous-area alias if known (판교), else
+ * the 구 (서울 마포구), else the dong (강릉시 홍제동), else the city.
+ */
+function composeFineLabel(
+  city: string | null,
+  gu: string | null,
+  dong: string | null,
+): string | null {
+  const alias = areaAlias(gu, dong);
+  if (alias) {
+    return alias;
+  }
+  if (!city) {
+    return gu ?? dong ?? null;
+  }
+  if (gu) {
+    return `${city} ${gu}`;
+  }
+  if (dong) {
+    return `${city} ${dong}`;
+  }
+  return city;
+}
 
 const labelCache = new Map<string, ParsedPlace | null>();
 
@@ -230,8 +292,10 @@ export function parseGeocodedPlace(
   let cityLabel: string;
 
   if (metro) {
+    // City stays the metro name; the 구 lives in its own field so the finest
+    // label can compose "서울 마포구" while the city level shows just "서울".
     journeyLabel = gu ? `${cityShort} - ${gu}` : cityShort;
-    cityLabel = gu ? `${cityShort} ${gu}` : cityShort;
+    cityLabel = cityShort;
   } else if (/시$/.test(rawCity)) {
     journeyLabel = rawCity;
     cityLabel = rawCity;
@@ -249,6 +313,7 @@ export function parseGeocodedPlace(
     journeyLabel,
     province,
     city: cityLabel,
+    gu: gu && endsWithGu(gu) ? gu : null,
     dong: dong && !endsWithGu(dong) ? dong : null,
   };
 }
@@ -266,34 +331,11 @@ function toSiForm(cityShort: string): string {
 export function formatDetailPlaceLabel(
   addr: Location.LocationGeocodedAddress,
 ): string | null {
-  const rawCity =
-    cleanPart(addr.city) ??
-    cleanPart(addr.subregion) ??
-    cleanPart(addr.region);
-  if (!rawCity) {
+  const parsed = parseGeocodedPlace(addr);
+  if (!parsed?.city) {
     return null;
   }
-
-  if (looksLikeSeoul(addr, rawCity)) {
-    const gu = extractGu(
-      addr.district,
-      addr.name,
-      addr.street,
-      addr.subregion,
-      addr.city,
-      addr.formattedAddress,
-    );
-    return gu ? `서울시 ${gu}` : '서울시';
-  }
-
-  const si = toSiForm(shortCityName(rawCity));
-  const dong = extractDong(
-    addr.district,
-    addr.name,
-    addr.street,
-    addr.formattedAddress,
-  );
-  return dong && !endsWithGu(dong) ? `${si} ${dong}` : si;
+  return composeFineLabel(toSiForm(parsed.city), parsed.gu, parsed.dong);
 }
 
 const detailLabelCache = new Map<string, string | null>();
@@ -419,11 +461,8 @@ export async function resolveVisitPlaces(photos: PhotoRef[]): Promise<VisitPlace
     }
     seen.add(parsed.journeyLabel);
 
-    const level: VisitAdminLevel = parsed.dong
-      ? 'dong'
-      : parsed.city
-        ? 'city'
-        : 'province';
+    const level: VisitAdminLevel =
+      parsed.gu || parsed.dong ? 'dong' : parsed.city ? 'city' : 'province';
 
     out.push({
       key: bucket.key,
@@ -431,6 +470,7 @@ export async function resolveVisitPlaces(photos: PhotoRef[]): Promise<VisitPlace
       level,
       province: parsed.province ?? undefined,
       city: parsed.city ?? undefined,
+      gu: parsed.gu ?? undefined,
       dong: parsed.dong ?? undefined,
       firstTakenAt: bucket.firstTakenAt,
     });
@@ -454,11 +494,14 @@ export function labelsForVisitLevel(
     } else if (level === 'city') {
       label = place.city ?? place.label;
     } else {
-      label = place.dong
-        ? place.city
-          ? `${place.city} ${place.dong}`
-          : place.dong
-        : place.city ?? place.label;
+      // Finest grain: famous-area alias > 구 > 동, computed together.
+      label =
+        composeFineLabel(
+          place.city ?? null,
+          place.gu ?? null,
+          place.dong ?? null,
+        ) ??
+        place.label;
     }
     if (!label || seen.has(label)) {
       continue;

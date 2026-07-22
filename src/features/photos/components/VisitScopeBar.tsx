@@ -13,7 +13,8 @@ export interface VisitScopeBarProps {
 }
 
 /**
- * Bottom strip of this month's places, grain follows map zoom (도 → 시 → 동).
+ * Bottom strip of this month's places, grain follows map zoom
+ * (도 → 시 → 동네: famous-area alias / 구 / 동).
  */
 export function VisitScopeBar({
   level,
