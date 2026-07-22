@@ -1,17 +1,8 @@
 import { useMemo, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Button } from '@/shared/components/Button';
 import { LoadingView } from '@/shared/components/LoadingView';
 import { ScreenHeader } from '@/shared/components/ScreenHeader';
 import { StateView } from '@/shared/components/StateView';
@@ -24,8 +15,13 @@ import { PhotoSelectGrid } from '../components/PhotoSelectGrid';
 import { useSaveCard } from '../hooks/useCards';
 import type { CardTemplate, MapSnapshot } from '../types';
 
+/** How many photos each template can actually place on the card. */
+const TEMPLATE_MAX: Record<CardTemplate, number> = { feed: 3, story: 1 };
+
 /**
- * Photo selection + title/comment input + template choice.
+ * Photo selection + template choice. Title/comment inputs were removed
+ * (2026-07-22): the title defaults to the month name and both stay editable on
+ * the preview screen, so creation is just "pick photos, pick a format".
  * Editing state is screen-local useState (spec A-4); persisted only on save.
  */
 export function CardCreateScreen() {
@@ -34,11 +30,11 @@ export function CardCreateScreen() {
   const { data, isPending, isError, refetch } = useMonthlyPhotos(month);
   const saveCard = useSaveCard();
 
-  const [title, setTitle] = useState('');
-  const [comment, setComment] = useState('');
-  const [template, setTemplate] = useState<CardTemplate>('feed');
+  const [template, setTemplate] = useState<CardTemplate>('story');
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const maxPhotos = TEMPLATE_MAX[template];
 
   const selectedPhotos = useMemo(() => {
     if (!data) {
@@ -73,32 +69,46 @@ export function CardCreateScreen() {
     };
   }, [selectedPhotos]);
 
+  // Selection is capped at what the template can show; picking past the cap
+  // swaps out the oldest pick (so on story, tapping a photo replaces the hero).
   const onToggle = (assetId: string) => {
-    setSelectedAssetIds((prev) =>
-      prev.includes(assetId) ? prev.filter((id) => id !== assetId) : [...prev, assetId],
-    );
+    setSelectedAssetIds((prev) => {
+      if (prev.includes(assetId)) {
+        return prev.filter((id) => id !== assetId);
+      }
+      const next = [...prev, assetId];
+      return next.length > maxPhotos ? next.slice(next.length - maxPhotos) : next;
+    });
+  };
+
+  // Switching to a smaller template keeps the earliest picks.
+  const onSelectTemplate = (next: CardTemplate) => {
+    setTemplate(next);
+    setSelectedAssetIds((prev) => prev.slice(0, TEMPLATE_MAX[next]));
   };
 
   const onSave = async () => {
     setFormError(null);
-    if (title.trim().length === 0) {
-      setFormError(strings.cards.errorTitleRequired);
-      return;
-    }
     if (selectedPhotos.length === 0) {
       setFormError(strings.cards.errorPhotoRequired);
       return;
     }
     try {
+      const monthNumber = Number(month.split('-')[1]);
       const card = await saveCard.mutateAsync({
         month,
-        title: title.trim(),
-        comment: comment.trim(),
+        // Default title (e.g. "칠월의 기록") — editable on the preview screen.
+        title: strings.map.monthTitle(monthNumber),
+        comment: '',
         photoRefs: selectedPhotos,
-        template,
+        template: 'story',
         mapSnapshot,
       });
-      router.replace(`/cards/${card.id}`);
+      // Keep create under preview so back returns to 카드 만들기.
+      router.push({
+        pathname: '/cards/[id]',
+        params: { id: card.id, from: 'create' },
+      });
     } catch (error) {
       console.error('saveCard failed', error);
       setFormError(strings.common.error);
@@ -136,109 +146,84 @@ export function CardCreateScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <ScreenHeader title={strings.cards.createTitle} />
-        {/* The grid owns the scroll (virtualized); the form rides along as its
-            header and the save button as its footer — nesting the FlatList in a
-            ScrollView breaks windowing and warns. */}
-        <PhotoSelectGrid
-          photos={data.allPhotos}
-          selectedAssetIds={selectedAssetIds}
-          onToggle={onToggle}
-          contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
-          ListHeaderComponent={
-            <View style={styles.headerBox}>
-              <View style={styles.section}>
-                <Text style={styles.label}>{strings.cards.titlePlaceholder}</Text>
-                <TextInput
-                  value={title}
-                  onChangeText={setTitle}
-                  placeholder={strings.cards.titlePlaceholder}
-                  placeholderTextColor={theme.colors.subtle}
-                  maxLength={40}
-                  style={styles.input}
-                />
-              </View>
-
-              <View style={styles.section}>
-                <Text style={styles.label}>{strings.cards.commentPlaceholder}</Text>
-                <TextInput
-                  value={comment}
-                  onChangeText={setComment}
-                  placeholder={strings.cards.commentPlaceholder}
-                  placeholderTextColor={theme.colors.subtle}
-                  maxLength={300}
-                  multiline
-                  style={[styles.input, styles.comment]}
-                />
-              </View>
-
-              <View style={styles.section}>
-                <Text style={styles.label}>{strings.cards.templateLabel}</Text>
-                <View style={styles.templateRow}>
-                  <Pressable
-                    onPress={() => setTemplate('feed')}
+      <ScreenHeader
+        title={strings.cards.createTitle}
+        trailing={
+          <Pressable
+            onPress={() => void onSave()}
+            disabled={saveCard.isPending}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={strings.cards.create}
+            style={({ pressed }) => [
+              styles.saveAction,
+              (pressed || saveCard.isPending) && styles.saveActionDim,
+            ]}
+          >
+            <Text style={styles.saveActionText}>{strings.cards.create}</Text>
+          </Pressable>
+        }
+      />
+      {formError ? <Text style={styles.error}>{formError}</Text> : null}
+      {/* The grid owns the scroll (virtualized); the template picker rides
+          along as its header — nesting the FlatList in a ScrollView breaks
+          windowing and warns. Save lives in the screen header. */}
+      <PhotoSelectGrid
+        photos={data.allPhotos}
+        selectedAssetIds={selectedAssetIds}
+        onToggle={onToggle}
+        contentContainerStyle={styles.scroll}
+        ListHeaderComponent={
+          <View style={styles.headerBox}>
+            <View style={styles.section}>
+              <Text style={styles.label}>{strings.cards.templateLabel}</Text>
+              <View style={styles.templateRow}>
+                {/* Feed temporarily hidden — story only (2026-07-22).
+                <Pressable
+                  onPress={() => onSelectTemplate('feed')}
+                  style={[
+                    styles.templateChip,
+                    template === 'feed' && styles.templateChipOn,
+                  ]}
+                >
+                  <Text
                     style={[
-                      styles.templateChip,
-                      template === 'feed' && styles.templateChipOn,
+                      styles.templateText,
+                      template === 'feed' && styles.templateTextOn,
                     ]}
                   >
-                    <Text
-                      style={[
-                        styles.templateText,
-                        template === 'feed' && styles.templateTextOn,
-                      ]}
-                    >
-                      {strings.cards.templateFeed}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => setTemplate('story')}
-                    style={[
-                      styles.templateChip,
-                      template === 'story' && styles.templateChipOn,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.templateText,
-                        template === 'story' && styles.templateTextOn,
-                      ]}
-                    >
-                      {strings.cards.templateStory}
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-
-              <View style={styles.labelRow}>
-                <Text style={styles.label}>{strings.cards.photoLabel}</Text>
-                {selectedCount > 0 ? (
-                  <Text style={styles.selectedCount}>
-                    {strings.cards.selectedCount(selectedCount)}
+                    {strings.cards.templateFeed}
                   </Text>
-                ) : null}
+                </Pressable>
+                */}
+                <Pressable
+                  onPress={() => onSelectTemplate('story')}
+                  style={[
+                    styles.templateChip,
+                    template === 'story' && styles.templateChipOn,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.templateText,
+                      template === 'story' && styles.templateTextOn,
+                    ]}
+                  >
+                    {strings.cards.templateStory}
+                  </Text>
+                </Pressable>
               </View>
             </View>
-          }
-          ListFooterComponent={
-            <View style={styles.footerBox}>
-              {formError ? <Text style={styles.error}>{formError}</Text> : null}
-              <Button
-                title={strings.cards.save}
-                variant="primary"
-                loading={saveCard.isPending}
-                onPress={() => void onSave()}
-                style={styles.saveBtn}
-              />
+
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>{strings.cards.photoLabel}</Text>
+              <Text style={styles.selectedCount}>
+                {strings.cards.selectedCount(selectedCount, maxPhotos)}
+              </Text>
             </View>
-          }
-        />
-      </KeyboardAvoidingView>
+          </View>
+        }
+      />
     </SafeAreaView>
   );
 }
@@ -248,11 +233,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background,
   },
-  flex: {
-    flex: 1,
-  },
   // No gap here: it would also space out the grid's photo rows. Section
-  // spacing lives inside headerBox/footerBox instead.
+  // spacing lives inside headerBox instead.
   scroll: {
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.sm,
@@ -262,9 +244,19 @@ const styles = StyleSheet.create({
     gap: theme.spacing.lg,
     marginBottom: theme.spacing.sm,
   },
-  footerBox: {
-    marginTop: theme.spacing.lg,
-    gap: theme.spacing.md,
+  saveAction: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: theme.radius.sm,
+    backgroundColor: theme.colors.accent,
+  },
+  saveActionDim: {
+    opacity: 0.55,
+  },
+  saveActionText: {
+    ...theme.type.label,
+    color: theme.colors.white,
+    fontWeight: '700',
   },
   section: {
     gap: theme.spacing.sm,
@@ -283,23 +275,6 @@ const styles = StyleSheet.create({
     ...theme.type.label,
     color: theme.colors.accent,
     fontWeight: '700',
-  },
-  input: {
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 14,
-    color: theme.colors.ink,
-    // fontSize only — spreading a type token would add lineHeight, which
-    // mis-centers text vertically inside a TextInput on Android.
-    fontSize: theme.type.body.fontSize,
-  },
-  comment: {
-    minHeight: 96,
-    textAlignVertical: 'top',
-    paddingTop: 14,
   },
   templateRow: {
     flexDirection: 'row',
@@ -325,12 +300,12 @@ const styles = StyleSheet.create({
   templateTextOn: {
     color: theme.colors.surface,
   },
-  saveBtn: {
-    marginTop: theme.spacing.xs,
-  },
+  /** Fixed under the header (not in the scroll) so it's visible next to save. */
   error: {
     ...theme.type.label,
     color: theme.colors.accent,
     fontWeight: '600',
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.sm,
   },
 });

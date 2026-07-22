@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { RecapCardDraft } from '../types';
 import {
   deleteCard,
+  deleteCards,
   getCard,
   listCards,
   saveCard,
@@ -48,6 +49,14 @@ export function useDeleteCard() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: deleteCard,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: cardsQueryKeys.all }),
+  });
+}
+
+export function useDeleteCards() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteCards,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: cardsQueryKeys.all }),
   });
 }

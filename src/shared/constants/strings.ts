@@ -134,6 +134,9 @@ export const strings = {
     listTitle: '내 회고',
     listEmpty: '아직 만든 회고 카드가 없습니다',
     createTitle: '카드 만들기',
+    /** Primary CTA on the create screen (not the edit "저장"). */
+    create: '만들기',
+    previewTitle: '미리보기',
     titlePlaceholder: '이 달의 제목',
     commentPlaceholder: '한 달을 한마디로',
     templateLabel: '템플릿',
@@ -143,6 +146,16 @@ export const strings = {
     shareFormatLabel: '공유 형식',
     save: '저장',
     edit: '제목·코멘트 편집',
+    listEdit: '편집',
+    listDone: '완료',
+    selectAll: '전체 선택',
+    deselectAll: '선택 해제',
+    deleteSelected: (count: number) => `${count}개 삭제`,
+    deleteConfirmTitle: '카드를 삭제할까요?',
+    deleteConfirmMessage: (count: number) =>
+      count === 1
+        ? '이 카드를 삭제합니다. 되돌릴 수 없습니다.'
+        : `선택한 ${count}장을 삭제합니다. 되돌릴 수 없습니다.`,
     saveToAlbum: '앨범에 저장',
     saved: '앨범에 저장했습니다',
     share: '공유',
@@ -150,6 +163,7 @@ export const strings = {
     notFound: '카드를 찾을 수 없습니다',
     errorTitleRequired: '제목을 입력해 주세요',
     errorPhotoRequired: '사진을 한 장 이상 선택해 주세요',
-    selectedCount: (count: number) => `${count}장 선택됨`,
+    /** e.g. "2/3장" — how many photos are picked out of the template's cap. */
+    selectedCount: (count: number, max: number) => `${count}/${max}장`,
   },
 } as const;

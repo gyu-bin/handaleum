@@ -76,3 +76,12 @@ export async function updateCard(
 export async function deleteCard(id: string): Promise<void> {
   writeAll(readAll().filter((card) => card.id !== id));
 }
+
+/** Delete many cards in one write (list bulk delete). */
+export async function deleteCards(ids: string[]): Promise<void> {
+  if (ids.length === 0) {
+    return;
+  }
+  const remove = new Set(ids);
+  writeAll(readAll().filter((card) => !remove.has(card.id)));
+}

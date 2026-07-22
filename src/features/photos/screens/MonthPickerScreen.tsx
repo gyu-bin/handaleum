@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -9,11 +10,24 @@ import { theme } from '@/shared/constants/theme';
 
 import { MonthPickerList } from '../components/MonthPickerList';
 import { useCurrentMonth } from '../hooks/useCurrentMonth';
-import { useMonthSummaries } from '../hooks/useMonthlyPhotos';
+import {
+  prefetchMonthlyPhotos,
+  useMonthSummaries,
+} from '../hooks/useMonthlyPhotos';
 
 export function MonthPickerScreen() {
   const { month, setMonth } = useCurrentMonth();
   const { data, isPending, isError, refetch, isRefetching } = useMonthSummaries();
+
+  // Warm a few recent months while the user scans the list.
+  useEffect(() => {
+    if (!data) {
+      return;
+    }
+    for (const summary of data.slice(0, 4)) {
+      prefetchMonthlyPhotos(summary.month);
+    }
+  }, [data]);
 
   if (isPending) {
     return <LoadingView />;

@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
+import { prefetchMonthlyPhotos } from '../hooks/useMonthlyPhotos';
 import type { MonthKey, MonthSummary } from '../types';
 
 export interface MonthPickerListProps {
@@ -27,6 +28,9 @@ export function MonthPickerList({ summaries, selected, onSelect }: MonthPickerLi
         return (
           <Pressable
             onPress={() => {
+              // Kick off the month load before navigating back so the map
+              // often has cache ready (or already fetching) on arrival.
+              prefetchMonthlyPhotos(item.month);
               onSelect(item.month);
               router.back();
             }}

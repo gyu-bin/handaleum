@@ -1,16 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Alert,
-  Pressable,
   ScrollView,
   Share,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { saveToLibraryAsync } from 'expo-media-library';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/shared/components/Button';
@@ -20,75 +18,48 @@ import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
-import { CardTemplateFeed } from '../components/CardTemplateFeed';
 import { CardTemplateStory } from '../components/CardTemplateStory';
-import { useCard, useDeleteCard, useUpdateCard } from '../hooks/useCards';
+import { useCard, useDeleteCard } from '../hooks/useCards';
 import { captureCardImage, EXPORT_RENDER_WIDTH } from '../services/cardExport';
-import type { CardTemplate } from '../types';
 
 export interface CardPreviewScreenProps {
   cardId: string;
 }
 
-/** On-screen preview widths (points) — sized to sit comfortably on a phone. */
-const PREVIEW_WIDTH: Record<CardTemplate, number> = {
-  feed: 360,
-  story: 270,
-};
+/** On-screen preview width for story (points). */
+const PREVIEW_WIDTH = 270;
 
 /**
- * Final card view. The user picks the export format (feed 4:5 / story 9:16) at
- * share time; the picked template is rendered off-screen at export resolution,
- * captured to a 1080-wide PNG, and handed to the system share sheet (Instagram
- * shows up there when installed) or saved to the camera roll. Offline-capable.
+ * Final card view. Story-only for now (feed format chips commented out).
+ * Layout: scrollable preview + fixed footer actions so buttons never overlap
+ * the tall story card.
  */
 export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
   const router = useRouter();
+  const { from } = useLocalSearchParams<{ from?: string | string[] }>();
+  const fromCreate = (Array.isArray(from) ? from[0] : from) === 'create';
   const { data, isPending, isError, refetch } = useCard(cardId);
   const deleteCard = useDeleteCard();
-  const updateCard = useUpdateCard();
   const captureTarget = useRef<View>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  // null = follow the card's stored template; a value = user override.
-  const [formatOverride, setFormatOverride] = useState<CardTemplate | null>(null);
-  const [editing, setEditing] = useState(false);
-  const [editTitle, setEditTitle] = useState('');
-  const [editComment, setEditComment] = useState('');
-  const [editError, setEditError] = useState<string | null>(null);
 
-  const beginEdit = () => {
-    if (!data) {
+  const goBack = () => {
+    // After 만들기, land on 카드 만들기 — never home.
+    if (fromCreate) {
+      if (router.canDismiss()) {
+        router.dismissTo('/cards/create');
+      } else {
+        router.replace('/cards/create');
+      }
       return;
     }
-    setEditTitle(data.title);
-    setEditComment(data.comment);
-    setEditError(null);
-    setEditing(true);
-  };
-
-  const saveEdit = async () => {
-    const title = editTitle.trim();
-    if (title.length === 0) {
-      setEditError(strings.cards.errorTitleRequired);
-      return;
-    }
-    try {
-      await updateCard.mutateAsync({
-        id: cardId,
-        fields: { title, comment: editComment.trim() },
-      });
-      setEditing(false);
-    } catch (error) {
-      console.error('updateCard failed', error);
-      setEditError(strings.common.error);
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/cards');
     }
   };
-
-  // Drop edit state if the card changes underneath (e.g. refetch).
-  useEffect(() => {
-    setEditing(false);
-  }, [cardId]);
 
   const capture = async (): Promise<string | null> => {
     if (!captureTarget.current) {
@@ -167,7 +138,7 @@ export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
   if (isError) {
     return (
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-        <ScreenHeader title={strings.cards.listTitle} />
+        <ScreenHeader title={strings.cards.previewTitle} onBack={goBack} />
         <StateView
           icon="⚠️"
           title={strings.common.error}
@@ -181,7 +152,7 @@ export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
   if (data === null || data === undefined) {
     return (
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-        <ScreenHeader title={strings.cards.listTitle} />
+        <ScreenHeader title={strings.cards.previewTitle} onBack={goBack} />
         <StateView icon="🔍" title={strings.cards.notFound} />
       </SafeAreaView>
     );
@@ -189,141 +160,75 @@ export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
 
   const draft = {
     month: data.month,
-    // Live-preview the in-progress edits so changes are visible as they type.
-    title: editing ? editTitle : data.title,
-    comment: editing ? editComment : data.comment,
+    title: data.title,
+    comment: data.comment,
     photoRefs: data.photoRefs,
     template: data.template,
     mapSnapshot: data.mapSnapshot,
   };
-  const format: CardTemplate = formatOverride ?? data.template;
+
+  /*
   const formatOptions: { id: CardTemplate; label: string }[] = [
     { id: 'feed', label: strings.cards.templateFeed },
     { id: 'story', label: strings.cards.templateStory },
   ];
-
-  const Template = format === 'story' ? CardTemplateStory : CardTemplateFeed;
+  */
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <ScreenHeader
-        title={strings.cards.listTitle}
-        onBack={() => router.replace('/cards')}
+        title={strings.cards.previewTitle}
+        onBack={goBack}
       />
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {!editing ? (
-          <View
-            style={styles.formatRow}
-            accessibilityRole="radiogroup"
-            accessibilityLabel={strings.cards.shareFormatLabel}
-          >
-            {formatOptions.map((opt) => {
-              const selected = opt.id === format;
-              return (
-                <Pressable
-                  key={opt.id}
-                  onPress={() => setFormatOverride(opt.id)}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected }}
-                  style={[styles.formatChip, selected && styles.formatChipActive]}
-                >
-                  <Text
-                    style={[styles.formatText, selected && styles.formatTextActive]}
-                  >
-                    {opt.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        ) : null}
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/*
+        Feed / story format chips — temporarily story-only.
+        <View style={styles.formatRow}>
+          {formatOptions.map(...)}
+        </View>
+        */}
 
         <View style={styles.preview}>
-          <Template card={draft} width={PREVIEW_WIDTH[format]} />
+          <CardTemplateStory card={draft} width={PREVIEW_WIDTH} />
         </View>
-
-        {editing ? (
-          <View style={styles.editPanel}>
-            <Text style={styles.editLabel}>{strings.cards.titlePlaceholder}</Text>
-            <TextInput
-              value={editTitle}
-              onChangeText={setEditTitle}
-              placeholder={strings.cards.titlePlaceholder}
-              placeholderTextColor={theme.colors.subtle}
-              maxLength={40}
-              style={styles.input}
-            />
-            <Text style={styles.editLabel}>{strings.cards.commentPlaceholder}</Text>
-            <TextInput
-              value={editComment}
-              onChangeText={setEditComment}
-              placeholder={strings.cards.commentPlaceholder}
-              placeholderTextColor={theme.colors.subtle}
-              maxLength={300}
-              multiline
-              style={[styles.input, styles.inputMultiline]}
-            />
-            {editError ? <Text style={styles.error}>{editError}</Text> : null}
-            <Button
-              title={strings.cards.save}
-              variant="primary"
-              loading={updateCard.isPending}
-              onPress={() => void saveEdit()}
-            />
-            <Button
-              title={strings.common.cancel}
-              variant="ghost"
-              disabled={updateCard.isPending}
-              onPress={() => setEditing(false)}
-            />
-          </View>
-        ) : (
-          <>
-            {actionError ? <Text style={styles.error}>{actionError}</Text> : null}
-
-            <View style={styles.actions}>
-              <Button
-                title={strings.cards.share}
-                variant="primary"
-                loading={busy}
-                onPress={() => void onShare()}
-              />
-              <Button
-                title={strings.cards.saveToAlbum}
-                variant="secondary"
-                disabled={busy}
-                onPress={() => void onSaveImage()}
-              />
-              <Button
-                title={strings.cards.edit}
-                variant="secondary"
-                disabled={busy}
-                onPress={beginEdit}
-              />
-              <Button
-                title={strings.cards.delete}
-                variant="ghost"
-                onPress={onDelete}
-                style={styles.deleteBtn}
-              />
-            </View>
-          </>
-        )}
       </ScrollView>
 
-      {/*
-       * Off-screen export copy at export resolution. Kept mounted so its photos
-       * preload, and captured on demand. Positioned off-screen (not opacity 0,
-       * which can blank the capture).
-       */}
+      <View style={styles.footer}>
+        {actionError ? <Text style={styles.error}>{actionError}</Text> : null}
+        <Button
+          title={strings.cards.share}
+          variant="primary"
+          loading={busy}
+          onPress={() => void onShare()}
+        />
+        <Button
+          title={strings.cards.saveToAlbum}
+          variant="secondary"
+          disabled={busy}
+          onPress={() => void onSaveImage()}
+        />
+        {/* Story: no title/comment edit (2026-07-22).
+        <Button title={strings.cards.edit} ... />
+        */}
+        <Button
+          title={strings.cards.delete}
+          variant="ghost"
+          onPress={onDelete}
+        />
+      </View>
+
       <View style={styles.offscreen} pointerEvents="none" aria-hidden>
-        {/* width pinned so the capture is exactly the template — no container slack */}
         <View
           ref={captureTarget}
           collapsable={false}
           style={{ width: EXPORT_RENDER_WIDTH }}
         >
-          <Template card={draft} width={EXPORT_RENDER_WIDTH} />
+          <CardTemplateStory card={draft} width={EXPORT_RENDER_WIDTH} />
         </View>
       </View>
     </SafeAreaView>
@@ -336,75 +241,34 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   scroll: {
+    flex: 1,
+  },
+  scrollContent: {
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.sm,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.lg,
     alignItems: 'center',
-    gap: theme.spacing.lg,
-    paddingBottom: theme.spacing.xl,
-  },
-  formatRow: {
-    flexDirection: 'row',
-    gap: theme.spacing.sm,
-    alignSelf: 'stretch',
-    justifyContent: 'center',
-  },
-  formatChip: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 8,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.surfaceAlt,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.hairline,
-  },
-  formatChipActive: {
-    backgroundColor: theme.colors.accentSoft,
-    borderColor: theme.colors.accent,
-  },
-  formatText: {
-    ...theme.type.label,
-    color: theme.colors.inkSoft,
-    fontWeight: '600',
-  },
-  formatTextActive: {
-    color: theme.colors.accent,
   },
   preview: {
     alignItems: 'center',
-  },
-  actions: {
-    width: '100%',
-    gap: theme.spacing.sm,
-  },
-  editPanel: {
-    width: '100%',
-    gap: theme.spacing.sm,
-  },
-  editLabel: {
-    ...theme.type.label,
-    color: theme.colors.inkSoft,
-    marginTop: theme.spacing.xs,
-  },
-  input: {
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
     borderRadius: theme.radius.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 12,
-    color: theme.colors.ink,
-    fontSize: theme.type.body.fontSize,
+    overflow: 'hidden',
+    ...theme.shadows.card,
   },
-  inputMultiline: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  deleteBtn: {
-    marginTop: theme.spacing.xs,
+  footer: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.md,
+    gap: theme.spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.hairline,
+    backgroundColor: theme.colors.background,
   },
   error: {
     ...theme.type.label,
     color: theme.colors.accent,
     fontWeight: '600',
+    textAlign: 'center',
   },
   offscreen: {
     position: 'absolute',

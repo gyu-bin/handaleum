@@ -6,13 +6,16 @@ import { theme } from '@/shared/constants/theme';
 
 import { PaperMap } from '../../photos/components/PaperMap';
 import { resolveAssetUri } from '../../photos/services/mediaLibrary';
+import { resolveCardRegionLabel } from '../../photos/utils/placeJourney';
 import type { RecapCardDraft } from '../types';
-import { cardCoordinate, formatMonthDot } from '../utils/cardMeta';
+import { cardCentroid, cardCoordinate, formatMonthDot } from '../utils/cardMeta';
 
 /** Design width the fixed sizes below are authored against. */
 const BASE_WIDTH = 270;
-const OUTER_PAD = 15;
-const FRAME_PAD = 16;
+const OUTER_PAD = 12;
+const FRAME_PAD = 12;
+/** Map strip height as a fraction of content width — keep below the hero photo. */
+const MAP_HEIGHT_RATIO = 0.38;
 
 /**
  * Story card (1080×1920, 9:16) in the Dawn Survey language: cream paper with a
@@ -24,6 +27,10 @@ export function CardTemplateStory({ card, width = BASE_WIDTH }: CardTemplateStor
   const styles = useMemo(() => makeStyles(width), [width]);
   const hero = card.photoRefs[0];
   const [uri, setUri] = useState<string | null>(null);
+  const [region, setRegion] = useState<string | null>(null);
+  const pinsKey = card.photoRefs
+    .map((p) => `${p.assetId}:${p.lat.toFixed(3)},${p.lng.toFixed(3)}`)
+    .join('|');
 
   useEffect(() => {
     if (!hero) {
@@ -39,6 +46,24 @@ export function CardTemplateStory({ card, width = BASE_WIDTH }: CardTemplateStor
       cancelled = true;
     };
   }, [hero]);
+
+  useEffect(() => {
+    const center = cardCentroid(card.photoRefs);
+    if (!center) {
+      setRegion(null);
+      return;
+    }
+    let cancelled = false;
+    void resolveCardRegionLabel(center.lat, center.lng).then((label) => {
+      if (!cancelled) {
+        setRegion(label);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pinsKey captures photo set
+  }, [pinsKey]);
 
   const pins = useMemo(
     () =>
@@ -59,7 +84,14 @@ export function CardTemplateStory({ card, width = BASE_WIDTH }: CardTemplateStor
       <View style={styles.frame}>
         <View style={styles.header}>
           <Text style={styles.brand}>한달음</Text>
-          <Text style={styles.coord}>{coord}</Text>
+          <View style={styles.metaCol}>
+            {region ? (
+              <Text style={styles.region} numberOfLines={1}>
+                {region}
+              </Text>
+            ) : null}
+            {coord ? <Text style={styles.coord}>{coord}</Text> : null}
+          </View>
         </View>
         <View style={styles.rule} />
 
@@ -72,7 +104,7 @@ export function CardTemplateStory({ card, width = BASE_WIDTH }: CardTemplateStor
         </View>
 
         <View style={styles.mapWrap}>
-          <PaperMap pins={pins} width={mapW} height={mapW * 0.72} />
+          <PaperMap pins={pins} width={mapW} height={mapW * MAP_HEIGHT_RATIO} />
         </View>
 
         <View style={styles.titleBlock}>
@@ -80,7 +112,7 @@ export function CardTemplateStory({ card, width = BASE_WIDTH }: CardTemplateStor
             {card.title}
           </Text>
           {card.comment ? (
-            <Text style={styles.comment} numberOfLines={3}>
+            <Text style={styles.comment} numberOfLines={2}>
               {card.comment}
             </Text>
           ) : null}
@@ -119,7 +151,7 @@ function makeStyles(width: number) {
       borderWidth: 1,
       borderColor: theme.tint.mid,
       padding: FRAME_PAD * s,
-      gap: 12 * s,
+      gap: 8 * s,
     },
     header: {
       flexDirection: 'row',
@@ -128,21 +160,34 @@ function makeStyles(width: number) {
     },
     brand: {
       color: theme.colors.inkSoft,
-      fontSize: 11 * s,
+      fontSize: 10 * s,
       fontWeight: '700',
-      letterSpacing: 3 * s,
+      letterSpacing: 2.5 * s,
+    },
+    metaCol: {
+      flexShrink: 1,
+      alignItems: 'flex-end',
+      gap: 1 * s,
+      maxWidth: width * 0.58,
+    },
+    region: {
+      color: theme.colors.inkSoft,
+      fontSize: 9 * s,
+      fontWeight: '600',
+      letterSpacing: 0.2 * s,
     },
     coord: {
       color: theme.colors.subtle,
-      fontSize: 9.5 * s,
-      letterSpacing: 0.8 * s,
+      fontSize: 8.5 * s,
+      letterSpacing: 0.6 * s,
     },
     rule: {
-      height: 1,
+      height: StyleSheet.hairlineWidth,
       backgroundColor: theme.tint.soft,
     },
     hero: {
-      flex: 1,
+      flex: 2.4,
+      minHeight: width * 0.72,
       borderRadius: 3 * s,
       overflow: 'hidden',
       borderWidth: 1,
@@ -163,20 +208,19 @@ function makeStyles(width: number) {
       borderColor: theme.colors.border,
     },
     titleBlock: {
-      marginTop: 2 * s,
-      gap: 5 * s,
+      gap: 3 * s,
     },
     title: {
       fontFamily: theme.fonts.serif,
       color: theme.colors.ink,
-      fontSize: 26 * s,
+      fontSize: 20 * s,
       fontWeight: '700',
-      letterSpacing: -0.6 * s,
+      letterSpacing: -0.4 * s,
     },
     comment: {
       color: theme.colors.inkSoft,
-      fontSize: 13 * s,
-      lineHeight: 19 * s,
+      fontSize: 11 * s,
+      lineHeight: 15 * s,
     },
     footer: {
       flexDirection: 'row',
@@ -186,23 +230,23 @@ function makeStyles(width: number) {
     tickRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6 * s,
+      gap: 5 * s,
     },
     tick: {
-      width: 9 * s,
-      height: 9 * s,
+      width: 7 * s,
+      height: 7 * s,
       backgroundColor: theme.colors.sand,
     },
     month: {
       color: theme.colors.ink,
-      fontSize: 12 * s,
+      fontSize: 11 * s,
       fontWeight: '600',
-      letterSpacing: 0.5 * s,
+      letterSpacing: 0.4 * s,
     },
     unit: {
       color: theme.colors.subtle,
-      fontSize: 9 * s,
-      letterSpacing: 2 * s,
+      fontSize: 8 * s,
+      letterSpacing: 1.6 * s,
     },
   });
 }

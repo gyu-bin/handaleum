@@ -50,7 +50,7 @@ export function MonthlyMapScreen() {
   const { month } = useCurrentMonth();
   const { themeId } = useMapTheme();
   const { covers, setCover } = usePinCovers(month);
-  const { data, isPending, isError, refetch, isRefetching } = useMonthlyPhotos(month, {
+  const { data, isPending, isFetching, isError, refetch, isRefetching } = useMonthlyPhotos(month, {
     enabled: isReady && hasAccess,
   });
   const bounds = useMemo(() => monthTimeBoundsIso(month), [month]);
@@ -97,7 +97,7 @@ export function MonthlyMapScreen() {
     return <Redirect href="/permission" />;
   }
 
-  if (isPending) {
+  if (isPending && !data) {
     return <LoadingView />;
   }
 
@@ -135,7 +135,9 @@ export function MonthlyMapScreen() {
                 {strings.map.monthTitle(monthNumber)}
               </Text>
               <Text style={styles.monthMeta} numberOfLines={1}>
-                {strings.map.monthMeta(monthLabel, clusters.length)}
+                {isFetching && data
+                  ? strings.common.loading
+                  : strings.map.monthMeta(monthLabel, clusters.length)}
               </Text>
             </View>
             <Pressable

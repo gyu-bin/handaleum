@@ -12,7 +12,10 @@ import { getAssetLocationRaw, setAssetLocationRaw } from '@/lib/storage';
 import type { MonthKey, MonthlyPhotos, MonthSummary, PhotoRef } from '../types';
 import { monthBounds, monthKeyFromTimestamp } from '../utils/month';
 
-const PAGE_SIZE = 100;
+/** Larger pages = fewer native round-trips when listing a month. */
+const PAGE_SIZE = 200;
+/** Parallel getAssetInfoAsync calls for uncached assets only. */
+const LOCATION_BATCH = 40;
 
 async function collectAssets(options: {
   createdAfter?: number;
@@ -48,10 +51,8 @@ function refFromCoords(asset: Asset, lat: number, lng: number): PhotoRef {
   };
 }
 
-async function toPhotoRefOrNull(asset: Asset): Promise<PhotoRef | 'no-location' | null> {
-  // GPS is effectively immutable per asset, and getAssetInfoAsync is one native
-  // call per photo — the dominant cost of a month load — so hit the persistent
-  // cache first and only ask the library about assets we've never seen.
+/** Sync resolve from kv cache — no native call. */
+function fromCache(asset: Asset): PhotoRef | 'no-location' | 'miss' {
   const cached = getAssetLocationRaw(asset.id);
   if (cached === 'x') {
     return 'no-location';
@@ -62,7 +63,10 @@ async function toPhotoRefOrNull(asset: Asset): Promise<PhotoRef | 'no-location' 
       return refFromCoords(asset, lat!, lng!);
     }
   }
+  return 'miss';
+}
 
+async function fetchLocation(asset: Asset): Promise<PhotoRef | 'no-location' | null> {
   try {
     const info = await getAssetInfoAsync(asset, { shouldDownloadFromNetwork: false });
     const location = info.location;
@@ -83,8 +87,7 @@ async function toPhotoRefOrNull(asset: Asset): Promise<PhotoRef | 'no-location' 
 
 /**
  * Load all camera-roll photos for a month via expo-media-library.
- * Photos without GPS are excluded from `photos` and counted in
- * `noLocationCount`. Success criterion: 1,000-photo month loads within 3s.
+ * Cached GPS hits resolve synchronously; only uncached assets pay getAssetInfoAsync.
  */
 export async function loadMonthlyPhotos(month: MonthKey): Promise<MonthlyPhotos> {
   const { startMs, endMs } = monthBounds(month);
@@ -95,12 +98,22 @@ export async function loadMonthlyPhotos(month: MonthKey): Promise<MonthlyPhotos>
 
   const photos: PhotoRef[] = [];
   let noLocationCount = 0;
+  const uncached: Asset[] = [];
 
-  // Resolve location in small batches to avoid flooding the bridge.
-  const BATCH = 20;
-  for (let i = 0; i < assets.length; i += BATCH) {
-    const chunk = assets.slice(i, i + BATCH);
-    const results = await Promise.all(chunk.map(toPhotoRefOrNull));
+  for (const asset of assets) {
+    const hit = fromCache(asset);
+    if (hit === 'miss') {
+      uncached.push(asset);
+    } else if (hit === 'no-location') {
+      noLocationCount += 1;
+    } else {
+      photos.push(hit);
+    }
+  }
+
+  for (let i = 0; i < uncached.length; i += LOCATION_BATCH) {
+    const chunk = uncached.slice(i, i + LOCATION_BATCH);
+    const results = await Promise.all(chunk.map(fetchLocation));
     for (const result of results) {
       if (result === 'no-location') {
         noLocationCount += 1;

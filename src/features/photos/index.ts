@@ -1,7 +1,11 @@
 export { resolveAssetUri } from './services/mediaLibrary';
 export { clusterPhotos } from './services/cluster';
 export { photosQueryKeys } from './hooks/photosQueryKeys';
-export { useMonthlyPhotos, useMonthSummaries } from './hooks/useMonthlyPhotos';
+export {
+  prefetchMonthlyPhotos,
+  useMonthlyPhotos,
+  useMonthSummaries,
+} from './hooks/useMonthlyPhotos';
 export { useCurrentMonth } from './hooks/useCurrentMonth';
 export { useMapTheme } from './hooks/useMapTheme';
 export { usePinCovers } from './hooks/usePinCovers';

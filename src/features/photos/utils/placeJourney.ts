@@ -194,6 +194,43 @@ async function reverseParsed(lat: number, lng: number): Promise<ParsedPlace | nu
   }
 }
 
+/**
+ * Card plate region: "경기도 · 성남시" / "서울 · 마포구".
+ * Requests location permission if needed (user-initiated card flow).
+ */
+export async function resolveCardRegionLabel(
+  lat: number,
+  lng: number,
+): Promise<string | null> {
+  const permission = await Location.getForegroundPermissionsAsync();
+  if (permission.status !== 'granted') {
+    const requested = await Location.requestForegroundPermissionsAsync();
+    if (requested.status !== 'granted') {
+      return null;
+    }
+  }
+
+  const parsed = await reverseParsed(lat, lng);
+  if (!parsed) {
+    return null;
+  }
+
+  const province = parsed.province?.trim() || null;
+  const city = parsed.city?.trim() || null;
+  const gu = parsed.gu?.trim() || null;
+
+  if (province && gu && (province === '서울' || city?.startsWith('서울'))) {
+    return `${province} · ${gu}`;
+  }
+  if (province && city && province !== city && !city.startsWith(province)) {
+    return `${province} · ${city}`;
+  }
+  if (city && gu) {
+    return `${city} · ${gu}`;
+  }
+  return city ?? province ?? parsed.journeyLabel ?? null;
+}
+
 function collectBuckets(photos: PhotoRef[]): Bucket[] {
   const map = new Map<string, Bucket>();
   for (const photo of photos) {
