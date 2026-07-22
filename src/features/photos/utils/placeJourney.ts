@@ -1,17 +1,18 @@
 import * as Location from 'expo-location';
 
-import seoulDongGu from '@/assets/geo/seoul-dong-gu.json';
+import dongGu from '@/assets/geo/dong-gu.json';
 
 import type { PhotoRef, VisitAdminLevel, VisitPlace } from '../types';
 
 /**
- * Seoul 법정동 → 구. iOS reverse-geocoding returns the 법정동 (도화동) but never
- * the 구 for Seoul points, so we recover the 구 from this reference table.
- * Generated from the official 법정동코드 전체자료 (25 구, 464 법정동); the two
- * intra-Seoul name collisions (신사동, 신정동) are pinned to their better-known
- * 구 (강남구, 양천구).
+ * 시 → (법정동 → 구). iOS reverse-geocoding returns the 법정동 (도화동) but never
+ * the 구 for cities that have one, so we recover the 구 from this reference table.
+ * Generated from the official 법정동코드 전체자료, covering Seoul's 자치구 and every
+ * 일반구 시 (성남·수원·고양·용인·창원·청주 등). Keyed by 시 so identically named
+ * dongs in different cities don't collide; the few intra-city name collisions are
+ * pinned (Seoul 신사동→강남구, 신정동→양천구) or omitted so they fall back to 시.
  */
-const SEOUL_DONG_GU = seoulDongGu as Record<string, string>;
+const DONG_GU = dongGu as Record<string, Record<string, string>>;
 
 /** ~110m buckets — nearby photos share one reverse-geocode call. */
 const BUCKET_DECIMALS = 3;
@@ -56,12 +57,12 @@ const AREA_ALIAS: Record<string, string> = {
   '강남구 신사동': '가로수길',
 };
 
-/** Recover the 구 for a Seoul 법정동 (iOS returns the dong but not the 구). */
-function seoulGuForDong(cityShort: string, dong: string | null): string | null {
-  if (cityShort !== '서울' || !dong) {
+/** Recover the 구 for a 법정동 when iOS returns the dong but not the 구. */
+function guForDong(cityShort: string, dong: string | null): string | null {
+  if (!dong) {
     return null;
   }
-  return SEOUL_DONG_GU[dong] ?? null;
+  return DONG_GU[cityShort]?.[dong] ?? null;
 }
 
 /** Colloquial alias for a dong, if we have one. */
@@ -256,8 +257,8 @@ function extractProvince(
 
 /**
  * Clean journey labels:
- * - 서울·광역시 → "서울 - 마포구" (구 required when available)
- * - 그 외 → "성남시" / "용인시" (시 only)
+ * - 구가 있는 시 → "서울 - 마포구" / "성남시 - 분당구" (구 appended when known)
+ * - 그 외 → "파주시" / "강릉시" (시 only)
  */
 export function formatAlbumPlaceLabel(
   addr: Location.LocationGeocodedAddress,
@@ -298,8 +299,8 @@ export function parseGeocodedPlace(
     addr.formattedAddress,
   );
 
-  // iOS returns the 법정동 but not the 구 for Seoul; recover it from the dong
-  // when direct extraction finds nothing.
+  // iOS returns the 법정동 but not the 구 for cities that have one; recover it
+  // from the dong when direct extraction finds nothing.
   const gu =
     extractGu(
       addr.district,
@@ -308,26 +309,23 @@ export function parseGeocodedPlace(
       addr.subregion,
       addr.city,
       addr.formattedAddress,
-    ) ?? seoulGuForDong(cityShort, dong);
+    ) ?? guForDong(cityShort, dong);
 
-  let journeyLabel: string;
+  // The city stays at 시 grain; the 구 lives in its own field.
   let cityLabel: string;
-
   if (metro) {
-    // City stays the metro name; the 구 lives in its own field so the finest
-    // label can compose "서울 마포구" while the city level shows just "서울".
-    journeyLabel = gu ? `${cityShort} - ${gu}` : cityShort;
     cityLabel = cityShort;
   } else if (/시$/.test(rawCity)) {
-    journeyLabel = rawCity;
     cityLabel = rawCity;
   } else if (/시$/.test(cityShort)) {
-    journeyLabel = cityShort;
     cityLabel = cityShort;
   } else {
-    journeyLabel = `${cityShort}시`;
     cityLabel = `${cityShort}시`;
   }
+
+  // Append the 구 whenever we have one (metro or 일반구 시) so distinct 구 stay
+  // distinct — resolveVisitPlaces dedupes buckets by this label.
+  const journeyLabel = gu ? `${cityLabel} - ${gu}` : cityLabel;
 
   const province = extractProvince(addr, cityShort, metro);
 
@@ -346,9 +344,9 @@ function toSiForm(cityShort: string): string {
 }
 
 /**
- * Detail-sheet location label. Seoul is shown to district grain (서울시 서대문구);
- * everywhere else to dong grain (수원시 영통동), falling back to the city alone
- * (성남시) when no finer part is found.
+ * Detail-sheet location label. Shown to 구 grain where the city has one
+ * (서울시 서대문구, 수원시 영통구), to dong grain elsewhere (강릉시 홍제동), and
+ * falling back to the city alone (파주시) when no finer part is found.
  */
 export function formatDetailPlaceLabel(
   addr: Location.LocationGeocodedAddress,
