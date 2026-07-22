@@ -1,6 +1,17 @@
 import * as Location from 'expo-location';
 
+import seoulDongGu from '@/assets/geo/seoul-dong-gu.json';
+
 import type { PhotoRef, VisitAdminLevel, VisitPlace } from '../types';
+
+/**
+ * Seoul 법정동 → 구. iOS reverse-geocoding returns the 법정동 (도화동) but never
+ * the 구 for Seoul points, so we recover the 구 from this reference table.
+ * Generated from the official 법정동코드 전체자료 (25 구, 464 법정동); the two
+ * intra-Seoul name collisions (신사동, 신정동) are pinned to their better-known
+ * 구 (강남구, 양천구).
+ */
+const SEOUL_DONG_GU = seoulDongGu as Record<string, string>;
 
 /** ~110m buckets — nearby photos share one reverse-geocode call. */
 const BUCKET_DECIMALS = 3;
@@ -44,6 +55,14 @@ const AREA_ALIAS: Record<string, string> = {
   청담동: '청담',
   '강남구 신사동': '가로수길',
 };
+
+/** Recover the 구 for a Seoul 법정동 (iOS returns the dong but not the 구). */
+function seoulGuForDong(cityShort: string, dong: string | null): string | null {
+  if (cityShort !== '서울' || !dong) {
+    return null;
+  }
+  return SEOUL_DONG_GU[dong] ?? null;
+}
 
 /** Colloquial alias for a dong, if we have one. */
 function areaAlias(gu: string | null, dong: string | null): string | null {
@@ -272,21 +291,24 @@ export function parseGeocodedPlace(
     isMetroCity(rawCity) ||
     Object.values(METRO_SHORT).includes(cityShort);
 
-  const gu = extractGu(
-    addr.district,
-    addr.name,
-    addr.street,
-    addr.subregion,
-    addr.city,
-    addr.formattedAddress,
-  );
-
   const dong = extractDong(
     addr.district,
     addr.name,
     addr.street,
     addr.formattedAddress,
   );
+
+  // iOS returns the 법정동 but not the 구 for Seoul; recover it from the dong
+  // when direct extraction finds nothing.
+  const gu =
+    extractGu(
+      addr.district,
+      addr.name,
+      addr.street,
+      addr.subregion,
+      addr.city,
+      addr.formattedAddress,
+    ) ?? seoulGuForDong(cityShort, dong);
 
   let journeyLabel: string;
   let cityLabel: string;
