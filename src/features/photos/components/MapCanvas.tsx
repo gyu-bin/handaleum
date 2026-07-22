@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   ResumableZoom,
@@ -12,7 +18,7 @@ import { theme } from '@/shared/constants/theme';
 
 import { useMapProjection } from '../hooks/useMapProjection';
 import type { MapThemeId, PlaceCluster } from '../types';
-import { fitPinsCamera } from '../utils/fitPinsCamera';
+import { fitPinsCamera, type MapCameraTransform } from '../utils/fitPinsCamera';
 import type { GeoBBox } from '../utils/geo';
 import { placeBucketKey } from '../utils/placeJourney';
 import { computeRebase, visibleRectForCamera } from '../utils/rebase';
@@ -21,8 +27,8 @@ import { MapAnchor } from './MapAnchor';
 import { MapSvg } from './MapSvg';
 
 const MIN_SCALE = 1;
-const MAX_FIT_SCALE = 3.5;
-const MIN_FIT_SCALE = 1.35;
+const MAX_FIT_SCALE = 5;
+const MIN_FIT_SCALE = 1.6;
 const ZOOM_STEP = 1.55;
 
 /**
@@ -35,13 +41,19 @@ const MAX_EFFECTIVE_SCALE = 18;
 /**
  * Zoom-out allowance of a rebased base: the settled camera sits at this scale
  * over a base drawn for headroom x the visible region, so a pinch-out has room
- * before hitting the camera floor of 1. The SVG is oversampled by the same
- * factor, which is what makes the settled view render at native resolution.
+ * before hitting the camera floor of 1.
  */
 const REBASE_HEADROOM = 2;
 
-/** |cameraScale - headroom| below this counts as already settled (pan-only). */
+/** |cameraScale - headroom| below this counts as no zoom change. */
 const SETTLE_EPSILON = 0.02;
+
+/**
+ * A settled region base sits centered at translate 0. Beyond this many pixels
+ * of pan the base is re-centered on release, so panning can walk across the
+ * map instead of clamping at the edge of the current base's headroom margin.
+ */
+const PAN_SETTLE_EPSILON = 1;
 
 /** Zoom buttons animate internally; settle after the motion has finished. */
 const BUTTON_SETTLE_DELAY_MS = 380;
@@ -89,6 +101,20 @@ export function MapCanvas({
    * at native resolution instead of as a magnified raster.
    */
   const [baseBBox, setBaseBBox] = useState<GeoBBox | null>(null);
+  /**
+   * Bumped on every rebase request. The camera reset is applied in a layout
+   * effect keyed on this, i.e. AFTER the new base SVG has committed — otherwise
+   * the imperative camera write lands before the re-render and the old SVG is
+   * briefly shown at the new camera, which reads as the map popping to a
+   * different place and back.
+   */
+  const [rebaseSeq, setRebaseSeq] = useState(0);
+  const pendingCameraRef = useRef<{
+    camera: MapCameraTransform;
+    /** Optional snap-to scale before animating, for the framing entry motion. */
+    from?: number;
+    animate: boolean;
+  } | null>(null);
   const zoomRef = useRef<ResumableZoomRefType>(null);
   const framedKeyRef = useRef<string>('');
   const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -131,20 +157,44 @@ export function MapCanvas({
   };
 
   /**
+   * Queue a base swap. The base state changes now; the camera is applied in the
+   * layout effect below, after the new SVG commits, so the two land together
+   * instead of the camera jumping a few frames ahead of the re-render.
+   */
+  const scheduleRebase = (
+    nextBase: GeoBBox | null,
+    camera: MapCameraTransform,
+    opts?: { from?: number; animate?: boolean },
+  ) => {
+    pendingCameraRef.current = {
+      camera,
+      from: opts?.from,
+      animate: opts?.animate ?? false,
+    };
+    setBaseBBox(nextBase);
+    setRebaseSeq((seq) => seq + 1);
+  };
+
+  /**
    * Fold the current camera into the base projection. Both sides of the swap
-   * paint identical pixels (see utils/rebase.ts), so committing the new SVG
-   * and writing the camera in the same task keeps the seam invisible.
+   * paint identical pixels (see utils/rebase.ts); scheduleRebase then keeps the
+   * base commit and the camera reset on the same frame so the seam is invisible.
    */
   const settle = () => {
     const zr = zoomRef.current;
     if (!zr || !projection || !reference) {
-      console.log('[settle] bail: not ready');
       return;
     }
     const current = zr.getState();
-    console.log(`[settle] scale=${current.scale.toFixed(3)} ratio=${baseRatio.toFixed(2)}`);
     reportEffectiveScale(baseRatio * current.scale);
-    if (Math.abs(current.scale - REBASE_HEADROOM) < SETTLE_EPSILON) {
+    // Skip only a true no-op: zoom unchanged AND the base still centered. A pan
+    // (translate off center) must rebase so the base follows the viewport.
+    const zoomUnchanged =
+      Math.abs(current.scale - REBASE_HEADROOM) < SETTLE_EPSILON;
+    const centered =
+      Math.abs(current.translateX) < PAN_SETTLE_EPSILON &&
+      Math.abs(current.translateY) < PAN_SETTLE_EPSILON;
+    if (zoomUnchanged && centered) {
       return;
     }
     const result = computeRebase({
@@ -158,12 +208,28 @@ export function MapCanvas({
       if (baseBBox === null) {
         return; // already on the reference base; the camera is the view
       }
-      setBaseBBox(null);
+      scheduleRebase(null, result.camera);
     } else {
-      setBaseBBox(result.bbox);
+      scheduleRebase(result.bbox, result.camera);
     }
-    zr.setTransformState(result.camera, false);
   };
+
+  // Apply the queued camera right after the new base SVG commits.
+  useLayoutEffect(() => {
+    const pending = pendingCameraRef.current;
+    const zr = zoomRef.current;
+    if (!pending || !zr) {
+      return;
+    }
+    pendingCameraRef.current = null;
+    if (pending.from !== undefined) {
+      zr.setTransformState(
+        { scale: pending.from, translateX: 0, translateY: 0 },
+        false,
+      );
+    }
+    zr.setTransformState(pending.camera, pending.animate);
+  }, [rebaseSeq]);
 
   /**
    * Frame the month's pins: fit against the reference projection, then rebase
@@ -193,17 +259,14 @@ export function MapCanvas({
       headroom: REBASE_HEADROOM,
     });
     if (result.type === 'reference') {
-      setBaseBBox(null);
-      zr.setTransformState(result.camera, false);
+      scheduleRebase(null, result.camera);
     } else {
-      setBaseBBox(result.bbox);
       // Entry motion: start slightly deeper and glide out into place. Stays
       // within the new base, so it can never fight the rebase math.
-      zr.setTransformState(
-        { scale: REBASE_HEADROOM * 1.22, translateX: 0, translateY: 0 },
-        false,
-      );
-      zr.setTransformState(result.camera, true);
+      scheduleRebase(result.bbox, result.camera, {
+        from: REBASE_HEADROOM * 1.22,
+        animate: true,
+      });
     }
     // fit.scale is korea-relative, i.e. already the effective scale.
     reportEffectiveScale(fit.scale);
