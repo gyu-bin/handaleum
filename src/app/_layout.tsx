@@ -1,15 +1,31 @@
+import { useCallback, useEffect, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet } from 'react-native';
 
+import { AnimatedSplash } from '@/shared/components/AnimatedSplash';
 import { queryClient } from '@/lib/queryClient';
 
+// Hold the native splash so the animated one takes over without a blank flash.
+void SplashScreen.preventAutoHideAsync();
+
 export default function RootLayout() {
+  const [splashDone, setSplashDone] = useState(false);
+
+  useEffect(() => {
+    // Reveal the JS tree; the AnimatedSplash overlay covers it until it finishes.
+    void SplashScreen.hideAsync().catch(() => {});
+  }, []);
+
+  const onSplashFinish = useCallback(() => setSplashDone(true), []);
+
   return (
     <GestureHandlerRootView style={styles.root}>
       <QueryClientProvider client={queryClient}>
         <Stack screenOptions={{ headerShown: false }} />
+        {splashDone ? null : <AnimatedSplash onFinish={onSplashFinish} />}
       </QueryClientProvider>
     </GestureHandlerRootView>
   );

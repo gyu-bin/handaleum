@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import {
   getAssetInfoAsync,
   getAssetsAsync,
@@ -5,6 +6,8 @@ import {
   SortBy,
   type Asset,
 } from 'expo-media-library';
+
+import { getAssetLocationRaw, setAssetLocationRaw } from '@/lib/storage';
 
 import type { MonthKey, MonthlyPhotos, MonthSummary, PhotoRef } from '../types';
 import { monthBounds, monthKeyFromTimestamp } from '../utils/month';
@@ -36,28 +39,45 @@ async function collectAssets(options: {
   return assets;
 }
 
+function refFromCoords(asset: Asset, lat: number, lng: number): PhotoRef {
+  return {
+    assetId: asset.id,
+    takenAt: new Date(asset.creationTime).toISOString(),
+    lat,
+    lng,
+  };
+}
+
 async function toPhotoRefOrNull(asset: Asset): Promise<PhotoRef | 'no-location' | null> {
+  // GPS is effectively immutable per asset, and getAssetInfoAsync is one native
+  // call per photo — the dominant cost of a month load — so hit the persistent
+  // cache first and only ask the library about assets we've never seen.
+  const cached = getAssetLocationRaw(asset.id);
+  if (cached === 'x') {
+    return 'no-location';
+  }
+  if (cached != null) {
+    const [lat, lng] = cached.split(',').map(Number);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      return refFromCoords(asset, lat!, lng!);
+    }
+  }
+
   try {
     const info = await getAssetInfoAsync(asset, { shouldDownloadFromNetwork: false });
     const location = info.location;
-    if (location == null) {
-      return 'no-location';
-    }
     // Native module exports coordinates as strings despite the number type.
-    const lat = Number(location.latitude);
-    const lng = Number(location.longitude);
+    const lat = location == null ? NaN : Number(location.latitude);
+    const lng = location == null ? NaN : Number(location.longitude);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      setAssetLocationRaw(asset.id, 'x');
       return 'no-location';
     }
-    return {
-      assetId: asset.id,
-      takenAt: new Date(asset.creationTime).toISOString(),
-      lat,
-      lng,
-    };
+    setAssetLocationRaw(asset.id, `${lat},${lng}`);
+    return refFromCoords(asset, lat, lng);
   } catch (error) {
     console.error('getAssetInfoAsync failed', asset.id, error);
-    return null;
+    return null; // transient failure — leave uncached so a retry can succeed
   }
 }
 
@@ -110,13 +130,34 @@ export async function loadMonthSummaries(): Promise<MonthSummary[]> {
     .sort((a, b) => b.month.localeCompare(a.month));
 }
 
-/** Resolve a display URI for a camera-roll asset. */
+const uriCache = new Map<string, string | null>();
+
+/**
+ * Resolve a display URI for a camera-roll asset. Every consumer feeds the
+ * result to expo-image, which renders iOS `ph://` Photos URIs natively — so on
+ * iOS this is a pure string build with no native round-trip. Elsewhere the
+ * (per-asset native call) lookup runs once and is memoized: grid cells
+ * unmount/remount while scrolling and would otherwise re-pay it every time.
+ */
 export async function resolveAssetUri(assetId: string): Promise<string | null> {
+  const hit = uriCache.get(assetId);
+  if (hit !== undefined) {
+    return hit;
+  }
+
+  if (Platform.OS === 'ios') {
+    const uri = `ph://${assetId}`;
+    uriCache.set(assetId, uri);
+    return uri;
+  }
+
   try {
     const info = await getAssetInfoAsync(assetId, { shouldDownloadFromNetwork: false });
-    return info.localUri ?? info.uri ?? null;
+    const uri = info.localUri ?? info.uri ?? null;
+    uriCache.set(assetId, uri);
+    return uri;
   } catch (error) {
     console.error('resolveAssetUri failed', assetId, error);
-    return null;
+    return null; // transient — leave uncached so a retry can succeed
   }
 }

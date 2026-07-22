@@ -4,6 +4,7 @@ const LAST_VIEWED_MONTH_KEY = 'lastViewedMonth';
 const MAP_THEME_KEY = 'mapThemeId';
 const PIN_COVERS_PREFIX = 'pinCovers:';
 const HOME_LOCATION_KEY = 'homeLocation';
+const ASSET_LOCATION_PREFIX = 'assetLoc:';
 
 /**
  * Synchronous key-value facade backed by expo-sqlite/kv-store
@@ -63,4 +64,17 @@ export function setHomeLocationRaw(json: string): void {
 
 export function clearHomeLocationRaw(): void {
   storage.remove(HOME_LOCATION_KEY);
+}
+
+/**
+ * Per-asset GPS cache: "lat,lng" or "x" (checked, no location). A photo's GPS
+ * is effectively immutable, and `getAssetInfoAsync` is the dominant cost of a
+ * month load — one native call per photo — so cached assets skip it entirely.
+ */
+export function getAssetLocationRaw(assetId: string): string | null {
+  return storage.getString(`${ASSET_LOCATION_PREFIX}${assetId}`) ?? null;
+}
+
+export function setAssetLocationRaw(assetId: string, value: string): void {
+  storage.set(`${ASSET_LOCATION_PREFIX}${assetId}`, value);
 }

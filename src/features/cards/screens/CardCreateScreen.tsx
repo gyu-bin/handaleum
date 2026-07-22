@@ -3,7 +3,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -142,94 +141,103 @@ export function CardCreateScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScreenHeader title={strings.cards.createTitle} />
-        <ScrollView
+        {/* The grid owns the scroll (virtualized); the form rides along as its
+            header and the save button as its footer — nesting the FlatList in a
+            ScrollView breaks windowing and warns. */}
+        <PhotoSelectGrid
+          photos={data.allPhotos}
+          selectedAssetIds={selectedAssetIds}
+          onToggle={onToggle}
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.section}>
-            <Text style={styles.label}>{strings.cards.titlePlaceholder}</Text>
-            <TextInput
-              value={title}
-              onChangeText={setTitle}
-              placeholder={strings.cards.titlePlaceholder}
-              placeholderTextColor={theme.colors.subtle}
-              maxLength={40}
-              style={styles.input}
-            />
-          </View>
+          ListHeaderComponent={
+            <View style={styles.headerBox}>
+              <View style={styles.section}>
+                <Text style={styles.label}>{strings.cards.titlePlaceholder}</Text>
+                <TextInput
+                  value={title}
+                  onChangeText={setTitle}
+                  placeholder={strings.cards.titlePlaceholder}
+                  placeholderTextColor={theme.colors.subtle}
+                  maxLength={40}
+                  style={styles.input}
+                />
+              </View>
 
-          <View style={styles.section}>
-            <Text style={styles.label}>{strings.cards.commentPlaceholder}</Text>
-            <TextInput
-              value={comment}
-              onChangeText={setComment}
-              placeholder={strings.cards.commentPlaceholder}
-              placeholderTextColor={theme.colors.subtle}
-              maxLength={300}
-              multiline
-              style={[styles.input, styles.comment]}
-            />
-          </View>
+              <View style={styles.section}>
+                <Text style={styles.label}>{strings.cards.commentPlaceholder}</Text>
+                <TextInput
+                  value={comment}
+                  onChangeText={setComment}
+                  placeholder={strings.cards.commentPlaceholder}
+                  placeholderTextColor={theme.colors.subtle}
+                  maxLength={300}
+                  multiline
+                  style={[styles.input, styles.comment]}
+                />
+              </View>
 
-          <View style={styles.section}>
-            <Text style={styles.label}>{strings.cards.templateLabel}</Text>
-            <View style={styles.templateRow}>
-              <Pressable
-                onPress={() => setTemplate('feed')}
-                style={[styles.templateChip, template === 'feed' && styles.templateChipOn]}
-              >
-                <Text
-                  style={[
-                    styles.templateText,
-                    template === 'feed' && styles.templateTextOn,
-                  ]}
-                >
-                  {strings.cards.templateFeed}
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setTemplate('story')}
-                style={[styles.templateChip, template === 'story' && styles.templateChipOn]}
-              >
-                <Text
-                  style={[
-                    styles.templateText,
-                    template === 'story' && styles.templateTextOn,
-                  ]}
-                >
-                  {strings.cards.templateStory}
-                </Text>
-              </Pressable>
+              <View style={styles.section}>
+                <Text style={styles.label}>{strings.cards.templateLabel}</Text>
+                <View style={styles.templateRow}>
+                  <Pressable
+                    onPress={() => setTemplate('feed')}
+                    style={[
+                      styles.templateChip,
+                      template === 'feed' && styles.templateChipOn,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.templateText,
+                        template === 'feed' && styles.templateTextOn,
+                      ]}
+                    >
+                      {strings.cards.templateFeed}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setTemplate('story')}
+                    style={[
+                      styles.templateChip,
+                      template === 'story' && styles.templateChipOn,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.templateText,
+                        template === 'story' && styles.templateTextOn,
+                      ]}
+                    >
+                      {strings.cards.templateStory}
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              <View style={styles.labelRow}>
+                <Text style={styles.label}>{strings.cards.photoLabel}</Text>
+                {selectedCount > 0 ? (
+                  <Text style={styles.selectedCount}>
+                    {strings.cards.selectedCount(selectedCount)}
+                  </Text>
+                ) : null}
+              </View>
             </View>
-          </View>
-
-          <View style={styles.section}>
-            <View style={styles.labelRow}>
-              <Text style={styles.label}>{strings.cards.photoLabel}</Text>
-              {selectedCount > 0 ? (
-                <Text style={styles.selectedCount}>
-                  {strings.cards.selectedCount(selectedCount)}
-                </Text>
-              ) : null}
+          }
+          ListFooterComponent={
+            <View style={styles.footerBox}>
+              {formError ? <Text style={styles.error}>{formError}</Text> : null}
+              <Button
+                title={strings.cards.save}
+                variant="primary"
+                loading={saveCard.isPending}
+                onPress={() => void onSave()}
+                style={styles.saveBtn}
+              />
             </View>
-            <PhotoSelectGrid
-              photos={data.allPhotos}
-              selectedAssetIds={selectedAssetIds}
-              onToggle={onToggle}
-            />
-          </View>
-
-          {formError ? <Text style={styles.error}>{formError}</Text> : null}
-
-          <Button
-            title={strings.cards.save}
-            variant="primary"
-            loading={saveCard.isPending}
-            onPress={() => void onSave()}
-            style={styles.saveBtn}
-          />
-        </ScrollView>
+          }
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -243,11 +251,20 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
+  // No gap here: it would also space out the grid's photo rows. Section
+  // spacing lives inside headerBox/footerBox instead.
   scroll: {
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.sm,
-    gap: theme.spacing.lg,
     paddingBottom: theme.spacing.xl,
+  },
+  headerBox: {
+    gap: theme.spacing.lg,
+    marginBottom: theme.spacing.sm,
+  },
+  footerBox: {
+    marginTop: theme.spacing.lg,
+    gap: theme.spacing.md,
   },
   section: {
     gap: theme.spacing.sm,
