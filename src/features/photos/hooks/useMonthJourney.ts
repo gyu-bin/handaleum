@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import type { PhotoRef, VisitAdminLevel, VisitPlace } from '../types';
+import type { PhotoRef, VisitPlace } from '../types';
 import {
   labelsForVisitLevel,
   resolveVisitPlaces,
@@ -10,12 +10,11 @@ import {
 const RESOLVE_DEBOUNCE_MS = 250;
 
 /**
- * Reverse-geocodes month photos once; exposes journey labels and zoom-scoped lists.
+ * Reverse-geocodes month photos once; exposes the familiar place labels for the
+ * header chips.
  */
 export function useMonthJourney(photos: PhotoRef[]): {
   places: string[];
-  visitPlaces: VisitPlace[];
-  labelsForLevel: (level: VisitAdminLevel) => string[];
   isResolving: boolean;
 } {
   const [visitPlaces, setVisitPlaces] = useState<VisitPlace[]>([]);
@@ -53,15 +52,11 @@ export function useMonthJourney(photos: PhotoRef[]): {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by photosKey
   }, [photosKey]);
 
+  // Finest familiar grain (famous-area alias / 구 / 동) for the header chips.
   const places = useMemo(
-    () => visitPlaces.map((p) => p.label),
+    () => labelsForVisitLevel(visitPlaces, 'dong'),
     [visitPlaces],
   );
 
-  const labelsForLevel = useMemo(
-    () => (level: VisitAdminLevel) => labelsForVisitLevel(visitPlaces, level),
-    [visitPlaces],
-  );
-
-  return { places, visitPlaces, labelsForLevel, isResolving };
+  return { places, isResolving };
 }

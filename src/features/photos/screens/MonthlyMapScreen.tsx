@@ -9,16 +9,11 @@ import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
-import {
-  DEFAULT_MAP_SCALE,
-  DEFAULT_MAP_ZOOM,
-  MapCanvas,
-} from '../components/MapCanvas';
+import { DEFAULT_MAP_ZOOM, MapCanvas } from '../components/MapCanvas';
 import { HomeNavBar } from '../components/HomeNavBar';
 import { PhotoPreviewSheet } from '../components/PhotoPreviewSheet';
 import { TimeSlider, type TimeRange } from '../components/TimeSlider';
 import { VisitChipRow } from '../components/VisitChipRow';
-import { VisitScopeBar } from '../components/VisitScopeBar';
 import { useCurrentMonth } from '../hooks/useCurrentMonth';
 import { useMapTheme } from '../hooks/useMapTheme';
 import { useMonthJourney } from '../hooks/useMonthJourney';
@@ -29,7 +24,6 @@ import { clusterPhotos } from '../services/cluster';
 import type { MonthKey, PlaceCluster } from '../types';
 import { monthTimeBoundsIso } from '../utils/month';
 import { placeBucketKey } from '../utils/placeJourney';
-import { visitLevelFromScale } from '../utils/visitScope';
 
 function useTimeRangeForMonth(month: MonthKey): [TimeRange, (value: TimeRange) => void] {
   const bounds = useMemo(() => monthTimeBoundsIso(month), [month]);
@@ -62,7 +56,6 @@ export function MonthlyMapScreen() {
   const bounds = useMemo(() => monthTimeBoundsIso(month), [month]);
   const [timeRange, setTimeRange] = useTimeRangeForMonth(month);
   const [zoom, setZoom] = useState(DEFAULT_MAP_ZOOM);
-  const [mapScale, setMapScale] = useState(DEFAULT_MAP_SCALE);
   const [selected, setSelected] = useState<PlaceCluster | null>(null);
 
   const filteredPhotos = useMemo(() => {
@@ -82,11 +75,8 @@ export function MonthlyMapScreen() {
     [filteredPhotos, zoom],
   );
 
-  const { places: journeyPlaces, labelsForLevel, isResolving } =
-    useMonthJourney(filteredPhotos);
+  const { places: journeyPlaces } = useMonthJourney(filteredPhotos);
   const journeyLine = strings.map.monthJourney(journeyPlaces);
-  const visitLevel = visitLevelFromScale(mapScale);
-  const scopeLabels = labelsForLevel(visitLevel);
 
   const onSelectCluster = useCallback((cluster: PlaceCluster) => {
     setSelected((prev) => (prev?.id === cluster.id ? null : cluster));
@@ -221,18 +211,12 @@ export function MonthlyMapScreen() {
               clusters={clusters}
               frameKey={month}
               onZoomChange={setZoom}
-              onScaleChange={setMapScale}
               onSelectCluster={onSelectCluster}
               selectedClusterId={selected?.id ?? null}
               themeId={themeId}
               pinCovers={covers}
             />
             <View style={styles.footer}>
-              <VisitScopeBar
-                level={visitLevel}
-                labels={scopeLabels}
-                isResolving={isResolving}
-              />
               <TimeSlider bounds={bounds} value={timeRange} onChange={setTimeRange} />
               <Button
                 title={strings.cards.createTitle}

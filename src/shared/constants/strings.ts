@@ -93,11 +93,6 @@ export const strings = {
       return `이번 달엔 ${countWord(places.length)} 곳에 갔어요~`;
     },
     navSeparator: '·',
-    visitScope: {
-      province: '이번 달 · 도',
-      city: '이번 달 · 시',
-      dong: '이번 달 · 동네',
-    },
     coverHint: '사진을 눌러 이 장소의 대표 사진으로 지정',
     setAsCover: '대표 사진으로 지정',
     setAsCoverShort: '대표',
