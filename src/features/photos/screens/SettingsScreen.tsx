@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Location from 'expo-location';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,6 +13,7 @@ import { useHomeLocation } from '../hooks/useHomeLocation';
 import { useDevDummyPhotos } from '../hooks/useDevDummyPhotos';
 import { DEFAULT_HOME_RADIUS_M } from '../services/homeLocationStorage';
 import { dummyPhotoCount } from '../services/dummyPhotos';
+import { ProPaywallModal } from '@/features/insights/components/ProPaywallModal';
 import { useIsPro } from '@/features/insights/hooks/useIsPro';
 
 const RADIUS_CHOICES = [100, 300, 500, 1000] as const;
@@ -23,10 +24,17 @@ function radiusLabel(radiusM: number): string {
 
 export function SettingsScreen() {
   const { home, setHome, clearHome } = useHomeLocation();
-  const { isPro, setIsPro } = useIsPro();
+  const { isPro, isBusy, error: proError, purchase, restore } = useIsPro();
   const dummy = useDevDummyPhotos();
   const [isLocating, setIsLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [paywallOpen, setPaywallOpen] = useState(false);
+
+  useEffect(() => {
+    if (isPro) {
+      setPaywallOpen(false);
+    }
+  }, [isPro]);
 
   const radius = home?.radiusM ?? DEFAULT_HOME_RADIUS_M;
 
@@ -141,12 +149,25 @@ export function SettingsScreen() {
             <Text style={[styles.status, isPro && styles.statusSet]}>
               {isPro ? strings.settings.proOn : strings.settings.proOff}
             </Text>
+            {isPro ? null : (
+              <Button
+                title={strings.settings.proPurchase}
+                variant="accent"
+                size="md"
+                onPress={() => setPaywallOpen(true)}
+              />
+            )}
             <Button
-              title={isPro ? strings.settings.proToggleOff : strings.settings.proToggleOn}
-              variant={isPro ? 'secondary' : 'accent'}
+              title={strings.settings.proRestore}
+              variant="ghost"
               size="md"
-              onPress={() => setIsPro(!isPro)}
+              loading={isBusy}
+              disabled={isBusy}
+              onPress={() => void restore()}
             />
+            {!paywallOpen && proError ? (
+              <Text style={styles.error}>{proError}</Text>
+            ) : null}
           </View>
         ) : null}
 
@@ -172,6 +193,16 @@ export function SettingsScreen() {
           </View>
         ) : null}
       </ScrollView>
+
+      <ProPaywallModal
+        visible={paywallOpen}
+        priceLabel={formatProPriceKrw()}
+        isBusy={isBusy}
+        error={proError}
+        onClose={() => setPaywallOpen(false)}
+        onPurchase={() => void purchase()}
+        onRestore={() => void restore()}
+      />
     </SafeAreaView>
   );
 }

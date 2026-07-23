@@ -8,9 +8,11 @@ import { StyleSheet } from 'react-native';
 import { AnimatedSplash } from '@/shared/components/AnimatedSplash';
 import { ErrorBoundary } from '@/shared/components/ErrorBoundary';
 import { queryClient } from '@/lib/queryClient';
+import { configurePurchases } from '@/lib/purchases';
 import { initSentry, Sentry } from '@/lib/sentry';
 
 initSentry();
+configurePurchases();
 
 // Hold the native splash so the animated one takes over without a blank flash.
 void SplashScreen.preventAutoHideAsync();

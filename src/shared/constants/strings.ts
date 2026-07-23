@@ -143,11 +143,34 @@ export const strings = {
     locationFailed: '위치를 확인하지 못했습니다. 다시 시도해 주세요',
     proSection: '프로',
     proDescription: (priceLabel: string) =>
-      `최근 3개월보다 지난 달을 열고, 인사이트 일부 지표를 잠금 해제합니다. 정식 가격 ${priceLabel}(일회). (결제 연동 전 로컬 스위치)`,
-    proOn: '프로 켜짐',
-    proOff: '프로 꺼짐',
+      `최근 3개월보다 지난 달을 열고, 인사이트 일부 지표를 잠금 해제합니다. ${priceLabel} · 일회 구매.`,
+    proOn: '프로 이용 중',
+    proOff: '무료 · 최근 3개월만',
+    proPurchase: '프로 구매',
+    proRestore: '구매 복원',
     proToggleOn: '프로 켜기',
     proToggleOff: '프로 끄기',
+    proPaywall: {
+      title: '한달음 프로',
+      subtitle: '지도를 더 멀리, 기록을 더 깊게',
+      oneTime: '일회 구매 · 구독이 아닙니다',
+      later: '나중에',
+      cta: (priceLabel: string) => `${priceLabel}에 잠금 해제`,
+      benefits: [
+        {
+          title: '지난 달 전부',
+          body: '무료는 최근 3개월만. 프로는 아카이브 전체를 엽니다.',
+        },
+        {
+          title: '인사이트 잠금 해제',
+          body: '대략 이동 거리·가장 바빴던 날까지 한눈에.',
+        },
+        {
+          title: '한 번만 결제',
+          body: '월 구독 없이, 이 기기에서 계속 이용합니다.',
+        },
+      ],
+    },
     dummySection: '개발 · 더미 사진',
     dummyDescription:
       '앨범 대신 도시 몇 곳에 소량 핀(~18장)을 둡니다. 시뮬레이터 확인용 (__DEV__만).',

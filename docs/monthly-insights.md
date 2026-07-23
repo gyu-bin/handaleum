@@ -67,7 +67,7 @@
 |---|---|---|
 | 계산된 인사이트 | 화면 파생 (`useMonthlyInsights` 훅, useMemo + 라벨은 비동기) | geocode 결과처럼 저장 안 함. `useMonthJourney` 패턴 미러 |
 | `placeFirstSeen` 인덱스 | sqlite kv (`lib/storage.ts` 헬퍼) | "처음 간 곳" 판정용 누적 인덱스 |
-| 프로 여부 `isPro` | 지금은 로컬 플래그(추후 RevenueCat) | 유료화 문서 참고. 프로 지표 게이팅 |
+| 프로 여부 `isPro` | RevenueCat entitlement `Handaleum Pro` (로컬 캐시) | 유료화. 프로 지표 게이팅 |
 
 Zustand 미도입.
 

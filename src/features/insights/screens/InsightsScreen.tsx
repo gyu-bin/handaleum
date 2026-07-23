@@ -1,15 +1,18 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LoadingView } from '@/shared/components/LoadingView';
 import { ScreenHeader } from '@/shared/components/ScreenHeader';
 import { StateView } from '@/shared/components/StateView';
+import { formatProPriceKrw, IS_MONETIZATION_LIVE } from '@/shared/constants/pricing';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 import { useCurrentMonth } from '@/features/photos/hooks/useCurrentMonth';
 
 import { InsightHero } from '../components/InsightHero';
 import { InsightRow } from '../components/InsightRow';
+import { ProPaywallModal } from '../components/ProPaywallModal';
 import { useIsPro } from '../hooks/useIsPro';
 import { useMonthlyInsights } from '../hooks/useMonthlyInsights';
 
@@ -24,7 +27,8 @@ function formatBusiestDay(date: string, count: number): string {
 
 export function InsightsScreen() {
   const { month } = useCurrentMonth();
-  const { isPro } = useIsPro();
+  const { isPro, isBusy, error: proError, purchase, restore } = useIsPro();
+  const [paywallOpen, setPaywallOpen] = useState(false);
   const {
     insights,
     isPending,
@@ -33,6 +37,12 @@ export function InsightsScreen() {
     isResolvingLabels,
     refetch,
   } = useMonthlyInsights(month);
+
+  useEffect(() => {
+    if (isPro) {
+      setPaywallOpen(false);
+    }
+  }, [isPro]);
 
   if (isPending) {
     return <LoadingView />;
@@ -135,10 +145,25 @@ export function InsightsScreen() {
           ) : null}
         </View>
 
-        {!isPro ? (
-          <Text style={styles.proHint}>{strings.insights.proHint}</Text>
+        {!isPro && IS_MONETIZATION_LIVE ? (
+          <Pressable
+            onPress={() => setPaywallOpen(true)}
+            accessibilityRole="button"
+          >
+            <Text style={styles.proHint}>{strings.insights.proHint}</Text>
+          </Pressable>
         ) : null}
       </ScrollView>
+
+      <ProPaywallModal
+        visible={paywallOpen}
+        priceLabel={formatProPriceKrw()}
+        isBusy={isBusy}
+        error={proError}
+        onClose={() => setPaywallOpen(false)}
+        onPurchase={() => void purchase()}
+        onRestore={() => void restore()}
+      />
     </SafeAreaView>
   );
 }

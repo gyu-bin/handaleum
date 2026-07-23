@@ -48,12 +48,10 @@
 > 돈이 아니어도 된다. 단, 명시한다. (수익화 전략가)
 
 - 목적: 기획·완성도 훈련 + 포트폴리오 + 본인/아내 실사용 + 출시.
-- **현재 (2026-07-23):** 유료 결제 **비활성**. 모든 월·인사이트 전부 사용 가능 (`IS_MONETIZATION_LIVE = false`).
-- **나중에 켤 계획 (문서만 유지):**
-  - **무료:** 최근 **3개월**만 열람.
-  - **프로:** 과거 월 **전체** + 일회성 **₩3,990**.
-  - 결제: StoreKit / RevenueCat 중 택1.
-- 결제 연동 전까지 설정 프로 토글·월 잠금 UI는 숨김.
+- **현재:** 유료 결제 **비활성** (`IS_MONETIZATION_LIVE = false`). 연동 코드·RevenueCat 설정은 유지.
+  - 켤 때: `pricing.ts`에서 `true` → 최근 3개월 게이트 + 프로 구매 UI.
+  - Entitlement: `Handaleum Pro` · Offering: `default` · Product: `handaleum_pro` · ₩3,990 일회.
+  - 실기기 구매는 Expo Go가 아니라 **Dev Client / TestFlight** 필요.
 
 ## 6. 차별화 한 줄
 > 앱스토어 설명 첫 줄에 쓸 문장. (크리에이티브 디렉터)
