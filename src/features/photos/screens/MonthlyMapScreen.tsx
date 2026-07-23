@@ -9,6 +9,8 @@ import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
+import { useOnboarding } from '@/features/onboarding';
+
 import { DEFAULT_MAP_ZOOM, MapCanvas } from '../components/MapCanvas';
 import { HomeNavBar } from '../components/HomeNavBar';
 import { PhotoPreviewSheet } from '../components/PhotoPreviewSheet';
@@ -45,6 +47,7 @@ function formatMonthLabel(month: MonthKey): string {
 
 export function MonthlyMapScreen() {
   const router = useRouter();
+  const { seen: onboardingSeen } = useOnboarding();
   const { status, isReady } = usePhotoPermission();
   const hasAccess = status === 'granted' || status === 'limited';
   const { month } = useCurrentMonth();
@@ -89,6 +92,11 @@ export function MonthlyMapScreen() {
     ? placeBucketKey(selected.centerLat, selected.centerLng)
     : null;
 
+  // First-run gate before the permission gate: explain the app, then ask.
+  if (!onboardingSeen) {
+    return <Redirect href="/onboarding" />;
+  }
+
   if (!isReady) {
     return <LoadingView />;
   }
@@ -122,6 +130,7 @@ export function MonthlyMapScreen() {
     { href: '/months' as const, label: strings.months.title },
     { href: '/playback' as const, label: strings.playback.title },
     { href: '/cards' as const, label: strings.cards.listTitle },
+    { href: '/insights' as const, label: strings.insights.title },
   ];
 
   return (
@@ -140,18 +149,40 @@ export function MonthlyMapScreen() {
                   : strings.map.monthMeta(monthLabel, clusters.length)}
               </Text>
             </View>
-            <Pressable
-              onPress={() => router.push('/settings')}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={strings.map.settings}
-              style={({ pressed }) => [
-                styles.settingsBtn,
-                pressed && styles.settingsBtnPressed,
-              ]}
-            >
-              <Text style={styles.settingsText}>{strings.map.settings}</Text>
-            </Pressable>
+            <View style={styles.topActions}>
+              <Pressable
+                onPress={() => router.push('/settings')}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={strings.map.settings}
+                style={({ pressed }) => [
+                  styles.settingsBtn,
+                  pressed && styles.settingsBtnPressed,
+                ]}
+              >
+                <Text style={styles.settingsText}>{strings.map.settings}</Text>
+              </Pressable>
+              {data.noLocationCount > 0 || data.homeExcludedCount > 0 ? (
+                <Pressable
+                  onPress={() => setShowNotices((v) => !v)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: showNotices }}
+                  accessibilityLabel={strings.map.infoToggle}
+                  style={({ pressed }) => [
+                    styles.infoBtn,
+                    showNotices && styles.infoBtnActive,
+                    pressed && styles.infoBtnPressed,
+                  ]}
+                >
+                  <Text
+                    style={[styles.infoBtnText, showNotices && styles.infoBtnTextActive]}
+                  >
+                    !
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
           </View>
 
           {journeyLine ? (
@@ -165,50 +196,28 @@ export function MonthlyMapScreen() {
             </View>
           ) : null}
 
-          {data.noLocationCount > 0 || data.homeExcludedCount > 0 ? (
-            <View style={styles.noticeBlock}>
-              <Pressable
-                onPress={() => setShowNotices((v) => !v)}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityState={{ expanded: showNotices }}
-                accessibilityLabel={strings.map.infoToggle}
-                style={({ pressed }) => [
-                  styles.infoBtn,
-                  showNotices && styles.infoBtnActive,
-                  pressed && styles.infoBtnPressed,
-                ]}
-              >
-                <Text
-                  style={[styles.infoBtnText, showNotices && styles.infoBtnTextActive]}
-                >
-                  !
-                </Text>
-              </Pressable>
-              {showNotices ? (
-                <View style={styles.noticeRow}>
-                  {data.noLocationCount > 0 ? (
-                    <View style={styles.noticeChip}>
-                      <Text style={styles.notice}>
-                        {strings.map.noLocationNotice(data.noLocationCount)}
-                      </Text>
-                    </View>
-                  ) : null}
-                  {data.homeExcludedCount > 0 ? (
-                    <Pressable
-                      onPress={() => router.push('/settings')}
-                      hitSlop={6}
-                      style={({ pressed }) => [
-                        styles.noticeChip,
-                        pressed && styles.noticeChipPressed,
-                      ]}
-                    >
-                      <Text style={styles.notice}>
-                        {strings.map.homeExcludedNotice(data.homeExcludedCount)}
-                      </Text>
-                    </Pressable>
-                  ) : null}
+          {showNotices && (data.noLocationCount > 0 || data.homeExcludedCount > 0) ? (
+            <View style={styles.noticeRow}>
+              {data.noLocationCount > 0 ? (
+                <View style={styles.noticeChip}>
+                  <Text style={styles.notice}>
+                    {strings.map.noLocationNotice(data.noLocationCount)}
+                  </Text>
                 </View>
+              ) : null}
+              {data.homeExcludedCount > 0 ? (
+                <Pressable
+                  onPress={() => router.push('/settings')}
+                  hitSlop={6}
+                  style={({ pressed }) => [
+                    styles.noticeChip,
+                    pressed && styles.noticeChipPressed,
+                  ]}
+                >
+                  <Text style={styles.notice}>
+                    {strings.map.homeExcludedNotice(data.homeExcludedCount)}
+                  </Text>
+                </Pressable>
               ) : null}
             </View>
           ) : null}
@@ -299,6 +308,11 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: theme.spacing.xs,
   },
+  /** Settings + the notices "!" stacked in the top-right corner. */
+  topActions: {
+    alignItems: 'flex-end',
+    gap: theme.spacing.sm,
+  },
   settingsBtn: {
     paddingHorizontal: 12,
     paddingVertical: 7,
@@ -338,10 +352,6 @@ const styles = StyleSheet.create({
     ...theme.type.body,
     color: theme.colors.inkSoft,
     fontWeight: '500',
-  },
-  noticeBlock: {
-    alignItems: 'flex-start',
-    gap: theme.spacing.sm,
   },
   infoBtn: {
     width: 22,

@@ -54,6 +54,27 @@ export const strings = {
     /** Denied is terminal in-app — the only way back is the system settings app. */
     openSettings: '설정에서 허용하기',
   },
+  onboarding: {
+    // Shown once on first launch. The last slide's CTA requests photo access,
+    // so the value is explained before the permission is asked.
+    slides: [
+      {
+        title: '한 달을 지도 위에',
+        body: '카메라롤 사진의 위치와 시간을 새벽 종이지도에 펼쳐,\n지난 한 달을 돌아봐요.',
+      },
+      {
+        title: '한 장의 카드로',
+        body: '마음에 든 순간을 골라 인스타 피드·스토리용\n카드로 남기고 공유해요.',
+      },
+      {
+        title: '사진을 볼 수 있게',
+        body: '지도를 그리려면 사진의 위치 정보가 필요해요.\n사진은 기기 밖으로 나가지 않아요.',
+      },
+    ],
+    next: '다음',
+    skip: '건너뛰기',
+    grant: '사진 허용하고 시작',
+  },
   map: {
     emptyMonth: '이 달에는 위치가 있는 사진이 없습니다',
     emptyAllHome: '이 달은 집에서 찍은 사진만 있습니다. 카드는 만들 수 있어요',
@@ -118,6 +139,12 @@ export const strings = {
     radiusHint: '집이 아파트 단지 안이면 넓게, 골목이면 좁게 잡으세요.',
     locationDenied: '위치 권한이 없어 집 위치를 지정할 수 없습니다',
     locationFailed: '위치를 확인하지 못했습니다. 다시 시도해 주세요',
+    proSection: '프로',
+    proDescription: '인사이트의 대략 이동 거리·바쁜 날을 잠금 해제합니다. (결제 연동 전 로컬 스위치)',
+    proOn: '프로 켜짐',
+    proOff: '프로 꺼짐',
+    proToggleOn: '프로 켜기',
+    proToggleOff: '프로 끄기',
   },
   months: {
     title: '월 선택',
@@ -165,5 +192,24 @@ export const strings = {
     errorPhotoRequired: '사진을 한 장 이상 선택해 주세요',
     /** e.g. "2/3장" — how many photos are picked out of the template's cap. */
     selectedCount: (count: number, max: number) => `${count}/${max}장`,
+  },
+  insights: {
+    title: '인사이트',
+    empty: '이 달은 보여줄 인사이트가 없어요',
+    placesCount: '다녀온 동네',
+    newPlaces: '처음 간 곳',
+    newPlacesWarming: '기록 쌓이는 중',
+    farthest: '가장 멀리 간 곳',
+    topPlace: '제일 많이 찍은 곳',
+    approxDistance: '대략 이동 거리',
+    busiestDay: '가장 바빴던 날',
+    proTag: '프로',
+    proHint: '대략 이동 거리·바쁜 날은 프로에서 볼 수 있어요',
+    unknownPlace: '알 수 없는 장소',
+    farthestValue: (label: string, km: number) => `${label} · ${km}km`,
+    topPlaceValue: (label: string, count: number) => `${label} · ${count}장`,
+    approxDistanceValue: (km: number) => `약 ${km} km`,
+    busiestDayValue: (month: number, day: number, count: number) =>
+      `${month}월 ${day}일 · ${count}장`,
   },
 } as const;

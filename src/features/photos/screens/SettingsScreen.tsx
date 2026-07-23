@@ -10,6 +10,7 @@ import { theme } from '@/shared/constants/theme';
 
 import { useHomeLocation } from '../hooks/useHomeLocation';
 import { DEFAULT_HOME_RADIUS_M } from '../services/homeLocationStorage';
+import { useIsPro } from '@/features/insights/hooks/useIsPro';
 
 const RADIUS_CHOICES = [100, 300, 500, 1000] as const;
 
@@ -19,6 +20,7 @@ function radiusLabel(radiusM: number): string {
 
 export function SettingsScreen() {
   const { home, setHome, clearHome } = useHomeLocation();
+  const { isPro, setIsPro } = useIsPro();
   const [isLocating, setIsLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -125,6 +127,20 @@ export function SettingsScreen() {
             </View>
           ) : null}
         </View>
+
+        <View style={[styles.card, styles.cardSpaced]}>
+          <Text style={styles.sectionTitle}>{strings.settings.proSection}</Text>
+          <Text style={styles.description}>{strings.settings.proDescription}</Text>
+          <Text style={[styles.status, isPro && styles.statusSet]}>
+            {isPro ? strings.settings.proOn : strings.settings.proOff}
+          </Text>
+          <Button
+            title={isPro ? strings.settings.proToggleOff : strings.settings.proToggleOn}
+            variant={isPro ? 'secondary' : 'accent'}
+            size="md"
+            onPress={() => setIsPro(!isPro)}
+          />
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -146,6 +162,9 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.colors.hairline,
     ...theme.shadows.card,
+  },
+  cardSpaced: {
+    marginTop: theme.spacing.md,
   },
   sectionTitle: {
     ...theme.type.title,

@@ -5,6 +5,7 @@ const MAP_THEME_KEY = 'mapThemeId';
 const PIN_COVERS_PREFIX = 'pinCovers:';
 const HOME_LOCATION_KEY = 'homeLocation';
 const ASSET_LOCATION_PREFIX = 'assetLoc:';
+const ONBOARDING_SEEN_KEY = 'onboardingSeen';
 
 /**
  * Synchronous key-value facade backed by expo-sqlite/kv-store
@@ -66,6 +67,15 @@ export function clearHomeLocationRaw(): void {
   storage.remove(HOME_LOCATION_KEY);
 }
 
+/** First-run onboarding shown once. Absent = not yet seen. */
+export function getOnboardingSeen(): boolean {
+  return storage.getString(ONBOARDING_SEEN_KEY) === '1';
+}
+
+export function setOnboardingSeen(): void {
+  storage.set(ONBOARDING_SEEN_KEY, '1');
+}
+
 /**
  * Per-asset GPS cache: "lat,lng" or "x" (checked, no location). A photo's GPS
  * is effectively immutable, and `getAssetInfoAsync` is the dominant cost of a
@@ -77,4 +87,29 @@ export function getAssetLocationRaw(assetId: string): string | null {
 
 export function setAssetLocationRaw(assetId: string, value: string): void {
   storage.set(`${ASSET_LOCATION_PREFIX}${assetId}`, value);
+}
+
+const PLACE_FIRST_SEEN_KEY = 'placeFirstSeen';
+const IS_PRO_KEY = 'isPro';
+
+/** JSON map of familiar place label → earliest YYYY-MM visited. */
+export function getPlaceFirstSeenRaw(): string | null {
+  return storage.getString(PLACE_FIRST_SEEN_KEY) ?? null;
+}
+
+export function setPlaceFirstSeenRaw(json: string): void {
+  storage.set(PLACE_FIRST_SEEN_KEY, json);
+}
+
+/** Local pro gate until RevenueCat. Absent / not "1" = free. */
+export function getIsProRaw(): boolean {
+  return storage.getString(IS_PRO_KEY) === '1';
+}
+
+export function setIsProRaw(value: boolean): void {
+  if (value) {
+    storage.set(IS_PRO_KEY, '1');
+  } else {
+    storage.remove(IS_PRO_KEY);
+  }
 }
