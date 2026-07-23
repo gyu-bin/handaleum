@@ -1,6 +1,7 @@
-import { Component, type ReactNode } from 'react';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { captureRenderError } from '@/lib/sentry';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
@@ -16,8 +17,7 @@ interface ErrorBoundaryState {
 
 /**
  * App-wide crash net: a render error anywhere below shows a retry surface
- * instead of a blank white screen. Retry clears the boundary; a deterministic
- * error surfaces again, which is the intended signal rather than a silent loop.
+ * instead of a blank white screen. Also forwards to Sentry when configured.
  */
 export class ErrorBoundary extends Component<
   ErrorBoundaryProps,
@@ -29,8 +29,9 @@ export class ErrorBoundary extends Component<
     return { hasError: true };
   }
 
-  componentDidCatch(error: unknown) {
+  componentDidCatch(error: unknown, info: ErrorInfo) {
     console.error('Uncaught render error', error);
+    captureRenderError(error, info.componentStack);
   }
 
   private reset = () => {

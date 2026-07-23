@@ -1,10 +1,12 @@
-import { useCallback, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useSyncExternalStore } from 'react';
 
 import { getLastViewedMonth, setLastViewedMonth } from '@/lib/storage';
+import { useIsPro } from '@/features/insights/hooks/useIsPro';
 
 import type { MonthKey } from '../types';
 import { monthKeySchema } from '../schema';
 import { currentMonthKey } from '../utils/month';
+import { canAccessMonth, clampMonthToAccess } from '../utils/monthAccess';
 
 function resolveMonth(): MonthKey {
   const stored = getLastViewedMonth();
@@ -47,17 +49,38 @@ function setSharedMonth(next: MonthKey): void {
 
 /**
  * Shared viewed month across screens.
- * Persists to sqlite kv-store; syncs via useSyncExternalStore so the map
- * updates after MonthPicker selects a different month.
+ * Free tier is limited to the last FREE_MONTH_WINDOW months unless isPro.
  */
 export function useCurrentMonth(): {
   month: MonthKey;
   setMonth: (month: MonthKey) => void;
+  canOpenMonth: (month: MonthKey) => boolean;
 } {
+  const { isPro } = useIsPro();
   const month = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-  const setMonth = useCallback((next: MonthKey) => {
-    setSharedMonth(next);
-  }, []);
 
-  return { month, setMonth };
+  // Drop out of locked history if pro is turned off or the window slides.
+  useEffect(() => {
+    const next = clampMonthToAccess(month, isPro);
+    if (next !== month) {
+      setSharedMonth(next);
+    }
+  }, [isPro, month]);
+
+  const setMonth = useCallback(
+    (next: MonthKey) => {
+      if (!canAccessMonth(next, isPro)) {
+        return;
+      }
+      setSharedMonth(next);
+    },
+    [isPro],
+  );
+
+  const canOpenMonth = useCallback(
+    (candidate: MonthKey) => canAccessMonth(candidate, isPro),
+    [isPro],
+  );
+
+  return { month, setMonth, canOpenMonth };
 }

@@ -142,7 +142,8 @@ export const strings = {
     locationDenied: '위치 권한이 없어 집 위치를 지정할 수 없습니다',
     locationFailed: '위치를 확인하지 못했습니다. 다시 시도해 주세요',
     proSection: '프로',
-    proDescription: '인사이트의 대략 이동 거리·바쁜 날을 잠금 해제합니다. (결제 연동 전 로컬 스위치)',
+    proDescription: (priceLabel: string) =>
+      `최근 3개월보다 지난 달을 열고, 인사이트 일부 지표를 잠금 해제합니다. 정식 가격 ${priceLabel}(일회). (결제 연동 전 로컬 스위치)`,
     proOn: '프로 켜짐',
     proOff: '프로 꺼짐',
     proToggleOn: '프로 켜기',
@@ -159,6 +160,9 @@ export const strings = {
     title: '월 선택',
     photoCount: (count: number) => `${count}장`,
     empty: '표시할 월이 없습니다',
+    freeWindowHint: (priceLabel: string) =>
+      `무료는 최근 3개월만 볼 수 있어요. 더 지난 달은 프로(${priceLabel}·일회)에서 열려요.`,
+    proOnly: '프로',
   },
   playback: {
     title: '몰아보기',

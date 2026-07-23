@@ -1,4 +1,5 @@
 allowBuilds:
+  '@sentry/cli': true
   unrs-resolver: true
 minimumReleaseAgeExclude:
   - '@expo/cli@57.0.9'

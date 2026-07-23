@@ -16,7 +16,7 @@ import {
 } from '../hooks/useMonthlyPhotos';
 
 export function MonthPickerScreen() {
-  const { month, setMonth } = useCurrentMonth();
+  const { month, setMonth, canOpenMonth } = useCurrentMonth();
   const { data, isPending, isError, refetch, isRefetching } = useMonthSummaries();
 
   // Warm a few recent months while the user scans the list.
@@ -59,7 +59,12 @@ export function MonthPickerScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <ScreenHeader title={strings.months.title} />
-      <MonthPickerList summaries={data} selected={month} onSelect={setMonth} />
+      <MonthPickerList
+        summaries={data}
+        selected={month}
+        onSelect={setMonth}
+        canOpenMonth={canOpenMonth}
+      />
     </SafeAreaView>
   );
 }

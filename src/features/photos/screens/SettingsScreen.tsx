@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/shared/components/Button';
 import { ScreenHeader } from '@/shared/components/ScreenHeader';
 import { strings } from '@/shared/constants/strings';
+import { formatProPriceKrw } from '@/shared/constants/pricing';
 import { theme } from '@/shared/constants/theme';
 
 import { useHomeLocation } from '../hooks/useHomeLocation';
@@ -133,7 +134,9 @@ export function SettingsScreen() {
 
         <View style={[styles.card, styles.cardSpaced]}>
           <Text style={styles.sectionTitle}>{strings.settings.proSection}</Text>
-          <Text style={styles.description}>{strings.settings.proDescription}</Text>
+          <Text style={styles.description}>
+            {strings.settings.proDescription(formatProPriceKrw())}
+          </Text>
           <Text style={[styles.status, isPro && styles.statusSet]}>
             {isPro ? strings.settings.proOn : strings.settings.proOff}
           </Text>
