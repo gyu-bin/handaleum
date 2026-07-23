@@ -1,3 +1,5 @@
+import { IS_MONETIZATION_LIVE } from '@/shared/constants/pricing';
+
 import type { MonthKey } from '../types';
 import { monthKeySchema } from '../schema';
 import { currentMonthKey } from './month';
@@ -15,13 +17,14 @@ export function oldestFreeMonthKey(now = new Date()): MonthKey {
 /**
  * Pro: every month. Free: only the last FREE_MONTH_WINDOW calendar months
  * (e.g. in July → May, June, July).
+ * When monetization is off, every month is open.
  */
 export function canAccessMonth(
   month: MonthKey,
   isPro: boolean,
   now = new Date(),
 ): boolean {
-  if (isPro) {
+  if (!IS_MONETIZATION_LIVE || isPro) {
     return true;
   }
   return month >= oldestFreeMonthKey(now);

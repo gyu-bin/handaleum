@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/shared/components/Button';
 import { ScreenHeader } from '@/shared/components/ScreenHeader';
 import { strings } from '@/shared/constants/strings';
-import { formatProPriceKrw } from '@/shared/constants/pricing';
+import { formatProPriceKrw, IS_MONETIZATION_LIVE } from '@/shared/constants/pricing';
 import { theme } from '@/shared/constants/theme';
 
 import { useHomeLocation } from '../hooks/useHomeLocation';
@@ -132,21 +132,23 @@ export function SettingsScreen() {
           ) : null}
         </View>
 
-        <View style={[styles.card, styles.cardSpaced]}>
-          <Text style={styles.sectionTitle}>{strings.settings.proSection}</Text>
-          <Text style={styles.description}>
-            {strings.settings.proDescription(formatProPriceKrw())}
-          </Text>
-          <Text style={[styles.status, isPro && styles.statusSet]}>
-            {isPro ? strings.settings.proOn : strings.settings.proOff}
-          </Text>
-          <Button
-            title={isPro ? strings.settings.proToggleOff : strings.settings.proToggleOn}
-            variant={isPro ? 'secondary' : 'accent'}
-            size="md"
-            onPress={() => setIsPro(!isPro)}
-          />
-        </View>
+        {IS_MONETIZATION_LIVE ? (
+          <View style={[styles.card, styles.cardSpaced]}>
+            <Text style={styles.sectionTitle}>{strings.settings.proSection}</Text>
+            <Text style={styles.description}>
+              {strings.settings.proDescription(formatProPriceKrw())}
+            </Text>
+            <Text style={[styles.status, isPro && styles.statusSet]}>
+              {isPro ? strings.settings.proOn : strings.settings.proOff}
+            </Text>
+            <Button
+              title={isPro ? strings.settings.proToggleOff : strings.settings.proToggleOn}
+              variant={isPro ? 'secondary' : 'accent'}
+              size="md"
+              onPress={() => setIsPro(!isPro)}
+            />
+          </View>
+        ) : null}
 
         {__DEV__ ? (
           <View style={[styles.card, styles.cardSpaced]}>

@@ -2,7 +2,7 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { strings } from '@/shared/constants/strings';
-import { formatProPriceKrw } from '@/shared/constants/pricing';
+import { formatProPriceKrw, IS_MONETIZATION_LIVE } from '@/shared/constants/pricing';
 import { theme } from '@/shared/constants/theme';
 
 import { prefetchMonthlyPhotos } from '../hooks/useMonthlyPhotos';
@@ -31,9 +31,11 @@ export function MonthPickerList({
       ItemSeparatorComponent={() => <View style={styles.sep} />}
       showsVerticalScrollIndicator={false}
       ListHeaderComponent={
-        <Text style={styles.hint}>
-          {strings.months.freeWindowHint(formatProPriceKrw())}
-        </Text>
+        IS_MONETIZATION_LIVE ? (
+          <Text style={styles.hint}>
+            {strings.months.freeWindowHint(formatProPriceKrw())}
+          </Text>
+        ) : null
       }
       renderItem={({ item }) => {
         const isSelected = item.month === selected;
