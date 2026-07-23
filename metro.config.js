@@ -1,4 +1,6 @@
-const { getSentryExpoConfig } = require('@sentry/react-native/metro');
+const { getDefaultConfig } = require('expo/metro-config');
 
-/** Sentry Metro config — Debug IDs / source maps for EAS production builds. */
-module.exports = getSentryExpoConfig(__dirname);
+/** @type {import('expo/metro-config').MetroConfig} */
+const config = getDefaultConfig(__dirname);
+
+module.exports = config;

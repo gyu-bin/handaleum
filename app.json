@@ -61,15 +61,7 @@
         }
       ],
       "expo-sqlite",
-      "expo-font",
-      [
-        "@sentry/react-native/expo",
-        {
-          "organization": "handaleum",
-          "project": "handaleum",
-          "url": "https://sentry.io/"
-        }
-      ]
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true,

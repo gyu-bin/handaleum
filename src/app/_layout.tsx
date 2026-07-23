@@ -9,15 +9,13 @@ import { AnimatedSplash } from '@/shared/components/AnimatedSplash';
 import { ErrorBoundary } from '@/shared/components/ErrorBoundary';
 import { queryClient } from '@/lib/queryClient';
 import { configurePurchases } from '@/lib/purchases';
-import { initSentry, Sentry } from '@/lib/sentry';
 
-initSentry();
 configurePurchases();
 
 // Hold the native splash so the animated one takes over without a blank flash.
 void SplashScreen.preventAutoHideAsync();
 
-function RootLayout() {
+export default function RootLayout() {
   const [splashDone, setSplashDone] = useState(false);
 
   useEffect(() => {
@@ -44,5 +42,3 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
-
-export default Sentry.wrap(RootLayout);
