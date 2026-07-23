@@ -13,54 +13,87 @@ export interface HomeNavBarProps {
 }
 
 /**
- * Thumb-reachable navigation for the home hub. Text labels (not icons) to keep
- * the paper-map identity. The primary action (카드 만들기) stays a distinct CTA
- * above the map footer; this bar carries the secondary destinations only.
+ * Compact pill dock for home destinations. Paper-map identity: text only,
+ * sand underline on press (concept C, sized down).
  */
 export function HomeNavBar({ items }: HomeNavBarProps) {
   const router = useRouter();
 
   return (
-    <View style={styles.bar}>
-      {items.map((item) => (
-        <Pressable
-          key={String(item.href)}
-          onPress={() => router.push(item.href)}
-          accessibilityRole="button"
-          accessibilityLabel={item.label}
-          style={({ pressed }) => [styles.item, pressed && styles.pressed]}
-        >
-          <Text style={styles.label}>{item.label}</Text>
-        </Pressable>
-      ))}
+    <View style={styles.wrap}>
+      <View style={styles.bar}>
+        {items.map((item) => (
+          <Pressable
+            key={String(item.href)}
+            onPress={() => router.push(item.href)}
+            accessibilityRole="button"
+            accessibilityLabel={item.label}
+            style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
+          >
+            {({ pressed }) => (
+              <>
+                <Text
+                  style={[styles.label, pressed && styles.labelPressed]}
+                  numberOfLines={1}
+                >
+                  {item.label}
+                </Text>
+                <View
+                  style={[styles.underline, pressed && styles.underlineVisible]}
+                />
+              </>
+            )}
+          </Pressable>
+        ))}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  wrap: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: theme.spacing.sm,
+  },
   bar: {
     flexDirection: 'row',
-    marginHorizontal: theme.spacing.md,
-    marginBottom: theme.spacing.sm,
-    borderRadius: theme.radius.card,
+    alignItems: 'stretch',
+    borderRadius: theme.radius.pill,
     backgroundColor: theme.colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.colors.hairline,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
     ...theme.shadows.card,
   },
   item: {
     flex: 1,
-    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: theme.radius.card,
+    paddingVertical: 8,
+    paddingHorizontal: 2,
+    gap: 3,
   },
-  pressed: {
-    backgroundColor: theme.colors.accentSoft,
+  itemPressed: {
+    opacity: 1,
   },
   label: {
-    ...theme.type.label,
-    color: theme.colors.ink,
+    ...theme.type.micro,
+    color: theme.colors.inkSoft,
     fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  labelPressed: {
+    color: theme.colors.ink,
+    fontWeight: '700',
+  },
+  underline: {
+    width: 14,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: 'transparent',
+  },
+  underlineVisible: {
+    backgroundColor: theme.colors.sand,
   },
 });
