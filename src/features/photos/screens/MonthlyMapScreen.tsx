@@ -109,6 +109,11 @@ export function MonthlyMapScreen() {
     return <LoadingView />;
   }
 
+  // Cold start: assets listed but GPS still resolving and no pins yet.
+  if (data && data.photos.length === 0 && isFetching) {
+    return <LoadingView />;
+  }
+
   if (isError || !data) {
     return (
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
@@ -145,7 +150,7 @@ export function MonthlyMapScreen() {
               </Text>
               <Text style={styles.monthMeta} numberOfLines={1}>
                 {isFetching && data
-                  ? strings.common.loading
+                  ? strings.map.resolvingLocations
                   : strings.map.monthMeta(monthLabel, clusters.length)}
               </Text>
             </View>

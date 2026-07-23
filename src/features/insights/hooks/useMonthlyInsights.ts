@@ -34,6 +34,7 @@ export function useMonthlyInsights(month: MonthKey): {
     data,
     isPending,
     isError,
+    isFetching,
     refetch,
   } = useMonthlyPhotos(month);
   const photos = useMemo(() => data?.photos ?? [], [data?.photos]);
@@ -138,11 +139,11 @@ export function useMonthlyInsights(month: MonthKey): {
     };
   }, [metrics, farthestLabel, topLabel]);
 
-  const isEmpty = Boolean(data && photos.length === 0);
+  const isEmpty = Boolean(data && photos.length === 0 && !isFetching);
 
   return {
     insights,
-    isPending,
+    isPending: isPending || Boolean(data && photos.length === 0 && isFetching),
     isError,
     isEmpty,
     isResolvingLabels: journeyResolving || labelsResolving,

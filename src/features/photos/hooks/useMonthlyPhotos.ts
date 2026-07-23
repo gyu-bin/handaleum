@@ -8,6 +8,8 @@ import {
 import { queryClient } from '@/lib/queryClient';
 
 import { loadMonthlyPhotos, loadMonthSummaries } from '../services/mediaLibrary';
+import { isAppForeground } from '../services/appForeground';
+import { startMonthWarmup } from '../services/monthWarmup';
 import type { MonthKey, MonthlyPhotos, PhotoRef } from '../types';
 import { excludeHomePhotos } from '../utils/homeFilter';
 import { useHomeLocation } from './useHomeLocation';
@@ -28,7 +30,13 @@ export interface MonthlyPhotosData extends MonthlyPhotos {
 export function prefetchMonthlyPhotos(month: MonthKey): void {
   void queryClient.prefetchQuery({
     queryKey: photosQueryKeys.monthly(month),
-    queryFn: () => loadMonthlyPhotos(month),
+    queryFn: () =>
+      loadMonthlyPhotos(month, {
+        onPartial: (partial) => {
+          queryClient.setQueryData(photosQueryKeys.monthly(month), partial);
+        },
+        shouldContinue: isAppForeground,
+      }),
   });
 }
 
@@ -40,37 +48,29 @@ export function prefetchMonthlyPhotos(month: MonthKey): void {
 export function useMonthlyPhotos(month: MonthKey, options?: { enabled?: boolean }) {
   const { home } = useHomeLocation();
   const client = useQueryClient();
+  const enabled = options?.enabled ?? true;
   const query = useQuery({
     queryKey: photosQueryKeys.monthly(month),
-    queryFn: () => loadMonthlyPhotos(month),
-    enabled: options?.enabled ?? true,
+    queryFn: () =>
+      loadMonthlyPhotos(month, {
+        onPartial: (partial) => {
+          client.setQueryData(photosQueryKeys.monthly(month), partial);
+        },
+        shouldContinue: isAppForeground,
+      }),
+    enabled,
     // Keep the previous month on screen while the next one loads — avoids a
     // full-screen spinner flash when switching months.
     placeholderData: keepPreviousData,
   });
 
-  // Prefetch adjacent months in the summaries list (prev/next by key sort).
+  // After the viewed month fully resolves, warm neighbors then the rest.
   useEffect(() => {
-    if (!query.isSuccess || !(options?.enabled ?? true)) {
+    if (!enabled || !query.isSuccess || query.isFetching) {
       return;
     }
-    const summaries = client.getQueryData<{ month: MonthKey }[]>(
-      photosQueryKeys.summaries,
-    );
-    if (!summaries || summaries.length === 0) {
-      return;
-    }
-    const idx = summaries.findIndex((s) => s.month === month);
-    if (idx < 0) {
-      return;
-    }
-    const neighbors = [summaries[idx - 1]?.month, summaries[idx + 1]?.month].filter(
-      (m): m is MonthKey => m != null && m !== month,
-    );
-    for (const neighbor of neighbors) {
-      prefetchMonthlyPhotos(neighbor);
-    }
-  }, [client, month, options?.enabled, query.isSuccess]);
+    startMonthWarmup(month);
+  }, [enabled, month, query.isSuccess, query.isFetching]);
 
   const data: MonthlyPhotosData | undefined = useMemo(() => {
     if (!query.data) {

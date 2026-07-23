@@ -11,6 +11,7 @@ import { getAssetLocationRaw, setAssetLocationRaw } from '@/lib/storage';
 
 import type { MonthKey, MonthlyPhotos, MonthSummary, PhotoRef } from '../types';
 import { monthBounds, monthKeyFromTimestamp } from '../utils/month';
+import { waitForAppForeground } from './appForeground';
 
 /** Larger pages = fewer native round-trips when listing a month. */
 const PAGE_SIZE = 200;
@@ -85,11 +86,38 @@ async function fetchLocation(asset: Asset): Promise<PhotoRef | 'no-location' | n
   }
 }
 
+export type LoadMonthlyPhotosOptions = {
+  /** Called after the cache pass (if anything to show) and after each GPS batch. */
+  onPartial?: (data: MonthlyPhotos) => void;
+  /**
+   * When false, pause between batches until true again.
+   * Used so backgrounding the app stops MediaLibrary work; assetLoc still persists.
+   */
+  shouldContinue?: () => boolean;
+};
+
+function snapshot(month: MonthKey, photos: PhotoRef[], noLocationCount: number): MonthlyPhotos {
+  const sorted = [...photos].sort((a, b) => a.takenAt.localeCompare(b.takenAt));
+  return { month, photos: sorted, noLocationCount };
+}
+
+async function pauseWhileBackgrounded(shouldContinue?: () => boolean): Promise<void> {
+  if (!shouldContinue || shouldContinue()) {
+    return;
+  }
+  await waitForAppForeground();
+}
+
 /**
  * Load all camera-roll photos for a month via expo-media-library.
  * Cached GPS hits resolve synchronously; only uncached assets pay getAssetInfoAsync.
+ * Optional onPartial paints the map before every uncached asset is resolved.
  */
-export async function loadMonthlyPhotos(month: MonthKey): Promise<MonthlyPhotos> {
+export async function loadMonthlyPhotos(
+  month: MonthKey,
+  options?: LoadMonthlyPhotosOptions,
+): Promise<MonthlyPhotos> {
+  const { onPartial, shouldContinue } = options ?? {};
   const { startMs, endMs } = monthBounds(month);
   const assets = await collectAssets({
     createdAfter: startMs,
@@ -111,7 +139,14 @@ export async function loadMonthlyPhotos(month: MonthKey): Promise<MonthlyPhotos>
     }
   }
 
+  // Emit early only when we already have pins, or when there is nothing left to resolve.
+  // Avoid flashing the empty-month state while GPS is still resolving.
+  if (photos.length > 0 || uncached.length === 0) {
+    onPartial?.(snapshot(month, photos, noLocationCount));
+  }
+
   for (let i = 0; i < uncached.length; i += LOCATION_BATCH) {
+    await pauseWhileBackgrounded(shouldContinue);
     const chunk = uncached.slice(i, i + LOCATION_BATCH);
     const results = await Promise.all(chunk.map(fetchLocation));
     for (const result of results) {
@@ -121,11 +156,14 @@ export async function loadMonthlyPhotos(month: MonthKey): Promise<MonthlyPhotos>
         photos.push(result);
       }
     }
+    const remaining = uncached.length - (i + chunk.length);
+    // Don't flash empty-month UI while later batches may still find GPS.
+    if (photos.length > 0 || remaining <= 0) {
+      onPartial?.(snapshot(month, photos, noLocationCount));
+    }
   }
 
-  photos.sort((a, b) => a.takenAt.localeCompare(b.takenAt));
-
-  return { month, photos, noLocationCount };
+  return snapshot(month, photos, noLocationCount);
 }
 
 /** Photo counts per month, for the month picker. */

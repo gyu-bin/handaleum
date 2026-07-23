@@ -100,6 +100,8 @@ export const strings = {
     /** Evidence line under the title: reads as an instrument, not a sentence. */
     monthMeta: (monthLabel: string, steps: number) =>
       steps > 0 ? `${monthLabel} · ${countWord(steps)} 걸음` : monthLabel,
+    /** Shown while GPS for this month is still resolving in the background. */
+    resolvingLocations: '위치 확인 중…',
     /**
      * Headline above the visit chips. Count-based so the line height stays
      * fixed no matter how many places the month holds — the places themselves
