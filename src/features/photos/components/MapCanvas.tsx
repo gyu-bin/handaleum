@@ -52,14 +52,14 @@ const REBASE_HEADROOM = 2;
 const SETTLE_EPSILON = 0.02;
 
 /**
- * A settled region base sits centered at translate 0. Beyond this many pixels
- * of pan the base is re-centered on release, so panning can walk across the
- * map instead of clamping at the edge of the current base's headroom margin.
+ * When the camera is still near the settled headroom scale, only rebase once
+ * the visible rect has used this fraction of its size as edge cushion. Skipping
+ * mid-margin pans avoids an SVG rebuild after every fling (the main scroll hitch).
  */
-const PAN_SETTLE_EPSILON = 1;
+const PAN_EDGE_FRACTION = 0.18;
 
 /** Zoom buttons animate internally; settle after the motion has finished. */
-const BUTTON_SETTLE_DELAY_MS = 380;
+const BUTTON_SETTLE_DELAY_MS = 420;
 
 /** Zoom level (used for clustering radius) derived from the effective scale. */
 export function zoomFromScale(scale: number): number {
@@ -182,6 +182,9 @@ export function MapCanvas({
    * Fold the current camera into the base projection. Both sides of the swap
    * paint identical pixels (see utils/rebase.ts); scheduleRebase then keeps the
    * base commit and the camera reset on the same frame so the seam is invisible.
+   *
+   * Skip when a rebase would not change coverage — every unnecessary swap
+   * rebuilds the Korea SVG and reads as a hitch at the end of a fling/pinch.
    */
   const settle = () => {
     const zr = zoomRef.current;
@@ -190,18 +193,31 @@ export function MapCanvas({
     }
     const current = zr.getState();
     reportEffectiveScale(baseRatio * current.scale);
-    // Skip only a true no-op: zoom unchanged AND the base still centered. A pan
-    // (translate off center) must rebase so the base follows the viewport.
-    const zoomUnchanged =
+
+    const visible = zr.getVisibleRect();
+    const zoomSettled =
       Math.abs(current.scale - REBASE_HEADROOM) < SETTLE_EPSILON;
-    const centered =
-      Math.abs(current.translateX) < PAN_SETTLE_EPSILON &&
-      Math.abs(current.translateY) < PAN_SETTLE_EPSILON;
-    if (zoomUnchanged && centered) {
-      return;
+
+    if (baseBBox === null) {
+      // Full Korea: nothing to sharpen until past the headroom band.
+      if (current.scale < REBASE_HEADROOM + SETTLE_EPSILON) {
+        return;
+      }
+    } else if (zoomSettled) {
+      const edgePad =
+        Math.min(visible.width, visible.height) * PAN_EDGE_FRACTION;
+      const nearEdge =
+        visible.x < edgePad ||
+        visible.y < edgePad ||
+        visible.x + visible.width > size.width - edgePad ||
+        visible.y + visible.height > size.height - edgePad;
+      if (!nearEdge) {
+        return;
+      }
     }
+
     const result = computeRebase({
-      visibleRect: zr.getVisibleRect(),
+      visibleRect: visible,
       projection,
       reference,
       viewport: size,
@@ -346,8 +362,11 @@ export function MapCanvas({
               style={{ width: size.width, height: size.height }}
               minScale={MIN_SCALE}
               maxScale={maxCameraScale}
-              panMode="clamp"
-              scaleMode="clamp"
+              // friction / bounce: rubber-band at edges instead of a hard stop.
+              panMode="friction"
+              scaleMode="bounce"
+              // Inertia after release (default true — keep explicit).
+              decay
               pinchEnabled
               panEnabled
               tapsEnabled

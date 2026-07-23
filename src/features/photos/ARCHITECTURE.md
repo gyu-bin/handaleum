@@ -42,6 +42,7 @@
 | 테마·커버 저장: sqlite kv + useSyncExternalStore | Zustand | 기존 month 패턴 재사용. Zustand 미도입 | 2026-07-18 |
 | 지도 테마: **dawn 단일** (ink/warm 제거, 스키마 `z.enum(['dawn'])`) | 3종 유지 | 사용자 결정. 정체성 단일화 + 팔레트 유지비 절감. 구조는 유지해 테마팩 복원 여지 | 2026-07-20 |
 | 줌 선명도: **정착 시 재투영(rebase)** — `utils/rebase.ts` 순수 수학 + `useMapProjection(baseBBox)` + settle 오케스트레이션. 카메라 정착 시 보이는 영역×2(headroom)로 base를 갈아끼우고 카메라를 {scale:2,0,0}으로 리셋. SVG는 headroom배 오버샘플이라 정착 화면은 네이티브 해상도 | 래스터 오버샘플만 (배율 제곱 메모리, 상한 3 이상 흐림) / 타일링 | Mercator가 (radLng, mercY)에서 아핀이라 swap이 항등 (수치검증: 200 랜덤 카메라 드리프트 5.7e-11px, 5연쇄 누적 없음). zoom-toolkit이 minScale<1을 throw하므로 줌아웃은 headroom으로 해결. 유효 배율 상한 18은 base별 동적 maxScale로 보존 | 2026-07-20 |
+| 제스처 체감: **panMode=friction · scaleMode=bounce · decay**, settle는 가장자리/줌 이탈 시에만 rebase (중간 패닝은 SVG 재빌드 생략) | 매 제스처 종료마다 rebase / clamp | 플링 끝 hitch 제거 | 2026-07-23 |
 | 하단 방문지 바 제거, 친숙 라벨을 **상단 헤더 칩**으로 | 줌 스코프 바(도→시→동) 유지 | 헤더가 이미 방문지를 보여줘 중복. `VisitScopeBar`/`visitScope` 삭제 | 2026-07-22 |
 | 서울 **구** 표시: `dong-gu.json` **법정동→구 테이블**로 복구 | iOS geocode에 의존 / 구 경계 geojson + point-in-polygon | 실기기 진단으로 iOS가 서울에 법정동만 주고 구는 어떤 필드에도 안 줌을 확인. 동은 신뢰 가능 → 테이블이 좌표 계산보다 단순·정확. 이전 "서울 구는 geocode" 결정 갱신 | 2026-07-22 |
 | 구 테이블 **전국 일반구 시로 확장** (서울 자치구 + 성남·수원·고양·용인·안양·안산·전주·창원·천안·청주·포항). `{시:{동:구}}` 시-스코프 키. journeyLabel에 구 포함해 구별 칩 분리 | 서울만 / 동 이름 단일 키(전국 충돌) | 비용 동일하고 일관. 시-스코프로 전국 동명 충돌 회피, 시내 충돌 8개(창원7·천안1)는 생략→시 폴백 | 2026-07-22 |
