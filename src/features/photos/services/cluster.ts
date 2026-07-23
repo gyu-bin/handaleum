@@ -1,58 +1,77 @@
 import type { PhotoRef, PlaceCluster } from '../types';
 
-const EARTH_RADIUS_KM = 6371;
-
-function haversineKm(a: PhotoRef, b: PhotoRef): number {
-  const toRad = (deg: number) => (deg * Math.PI) / 180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const lat1 = toRad(a.lat);
-  const lat2 = toRad(b.lat);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(h)));
+/**
+ * Soft cap on visible pins so the paper map stays readable.
+ * Overview (~zoom 8) ≈ 30 pins; deep zoom allows more detail.
+ */
+function maxPinsForZoom(zoom: number): number {
+  const z = Math.max(6, Math.min(18, zoom));
+  return Math.round(24 + (z - 6) * 10); // 24 @6 → 84 @12 → 144 @18
 }
 
-/** Approximate cluster radius in km from map zoom. */
-function radiusKmForZoom(zoom: number): number {
-  return Math.max(0.04, 48 / 2 ** Math.max(0, zoom - 8));
+/** Starting cell size in degrees from map zoom (~km/111). */
+function cellDegForZoom(zoom: number): number {
+  // Broader than the old haversine radius — overview should read as cities, not dots.
+  const radiusKm = Math.max(1.2, 90 / 2 ** Math.max(0, zoom - 6));
+  return Math.max(radiusKm / 111, 0.008);
+}
+
+function gridCluster(photos: PhotoRef[], cellDeg: number): PlaceCluster[] {
+  const cells = new Map<string, PhotoRef[]>();
+
+  for (const photo of photos) {
+    const row = Math.floor(photo.lat / cellDeg);
+    const col = Math.floor(photo.lng / cellDeg);
+    const key = `${row}:${col}`;
+    const bucket = cells.get(key);
+    if (bucket) {
+      bucket.push(photo);
+    } else {
+      cells.set(key, [photo]);
+    }
+  }
+
+  const clusters: PlaceCluster[] = [];
+  for (const members of cells.values()) {
+    members.sort((a, b) => a.takenAt.localeCompare(b.takenAt));
+    const centerLat =
+      members.reduce((sum, p) => sum + p.lat, 0) / members.length;
+    const centerLng =
+      members.reduce((sum, p) => sum + p.lng, 0) / members.length;
+    const seedId = members[0]!.assetId;
+    clusters.push({
+      id: `${centerLat.toFixed(4)},${centerLng.toFixed(4)}:${members.length}:${seedId}`,
+      centerLat,
+      centerLng,
+      photos: members,
+    });
+  }
+
+  return clusters;
 }
 
 /**
  * Group nearby photos into map pins. Pure function, computed at read time,
- * never persisted (spec A-2). Cluster radius depends on zoom level.
+ * never persisted (spec A-2).
+ *
+ * Spatial grid (O(n)). If the first pass still yields too many pins for the
+ * current zoom (sparse nationwide scatter), grow the cell until under the cap
+ * so the map stays an infographic — not a pin carpet.
  */
 export function clusterPhotos(photos: PhotoRef[], zoom: number): PlaceCluster[] {
-  const radiusKm = radiusKmForZoom(zoom);
-  const remaining = [...photos].sort((a, b) => a.takenAt.localeCompare(b.takenAt));
-  const clusters: PlaceCluster[] = [];
+  if (photos.length === 0) {
+    return [];
+  }
 
-  while (remaining.length > 0) {
-    const seed = remaining.shift()!;
-    const members: PhotoRef[] = [seed];
+  const maxPins = maxPinsForZoom(zoom);
+  let cellDeg = cellDegForZoom(zoom);
+  let clusters = gridCluster(photos, cellDeg);
 
-    for (let i = remaining.length - 1; i >= 0; i -= 1) {
-      if (haversineKm(seed, remaining[i]!) <= radiusKm) {
-        members.push(remaining[i]!);
-        remaining.splice(i, 1);
-      }
-    }
-
-    const centerLat = members.reduce((sum, p) => sum + p.lat, 0) / members.length;
-    const centerLng = members.reduce((sum, p) => sum + p.lng, 0) / members.length;
-    const id = members
-      .map((p) => p.assetId)
-      .sort()
-      .join('|')
-      .slice(0, 120);
-
-    clusters.push({
-      id,
-      centerLat,
-      centerLng,
-      photos: members.sort((a, b) => a.takenAt.localeCompare(b.takenAt)),
-    });
+  let guard = 0;
+  while (clusters.length > maxPins && guard < 14) {
+    cellDeg *= 1.55;
+    clusters = gridCluster(photos, cellDeg);
+    guard += 1;
   }
 
   return clusters;

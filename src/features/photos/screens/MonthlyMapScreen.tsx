@@ -23,6 +23,7 @@ import { useMonthlyPhotos } from '../hooks/useMonthlyPhotos';
 import { usePhotoPermission } from '../hooks/usePhotoPermission';
 import { usePinCovers } from '../hooks/usePinCovers';
 import { clusterPhotos } from '../services/cluster';
+import { isDevDummyPhotosEnabled } from '../services/dummyPhotos';
 import type { MonthKey, PlaceCluster } from '../types';
 import { monthTimeBoundsIso } from '../utils/month';
 import { placeBucketKey } from '../utils/placeJourney';
@@ -49,7 +50,8 @@ export function MonthlyMapScreen() {
   const router = useRouter();
   const { seen: onboardingSeen } = useOnboarding();
   const { status, isReady } = usePhotoPermission();
-  const hasAccess = status === 'granted' || status === 'limited';
+  const hasLibraryAccess = status === 'granted' || status === 'limited';
+  const hasAccess = hasLibraryAccess || isDevDummyPhotosEnabled();
   const { month } = useCurrentMonth();
   const { themeId } = useMapTheme();
   const { covers, setCover } = usePinCovers(month);
@@ -228,45 +230,36 @@ export function MonthlyMapScreen() {
           ) : null}
         </View>
 
-        {data.photos.length === 0 ? (
-          <View style={styles.empty}>
-            <StateView
-              icon="📷"
-              title={
-                data.homeExcludedCount > 0
+        <View style={styles.mapBlock}>
+          <MapCanvas
+            clusters={clusters}
+            frameKey={month}
+            onZoomChange={setZoom}
+            onSelectCluster={onSelectCluster}
+            selectedClusterId={selected?.id ?? null}
+            themeId={themeId}
+            pinCovers={covers}
+          />
+          {data.photos.length === 0 ? (
+            <View style={styles.emptyOverlay} pointerEvents="box-none">
+              <Text style={styles.emptyOverlayText}>
+                {data.homeExcludedCount > 0
                   ? strings.map.emptyAllHome
-                  : strings.map.emptyMonth
-              }
-            />
-            {data.allPhotos.length > 0 ? (
-              <Button
-                title={strings.cards.createTitle}
-                variant="accent"
-                onPress={() => router.push('/cards/create')}
-              />
-            ) : null}
-          </View>
-        ) : (
-          <>
-            <MapCanvas
-              clusters={clusters}
-              frameKey={month}
-              onZoomChange={setZoom}
-              onSelectCluster={onSelectCluster}
-              selectedClusterId={selected?.id ?? null}
-              themeId={themeId}
-              pinCovers={covers}
-            />
-            <View style={styles.footer}>
-              <TimeSlider bounds={bounds} value={timeRange} onChange={setTimeRange} />
-              <Button
-                title={strings.cards.createTitle}
-                variant="accent"
-                onPress={() => router.push('/cards/create')}
-              />
+                  : strings.map.emptyMonth}
+              </Text>
             </View>
-          </>
-        )}
+          ) : null}
+        </View>
+        <View style={styles.footer}>
+          {data.photos.length > 0 ? (
+            <TimeSlider bounds={bounds} value={timeRange} onChange={setTimeRange} />
+          ) : null}
+          <Button
+            title={strings.cards.createTitle}
+            variant="accent"
+            onPress={() => router.push('/cards/create')}
+          />
+        </View>
       </View>
 
       <HomeNavBar items={navItems} />
@@ -403,11 +396,26 @@ const styles = StyleSheet.create({
     ...theme.type.micro,
     color: theme.colors.subtle,
   },
-  empty: {
+  mapBlock: {
     flex: 1,
+    position: 'relative',
+  },
+  emptyOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.lg,
-    gap: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+  },
+  emptyOverlayText: {
+    ...theme.type.body,
+    color: theme.colors.inkSoft,
+    fontWeight: '600',
+    textAlign: 'center',
+    backgroundColor: theme.colors.overlay,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.radius.md,
+    overflow: 'hidden',
   },
   footer: {
     paddingTop: theme.spacing.md,

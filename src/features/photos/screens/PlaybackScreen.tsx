@@ -23,6 +23,7 @@ import { useMonthlyPhotos } from '../hooks/useMonthlyPhotos';
 import { clusterPhotos } from '../services/cluster';
 import { resolveAssetUri } from '../services/mediaLibrary';
 import type { PlaceCluster } from '../types';
+import { resolveClusterDetailLabel } from '../utils/placeJourney';
 
 function ClusterSlide({
   cluster,
@@ -32,6 +33,7 @@ function ClusterSlide({
   width: number;
 }) {
   const [uri, setUri] = useState<string | null>(null);
+  const [placeLabel, setPlaceLabel] = useState<string | null>(null);
   const first = cluster.photos[0];
 
   useEffect(() => {
@@ -49,6 +51,21 @@ function ClusterSlide({
     };
   }, [first]);
 
+  useEffect(() => {
+    let cancelled = false;
+    setPlaceLabel(null);
+    void resolveClusterDetailLabel(cluster.centerLat, cluster.centerLng).then(
+      (label) => {
+        if (!cancelled) {
+          setPlaceLabel(label);
+        }
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [cluster.centerLat, cluster.centerLng]);
+
   return (
     <View style={[styles.slide, { width }]}>
       <View style={styles.imageWrap}>
@@ -58,6 +75,9 @@ function ClusterSlide({
           <View style={[styles.image, styles.placeholder]} />
         )}
       </View>
+      <Text style={styles.place} numberOfLines={2}>
+        {placeLabel ?? strings.playback.placeLoading}
+      </Text>
       <Text style={styles.meta}>
         {strings.map.clusterCount(cluster.photos.length)}
       </Text>
@@ -246,15 +266,21 @@ const styles = StyleSheet.create({
   placeholder: {
     backgroundColor: theme.colors.surfaceAlt,
   },
-  meta: {
+  place: {
     ...theme.type.title,
     marginTop: theme.spacing.md,
     color: theme.colors.ink,
     fontWeight: '800',
   },
+  meta: {
+    ...theme.type.label,
+    marginTop: 4,
+    color: theme.colors.inkSoft,
+    fontWeight: '600',
+  },
   date: {
     ...theme.type.label,
     marginTop: 2,
-    color: theme.colors.inkSoft,
+    color: theme.colors.subtle,
   },
 });

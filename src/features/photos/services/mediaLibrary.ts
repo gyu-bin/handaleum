@@ -12,6 +12,12 @@ import { getAssetLocationRaw, setAssetLocationRaw } from '@/lib/storage';
 import type { MonthKey, MonthlyPhotos, MonthSummary, PhotoRef } from '../types';
 import { monthBounds, monthKeyFromTimestamp } from '../utils/month';
 import { waitForAppForeground } from './appForeground';
+import {
+  buildDummyMonthSummaries,
+  buildDummyMonthlyPhotos,
+  isDevDummyPhotosEnabled,
+  isDummyAssetId,
+} from './dummyPhotos';
 
 /** Larger pages = fewer native round-trips when listing a month. */
 const PAGE_SIZE = 200;
@@ -96,9 +102,16 @@ export type LoadMonthlyPhotosOptions = {
   shouldContinue?: () => boolean;
 };
 
-function snapshot(month: MonthKey, photos: PhotoRef[], noLocationCount: number): MonthlyPhotos {
-  const sorted = [...photos].sort((a, b) => a.takenAt.localeCompare(b.takenAt));
-  return { month, photos: sorted, noLocationCount };
+function snapshot(
+  month: MonthKey,
+  photos: PhotoRef[],
+  noLocationCount: number,
+  sort: boolean,
+): MonthlyPhotos {
+  const list = sort
+    ? [...photos].sort((a, b) => a.takenAt.localeCompare(b.takenAt))
+    : [...photos];
+  return { month, photos: list, noLocationCount };
 }
 
 async function pauseWhileBackgrounded(shouldContinue?: () => boolean): Promise<void> {
@@ -107,6 +120,9 @@ async function pauseWhileBackgrounded(shouldContinue?: () => boolean): Promise<v
   }
   await waitForAppForeground();
 }
+
+/** Min gap between progressive UI updates — avoids re-clustering every batch. */
+const PARTIAL_MIN_MS = 400;
 
 /**
  * Load all camera-roll photos for a month via expo-media-library.
@@ -117,6 +133,12 @@ export async function loadMonthlyPhotos(
   month: MonthKey,
   options?: LoadMonthlyPhotosOptions,
 ): Promise<MonthlyPhotos> {
+  if (isDevDummyPhotosEnabled()) {
+    const data = buildDummyMonthlyPhotos(month);
+    options?.onPartial?.(data);
+    return data;
+  }
+
   const { onPartial, shouldContinue } = options ?? {};
   const { startMs, endMs } = monthBounds(month);
   const assets = await collectAssets({
@@ -139,10 +161,27 @@ export async function loadMonthlyPhotos(
     }
   }
 
+  let lastPartialAt = 0;
+  const emitPartial = (force: boolean) => {
+    if (!onPartial) {
+      return;
+    }
+    if (photos.length === 0 && !force) {
+      return;
+    }
+    const now = Date.now();
+    if (!force && now - lastPartialAt < PARTIAL_MIN_MS) {
+      return;
+    }
+    lastPartialAt = now;
+    // Partial frames skip a full sort — final return is sorted.
+    onPartial(snapshot(month, photos, noLocationCount, force));
+  };
+
   // Emit early only when we already have pins, or when there is nothing left to resolve.
   // Avoid flashing the empty-month state while GPS is still resolving.
   if (photos.length > 0 || uncached.length === 0) {
-    onPartial?.(snapshot(month, photos, noLocationCount));
+    emitPartial(uncached.length === 0);
   }
 
   for (let i = 0; i < uncached.length; i += LOCATION_BATCH) {
@@ -157,17 +196,20 @@ export async function loadMonthlyPhotos(
       }
     }
     const remaining = uncached.length - (i + chunk.length);
-    // Don't flash empty-month UI while later batches may still find GPS.
     if (photos.length > 0 || remaining <= 0) {
-      onPartial?.(snapshot(month, photos, noLocationCount));
+      emitPartial(remaining <= 0);
     }
   }
 
-  return snapshot(month, photos, noLocationCount);
+  return snapshot(month, photos, noLocationCount, true);
 }
 
 /** Photo counts per month, for the month picker. */
 export async function loadMonthSummaries(): Promise<MonthSummary[]> {
+  if (isDevDummyPhotosEnabled()) {
+    return buildDummyMonthSummaries();
+  }
+
   const assets = await collectAssets({});
   const counts = new Map<MonthKey, number>();
 
@@ -194,6 +236,13 @@ export async function resolveAssetUri(assetId: string): Promise<string | null> {
   const hit = uriCache.get(assetId);
   if (hit !== undefined) {
     return hit;
+  }
+
+  if (isDummyAssetId(assetId)) {
+    const seed = encodeURIComponent(assetId);
+    const uri = `https://picsum.photos/seed/${seed}/600/800`;
+    uriCache.set(assetId, uri);
+    return uri;
   }
 
   if (Platform.OS === 'ios') {

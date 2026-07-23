@@ -147,6 +147,13 @@ export const strings = {
     proOff: '프로 꺼짐',
     proToggleOn: '프로 켜기',
     proToggleOff: '프로 끄기',
+    dummySection: '개발 · 더미 사진',
+    dummyDescription:
+      '앨범 대신 도시 몇 곳에 소량 핀(~18장)을 둡니다. 시뮬레이터 확인용 (__DEV__만).',
+    dummyOn: '더미 켜짐',
+    dummyOff: '더미 꺼짐',
+    dummyToggleOn: '더미 켜기',
+    dummyToggleOff: '더미 끄기',
   },
   months: {
     title: '월 선택',
@@ -158,6 +165,7 @@ export const strings = {
     empty: '이 달에는 보여줄 사진이 없습니다',
     play: '자동 재생',
     pause: '멈춤',
+    placeLoading: '위치 확인 중…',
   },
   cards: {
     listTitle: '내 회고',

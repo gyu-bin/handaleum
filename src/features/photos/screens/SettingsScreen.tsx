@@ -9,7 +9,9 @@ import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
 import { useHomeLocation } from '../hooks/useHomeLocation';
+import { useDevDummyPhotos } from '../hooks/useDevDummyPhotos';
 import { DEFAULT_HOME_RADIUS_M } from '../services/homeLocationStorage';
+import { dummyPhotoCount } from '../services/dummyPhotos';
 import { useIsPro } from '@/features/insights/hooks/useIsPro';
 
 const RADIUS_CHOICES = [100, 300, 500, 1000] as const;
@@ -21,6 +23,7 @@ function radiusLabel(radiusM: number): string {
 export function SettingsScreen() {
   const { home, setHome, clearHome } = useHomeLocation();
   const { isPro, setIsPro } = useIsPro();
+  const dummy = useDevDummyPhotos();
   const [isLocating, setIsLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -141,6 +144,28 @@ export function SettingsScreen() {
             onPress={() => setIsPro(!isPro)}
           />
         </View>
+
+        {__DEV__ ? (
+          <View style={[styles.card, styles.cardSpaced]}>
+            <Text style={styles.sectionTitle}>{strings.settings.dummySection}</Text>
+            <Text style={styles.description}>{strings.settings.dummyDescription}</Text>
+            <Text style={[styles.status, dummy.enabled && styles.statusSet]}>
+              {dummy.enabled
+                ? `${strings.settings.dummyOn} · ${dummyPhotoCount()}장`
+                : strings.settings.dummyOff}
+            </Text>
+            <Button
+              title={
+                dummy.enabled
+                  ? strings.settings.dummyToggleOff
+                  : strings.settings.dummyToggleOn
+              }
+              variant={dummy.enabled ? 'secondary' : 'accent'}
+              size="md"
+              onPress={() => dummy.setEnabled(!dummy.enabled)}
+            />
+          </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
