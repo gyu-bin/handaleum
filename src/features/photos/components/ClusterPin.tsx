@@ -25,7 +25,7 @@ export interface ClusterPinProps {
 
 /**
  * Reference-style map pin: square photo card + white frame + bottom caret.
- * Tip of the caret sits on the geo point (MapAnchor centers this view).
+ * Tip of the caret sits on the geo point (MapCameraLayer centers this view).
  */
 export function ClusterPin({
   cluster,
@@ -96,7 +96,7 @@ export function ClusterPin({
 const styles = StyleSheet.create({
   wrap: {
     alignItems: 'center',
-    // MapAnchor centers this box; shift up so the caret tip lands on the point.
+    // Layer centers this box; shift up so the caret tip lands on the point.
     transform: [{ translateY: -(TOTAL_H / 2) }],
     ...theme.shadows.card,
   },

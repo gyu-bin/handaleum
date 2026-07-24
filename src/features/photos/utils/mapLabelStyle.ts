@@ -12,7 +12,7 @@ export type ScreenLabelStyle = {
 };
 
 /**
- * Fixed on-screen sizes — labels ride MapAnchor outside the zoom transform,
+ * Fixed on-screen sizes — labels ride MapCameraLayer outside the zoom transform,
  * so they must not depend on camera scale. Keep in sync with collideLabels.
  */
 export const SCREEN_LABEL_SIZE: Record<LabelTier, number> = {

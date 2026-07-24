@@ -38,7 +38,7 @@ export interface MapFloatingLabelProps {
   palette: MapPalette;
 }
 
-/** Constant on-screen place name — parent MapAnchor must pass matching `box`. */
+/** Constant on-screen place name — sized by the parent inverse-scale box. */
 export function MapFloatingLabel({
   text,
   tier,

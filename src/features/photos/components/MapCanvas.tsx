@@ -25,9 +25,10 @@ import type { GeoBBox } from '../utils/geo';
 import { placeBucketKey } from '../utils/placeJourney';
 import { computeRebase, visibleRectForCamera } from '../utils/rebase';
 import { ClusterPin } from './ClusterPin';
-import { MapAnchor } from './MapAnchor';
+import { MapCameraLayer } from './MapCameraLayer';
 import { MapFloatingLabel, MapPlaceStamp, labelBoxSize, stampBoxSize } from './MapFloatingLabel';
 import { MapSvg, type MapDetail } from './MapSvg';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 
 const MIN_SCALE = 1;
 const MAX_FIT_SCALE = 5;
@@ -132,6 +133,11 @@ export function MapCanvas({
    * gesture (including decay) so pan/pinch only moves the SVG + pins.
    */
   const [labelsLive, setLabelsLive] = useState(true);
+
+  // Shared inverse scale — one worklet for every pin/label, not one per marker.
+  const constantSizeStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 / Math.max(state.scale.value, 0.05) }],
+  }));
 
   // Detail from rebased coverage: overview (full KR) → region (도/시) → local (구 stamps).
   const detail: MapDetail = useMemo(() => {
@@ -459,20 +465,12 @@ export function MapCanvas({
               onPinchStart={beginGesture}
               onGestureEnd={settle}
             >
-              <View
-                style={{ width: size.width, height: size.height }}
-                // Rasterize the heavy SVG while the layer is transformed — fewer
-                // per-frame vector redraws during pan/pinch on iOS.
-                shouldRasterizeIOS
-                renderToHardwareTextureAndroid
-              >
+              <View style={{ width: size.width, height: size.height }}>
                 {/*
                  * Rendered 1:1 — no raster oversampling. react-native-svg
                  * re-rasterizes the vector paths crisply at the composited
                  * scale, and rebase keeps the settled camera low (~headroom),
-                 * so the map stays sharp at every depth. Oversampling here was
-                 * counter-productive: an up-scaled SVG scaled back down by a
-                 * layer transform is softened by the downsample, not sharpened.
+                 * so the map stays sharp at every depth.
                  */}
                 <MapSvg
                   width={size.width}
@@ -489,71 +487,104 @@ export function MapCanvas({
             </ResumableZoom>
 
             <View style={[StyleSheet.absoluteFill, styles.overlay]} pointerEvents="box-none">
-              {labelsLive
-                ? labels.map((label) => {
-                    if (detail === 'overview' && label.tier > 1) {
-                      return null;
-                    }
-                    const box = labelBoxSize(label.text, label.tier);
-                    return (
-                      <MapAnchor
-                        key={label.key}
-                        x={label.x}
-                        y={label.y}
-                        width={size.width}
-                        height={size.height}
-                        camera={state}
-                        box={box}
-                      >
-                        <MapFloatingLabel
-                          text={label.text}
-                          tier={label.tier}
-                          detail={detail}
-                          palette={palette}
+              <MapCameraLayer
+                width={size.width}
+                height={size.height}
+                camera={state}
+              >
+                {labelsLive
+                  ? labels.map((label) => {
+                      if (detail === 'overview' && label.tier > 1) {
+                        return null;
+                      }
+                      const box = labelBoxSize(label.text, label.tier);
+                      return (
+                        <View
+                          key={label.key}
+                          pointerEvents="none"
+                          style={[
+                            styles.mapPoint,
+                            { left: label.x, top: label.y },
+                          ]}
+                        >
+                          <Animated.View
+                            style={[
+                              constantSizeStyle,
+                              {
+                                width: box.width,
+                                height: box.height,
+                                marginLeft: -box.width / 2,
+                                marginTop: -box.height / 2,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              },
+                            ]}
+                          >
+                            <MapFloatingLabel
+                              text={label.text}
+                              tier={label.tier}
+                              detail={detail}
+                              palette={palette}
+                            />
+                          </Animated.View>
+                        </View>
+                      );
+                    })
+                  : null}
+                {labelsLive
+                  ? placeStamps.map((stamp) => {
+                      const box = stampBoxSize(stamp.text);
+                      return (
+                        <View
+                          key={`stamp-${stamp.key}`}
+                          pointerEvents="none"
+                          style={[
+                            styles.mapPoint,
+                            { left: stamp.x, top: stamp.y },
+                          ]}
+                        >
+                          <Animated.View
+                            style={[
+                              constantSizeStyle,
+                              {
+                                width: box.width,
+                                height: box.height,
+                                marginLeft: -box.width / 2,
+                                marginTop: -4,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              },
+                            ]}
+                          >
+                            <MapPlaceStamp text={stamp.text} />
+                          </Animated.View>
+                        </View>
+                      );
+                    })
+                  : null}
+                {pinPositions.map(({ cluster, x, y }) => {
+                  const placeKey = placeBucketKey(
+                    cluster.centerLat,
+                    cluster.centerLng,
+                  );
+                  return (
+                    <View
+                      key={cluster.id}
+                      pointerEvents="box-none"
+                      style={[styles.mapPoint, { left: x, top: y }]}
+                    >
+                      <Animated.View style={constantSizeStyle}>
+                        <ClusterPin
+                          cluster={cluster}
+                          selected={selectedClusterId === cluster.id}
+                          onPress={onSelectCluster}
+                          coverAssetId={pinCovers[placeKey]}
                         />
-                      </MapAnchor>
-                    );
-                  })
-                : null}
-              {labelsLive
-                ? placeStamps.map((stamp) => {
-                    const box = stampBoxSize(stamp.text);
-                    return (
-                      <MapAnchor
-                        key={`stamp-${stamp.key}`}
-                        x={stamp.x}
-                        y={stamp.y}
-                        width={size.width}
-                        height={size.height}
-                        camera={state}
-                        box={box}
-                      >
-                        <MapPlaceStamp text={stamp.text} />
-                      </MapAnchor>
-                    );
-                  })
-                : null}
-              {pinPositions.map(({ cluster, x, y }) => {
-                const placeKey = placeBucketKey(cluster.centerLat, cluster.centerLng);
-                return (
-                  <MapAnchor
-                    key={cluster.id}
-                    x={x}
-                    y={y}
-                    width={size.width}
-                    height={size.height}
-                    camera={state}
-                    interactive
-                  >
-                    <ClusterPin
-                      cluster={cluster}
-                      selected={selectedClusterId === cluster.id}
-                      onPress={onSelectCluster}
-                      coverAssetId={pinCovers[placeKey]}
-                    />
-                  </MapAnchor>
-                );
-              })}
+                      </Animated.View>
+                    </View>
+                  );
+                })}
+              </MapCameraLayer>
             </View>
           </>
         ) : null}
@@ -598,6 +629,14 @@ const styles = StyleSheet.create({
   },
   overlay: {
     zIndex: 1,
+  },
+  mapPoint: {
+    position: 'absolute',
+    width: 0,
+    height: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
   },
   zoomCtl: {
     position: 'absolute',

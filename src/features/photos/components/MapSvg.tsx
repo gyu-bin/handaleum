@@ -134,7 +134,7 @@ const COAST_PASSES: { dx: number; dy: number; opacity: number; width: number }[]
 
 /**
  * Paper Korea map geometry only. Place names render outside the zoom transform
- * (MapFloatingLabel + MapAnchor) so type stays constant on screen.
+ * (MapFloatingLabel + MapCameraLayer) so type stays constant on screen.
  */
 export const MapSvg = memo(function MapSvg({
   width,
