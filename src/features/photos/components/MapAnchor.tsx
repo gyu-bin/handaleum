@@ -21,6 +21,11 @@ export interface MapAnchorProps {
   /** Live transform, mirrored from the zoom container. */
   camera: MapCamera;
   interactive?: boolean;
+  /**
+   * When set, the anchor box is this size centered on the geo point.
+   * Needed for Text labels — a 0×0 parent clamps intrinsic Text layout to nothing.
+   */
+  box?: { width: number; height: number };
   children: ReactNode;
 }
 
@@ -36,21 +41,31 @@ export function MapAnchor({
   height,
   camera,
   interactive,
+  box,
   children,
 }: MapAnchorProps) {
+  const boxW = box?.width ?? 0;
+  const boxH = box?.height ?? 0;
+
   const style = useAnimatedStyle(() => {
     const s = camera.scale.value;
     const cx = width / 2;
     const cy = height / 2;
-    const left = cx + camera.translateX.value + s * (x - cx);
-    const top = cy + camera.translateY.value + s * (y - cy);
-    return { left, top };
+    const px = cx + camera.translateX.value + s * (x - cx);
+    const py = cy + camera.translateY.value + s * (y - cy);
+    return {
+      left: px - boxW / 2,
+      top: py - boxH / 2,
+      width: boxW || undefined,
+      height: boxH || undefined,
+    };
   });
 
   return (
     <Animated.View
       pointerEvents={interactive ? 'box-none' : 'none'}
-      style={[styles.anchor, style]}
+      collapsable={false}
+      style={[box ? styles.boxAnchor : styles.anchor, style]}
     >
       {children}
     </Animated.View>
@@ -65,5 +80,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'visible',
+    zIndex: 2,
+  },
+  boxAnchor: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
+    zIndex: 2,
   },
 });

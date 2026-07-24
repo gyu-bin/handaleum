@@ -174,6 +174,22 @@ export async function resolveClusterDetailLabel(
   }
 }
 
+/**
+ * Map stamp grain: 구 only (마포구). No 동 / colloquial alias.
+ * Returns null when the city has no 구 — 시 labels already cover that case.
+ */
+export async function resolveClusterGuLabel(
+  lat: number,
+  lng: number,
+): Promise<string | null> {
+  const permission = await Location.getForegroundPermissionsAsync();
+  if (permission.status !== 'granted') {
+    return null;
+  }
+  const parsed = await reverseParsed(lat, lng);
+  return parsed?.gu ?? null;
+}
+
 async function reverseParsed(lat: number, lng: number): Promise<ParsedPlace | null> {
   const key = `v6:${placeBucketKey(lat, lng)}`;
   if (labelCache.has(key)) {

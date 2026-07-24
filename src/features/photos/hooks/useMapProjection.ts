@@ -1,13 +1,18 @@
 import { useMemo } from 'react';
 
+import districtsGeo from '@/assets/geo/districts.json';
 import koreaGeo from '@/assets/geo/korea.json';
 import municipalitiesGeo from '@/assets/geo/municipalities.json';
 import provincesGeo from '@/assets/geo/provinces.json';
-import { KOREA_CITIES } from '@/shared/constants/koreaCities';
+import {
+  KOREA_CITIES,
+  shortCityName,
+} from '@/shared/constants/koreaCities';
 
 import type { ProjectedLabel } from '../components/MapSvg';
 import type { PlaceCluster } from '../types';
 import {
+  bboxIntersects,
   bboxOf,
   centroidOf,
   createProjection,
@@ -16,6 +21,7 @@ import {
   type PackedGeometry,
   type Projection,
 } from '../utils/geo';
+import { collideLabels } from '../utils/labelCollision';
 
 const MAP_PAD = 8;
 
@@ -47,45 +53,46 @@ type ProvinceFeature = PackedGeometry & {
 
 type MuniFeature = PackedGeometry & { id: string; name?: string };
 
-/** Whole-degree lat/lng rule, drawn at the faintest tint under the land. */
-export interface GraticuleLine {
-  key: string;
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-}
+type DistrictFeature = PackedGeometry & { id: string; name: string };
 
 export interface MapProjectionResult {
   koreaPath: string;
   provincePaths: { id: string; d: string }[];
   cityPaths: { id: string; d: string }[];
+  districtPaths: { id: string; d: string }[];
   labels: ProjectedLabel[];
-  graticule: GraticuleLine[];
   pinPositions: { cluster: PlaceCluster; x: number; y: number }[];
-  /** Projection the geometry above was drawn with (null until laid out). */
   projection: Projection | null;
-  /** Full-Korea projection — the rebase reference and effective-zoom baseline. */
   reference: Projection | null;
 }
 
+function inBBox(lng: number, lat: number, box: GeoBBox, pad = 0): boolean {
+  return (
+    lng >= box.minLng - pad &&
+    lng <= box.maxLng + pad &&
+    lat >= box.minLat - pad &&
+    lat <= box.maxLat + pad
+  );
+}
+
 /**
- * Projects Korea geometry + curated name labels + pin anchors.
- * Keeps label set small (도 + curated 시 only) so zoom stays readable.
+ * Projects Korea geometry + name labels + pin anchors.
  *
  * `baseBBox` selects the geographic region the SVG is drawn for: null means
- * the full-Korea reference view; a bbox means a zoom-rebased region (pad 0 —
- * the rebase swap is only pixel-exact with no letterbox padding).
+ * the full-Korea reference view; a bbox means a zoom-rebased region.
+ * `detail` drives which admin labels are projected (overview stays quiet).
  */
 export function useMapProjection(
   size: { width: number; height: number },
   clusters: PlaceCluster[],
   baseBBox: GeoBBox | null,
+  detail: 'overview' | 'region' | 'local' = 'overview',
 ): MapProjectionResult {
   const southKorea = koreaGeo.korea as unknown as PackedGeometry;
   const provinces = provincesGeo.provinces as unknown as ProvinceFeature[];
   const municipalities =
     municipalitiesGeo.municipalities as unknown as MuniFeature[];
+  const districts = districtsGeo.districts as unknown as DistrictFeature[];
 
   const reference = useMemo(() => {
     if (size.width === 0 || size.height === 0) {
@@ -120,21 +127,49 @@ export function useMapProjection(
     if (!projection) {
       return [];
     }
-    return provinces.map((province) => ({
+    const view = projection.bbox;
+    // Overview keeps every 도; zoomed bases only keep what intersects the view.
+    const list =
+      detail === 'overview'
+        ? provinces
+        : provinces.filter((province) =>
+            bboxIntersects(bboxOf(province), view, 0.4),
+          );
+    return list.map((province) => ({
       id: province.id,
       d: geometryToPath(province, projection.project),
     }));
-  }, [provinces, projection]);
+  }, [provinces, projection, detail]);
 
   const cityPaths = useMemo(() => {
     if (!projection) {
       return [];
     }
-    return municipalities.map((muni) => ({
+    const view = projection.bbox;
+    const list =
+      detail === 'overview'
+        ? municipalities
+        : municipalities.filter((muni) =>
+            bboxIntersects(bboxOf(muni), view, 0.25),
+          );
+    return list.map((muni) => ({
       id: muni.id,
       d: geometryToPath(muni, projection.project),
     }));
-  }, [municipalities, projection]);
+  }, [municipalities, projection, detail]);
+
+  const districtPaths = useMemo(() => {
+    if (!projection || detail === 'overview') {
+      return [];
+    }
+    const view = projection.bbox;
+    return districts
+      .filter((district) => bboxIntersects(bboxOf(district), view, 0.15))
+      .map((district) => ({
+        id: district.id,
+        d: geometryToPath(district, projection.project),
+      }));
+  }, [districts, projection, detail]);
 
   const pinPositions = useMemo(() => {
     if (!projection) {
@@ -146,64 +181,107 @@ export function useMapProjection(
     });
   }, [clusters, projection]);
 
-  const graticule = useMemo<GraticuleLine[]>(() => {
-    if (!projection) {
-      return [];
-    }
-    const { minLng, maxLng, minLat, maxLat } = projection.bbox;
-    const lines: GraticuleLine[] = [];
-    for (let lng = Math.ceil(minLng); lng <= Math.floor(maxLng); lng += 1) {
-      const [x1, y1] = projection.project([lng, minLat]);
-      const [x2, y2] = projection.project([lng, maxLat]);
-      lines.push({ key: `lng-${lng}`, x1, y1, x2, y2 });
-    }
-    for (let lat = Math.ceil(minLat); lat <= Math.floor(maxLat); lat += 1) {
-      const [x1, y1] = projection.project([minLng, lat]);
-      const [x2, y2] = projection.project([maxLng, lat]);
-      lines.push({ key: `lat-${lat}`, x1, y1, x2, y2 });
-    }
-    return lines;
-  }, [projection]);
-
   const labels = useMemo<ProjectedLabel[]>(() => {
     if (!projection) {
       return [];
     }
+    const box = projection.bbox;
+    const out: ProjectedLabel[] = [];
 
-    const provinceLabels: ProjectedLabel[] = provinces
-      .filter((p) => !METRO_PROVINCE_NAMES.has(p.name))
-      .map((province) => {
+    // 도 — overview + region (hide when local so 시/구 can breathe).
+    if (detail !== 'local') {
+      for (const province of provinces) {
+        if (METRO_PROVINCE_NAMES.has(province.name)) {
+          continue;
+        }
         const c = province.centroid ?? centroidOf(province);
+        if (detail === 'region' && !inBBox(c[0], c[1], box, 0.3)) {
+          continue;
+        }
         const [x, y] = projection.project(c);
-        return {
+        out.push({
           key: `prov-${province.id}`,
           text: province.name,
           x,
           y,
-          tier: 0 as const,
-        };
-      });
+          tier: 0,
+        });
+      }
+    }
 
-    const cityLabels: ProjectedLabel[] = KOREA_CITIES.map((city, index) => {
+    // Curated hubs — denser tiers only when zoomed. Skip metro hubs at local
+    // so 자치구 names own the empty special-city interiors.
+    for (const [index, city] of KOREA_CITIES.entries()) {
+      if (detail === 'overview' && city.tier > 1) {
+        continue;
+      }
+      if (detail === 'region' && city.tier > 2) {
+        continue;
+      }
+      if (detail === 'local' && METRO_PROVINCE_NAMES.has(city.name)) {
+        continue;
+      }
+      if (!inBBox(city.c[0], city.c[1], box, 0.4)) {
+        continue;
+      }
       const [x, y] = projection.project(city.c);
-      return {
-        key: `city-${city.name}-${index}`,
+      out.push({
+        key: `hub-${city.name}-${index}`,
         text: city.name,
         x,
         y,
-        tier: city.tier as 1 | 2 | 3,
-      };
-    });
+        tier: city.tier,
+      });
+    }
 
-    return [...provinceLabels, ...cityLabels];
-  }, [provinces, projection]);
+    // 시 names from municipality polygons — region/local only.
+    if (detail !== 'overview') {
+      for (const muni of municipalities) {
+        if (!muni.name) {
+          continue;
+        }
+        const c = centroidOf(muni);
+        if (!inBBox(c[0], c[1], box, 0.15)) {
+          continue;
+        }
+        const [x, y] = projection.project(c);
+        out.push({
+          key: `muni-${muni.id}`,
+          text: shortCityName(muni.name),
+          x,
+          y,
+          tier: 2,
+        });
+      }
+    }
+
+    // Metro 자치구 names — region/local (collision drops the dense ones).
+    if (detail !== 'overview') {
+      for (const district of districts) {
+        const c = centroidOf(district);
+        if (!inBBox(c[0], c[1], box, 0.1)) {
+          continue;
+        }
+        const [x, y] = projection.project(c);
+        out.push({
+          key: `dist-${district.id}`,
+          text: district.name,
+          x,
+          y,
+          tier: 3,
+        });
+      }
+    }
+
+    return collideLabels(out, detail);
+  }, [provinces, municipalities, districts, projection, detail]);
 
   return {
     koreaPath,
     provincePaths,
     cityPaths,
+    districtPaths,
     labels,
-    graticule,
     pinPositions,
     projection,
     reference,

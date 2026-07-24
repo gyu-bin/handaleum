@@ -1,19 +1,19 @@
-import Svg, { G, Path, Rect, Text as SvgText } from 'react-native-svg';
+import Svg, { G, Path, Rect } from 'react-native-svg';
+import { memo } from 'react';
 
-import {
-  getMapPalette,
-  type MapPalette,
-} from '@/shared/constants/mapThemes';
+import { getMapPalette } from '@/shared/constants/mapThemes';
 import { theme } from '@/shared/constants/theme';
 
 import type { MapThemeId } from '../types';
+
+export type MapDetail = 'overview' | 'region' | 'local';
 
 export interface ProjectedLabel {
   key: string;
   text: string;
   x: number;
   y: number;
-  /** 0 = province (도), 1–3 = city. */
+  /** 0 = province (도), 1–3 = city / municipality grain. */
   tier: 0 | 1 | 2 | 3;
 }
 
@@ -25,36 +25,26 @@ export interface LandRect {
   height: number;
 }
 
+export interface PlaceStamp {
+  key: string;
+  text: string;
+  x: number;
+  y: number;
+}
+
 export interface MapSvgProps {
   width: number;
   height: number;
   koreaPath: string;
   provincePaths: { id: string; d: string }[];
   cityPaths: { id: string; d: string }[];
-  labels: ProjectedLabel[];
+  /** Metro 자치구 boundaries — region/local only. */
+  districtPaths?: { id: string; d: string }[];
   themeId?: MapThemeId;
-  /**
-   * Projected focus bbox in screen px. When present (full-Korea view), we draw
-   * journal sketch marks in that frame. Zoomed/rebased views omit marks.
-   */
+  detail?: MapDetail;
   landRect?: LandRect | null;
 }
 
-function labelStyle(
-  palette: MapPalette,
-): Record<
-  0 | 1 | 2 | 3,
-  { size: number; opacity: number; weight: '400' | '500' | '600'; color: string }
-> {
-  return {
-    0: { size: 4.8, opacity: 0.32, weight: '500', color: palette.labelProvince },
-    1: { size: 4.4, opacity: 0.45, weight: '600', color: palette.labelCity },
-    2: { size: 3.6, opacity: 0.3, weight: '500', color: palette.labelProvince },
-    3: { size: 3.2, opacity: 0.24, weight: '400', color: palette.labelMinor },
-  };
-}
-
-/** Tiny mountain glyph — journal stamp, not a sticker layer. */
 function Mountains({ x, y, s, color }: { x: number; y: number; s: number; color: string }) {
   return (
     <Path
@@ -118,10 +108,6 @@ function Compass({ x, y, s, color }: { x: number; y: number; s: number; color: s
   );
 }
 
-/**
- * Journal sketch marks drawn in the same SVG as the coastline — one plate,
- * not a PNG dropped on top.
- */
 function SketchMarks({ rect, color }: { rect: LandRect; color: string }) {
   const { x, y, width: w, height: h } = rect;
   const u = Math.min(w, h);
@@ -140,7 +126,6 @@ function SketchMarks({ rect, color }: { rect: LandRect; color: string }) {
   );
 }
 
-/** Slightly offset echo strokes — reads as pencil, not a stamped PNG. */
 const COAST_PASSES: { dx: number; dy: number; opacity: number; width: number }[] = [
   { dx: 1.4, dy: 1.1, opacity: 0.12, width: 2.2 },
   { dx: -0.8, dy: 0.6, opacity: 0.16, width: 1.6 },
@@ -148,23 +133,40 @@ const COAST_PASSES: { dx: number; dy: number; opacity: number; width: number }[]
 ];
 
 /**
- * One paper plate: geo coastline drawn as ink, journal marks in the same SVG.
- * No external map bitmap — that read as an image floating on the map.
+ * Paper Korea map geometry only. Place names render outside the zoom transform
+ * (MapFloatingLabel + MapAnchor) so type stays constant on screen.
  */
-export function MapSvg({
+export const MapSvg = memo(function MapSvg({
   width,
   height,
   koreaPath,
   provincePaths,
   cityPaths,
-  labels,
+  districtPaths = [],
   themeId = 'dawn',
+  detail = 'overview',
   landRect = null,
 }: MapSvgProps) {
   const palette = getMapPalette(themeId);
-  const styles = labelStyle(palette);
   const ink = theme.colors.accent;
-  const showMarks = Boolean(landRect && landRect.width > 40 && landRect.height > 40);
+  const showMarks = detail === 'overview' && Boolean(landRect && landRect.width > 40);
+
+  const provinceStroke =
+    detail === 'overview'
+      ? { opacity: 0.14, width: 0.45 }
+      : detail === 'region'
+        ? { opacity: 0.42, width: 1.1 }
+        : { opacity: 0.5, width: 1.35 };
+  const cityStroke =
+    detail === 'overview'
+      ? { opacity: 0.07, width: 0.35 }
+      : detail === 'region'
+        ? { opacity: 0.28, width: 0.75 }
+        : { opacity: 0.38, width: 0.95 };
+  const districtStroke =
+    detail === 'region'
+      ? { opacity: 0.22, width: 0.55 }
+      : { opacity: 0.32, width: 0.7 };
 
   return (
     <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
@@ -178,7 +180,6 @@ export function MapSvg({
 
       {koreaPath ? (
         <G>
-          {/* Land wash — same paper family, just a shade warmer so the shore reads. */}
           <Path d={koreaPath} fill={theme.colors.landLight} />
           {COAST_PASSES.map((pass) => (
             <Path
@@ -206,8 +207,19 @@ export function MapSvg({
           d={city.d}
           fill="none"
           stroke={ink}
-          strokeOpacity={0.07}
-          strokeWidth={0.35}
+          strokeOpacity={cityStroke.opacity}
+          strokeWidth={cityStroke.width}
+          strokeLinejoin="round"
+        />
+      ))}
+      {districtPaths.map((district) => (
+        <Path
+          key={district.id}
+          d={district.d}
+          fill="none"
+          stroke={ink}
+          strokeOpacity={districtStroke.opacity}
+          strokeWidth={districtStroke.width}
           strokeLinejoin="round"
         />
       ))}
@@ -217,36 +229,13 @@ export function MapSvg({
           d={province.d}
           fill="none"
           stroke={ink}
-          strokeOpacity={0.14}
-          strokeWidth={0.45}
+          strokeOpacity={provinceStroke.opacity}
+          strokeWidth={provinceStroke.width}
           strokeLinejoin="round"
         />
       ))}
 
       {showMarks && landRect ? <SketchMarks rect={landRect} color={ink} /> : null}
-
-      {labels.map((label) => {
-        const s = styles[label.tier];
-        // On the quiet full view, keep only stronger city labels.
-        if (showMarks && label.tier === 0) {
-          return null;
-        }
-        return (
-          <SvgText
-            key={label.key}
-            x={label.x}
-            y={label.y}
-            fontSize={s.size}
-            fontWeight={s.weight}
-            fill={s.color}
-            opacity={showMarks ? s.opacity * 0.7 : s.opacity}
-            textAnchor="middle"
-            alignmentBaseline="middle"
-          >
-            {label.text}
-          </SvgText>
-        );
-      })}
     </Svg>
   );
-}
+});

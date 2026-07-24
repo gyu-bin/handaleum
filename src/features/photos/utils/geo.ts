@@ -88,6 +88,16 @@ export function bboxOf(geometry: PackedGeometry): GeoBBox {
   return { minLng, maxLng, minLat, maxLat };
 }
 
+/** True if two geographic boxes overlap, with optional padding in degrees. */
+export function bboxIntersects(a: GeoBBox, b: GeoBBox, pad = 0): boolean {
+  return !(
+    a.maxLng < b.minLng - pad ||
+    a.minLng > b.maxLng + pad ||
+    a.maxLat < b.minLat - pad ||
+    a.minLat > b.maxLat + pad
+  );
+}
+
 /** Rough label anchor — bbox center of a polygon geometry. */
 export function centroidOf(geometry: PackedGeometry): LngLat {
   const b = bboxOf(geometry);

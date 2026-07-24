@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -17,6 +18,7 @@ import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
 import { useMapProjection } from '../hooks/useMapProjection';
+import { useClusterPlaceLabels } from '../hooks/useClusterPlaceLabels';
 import type { MapThemeId, PlaceCluster } from '../types';
 import { fitPinsCamera, type MapCameraTransform } from '../utils/fitPinsCamera';
 import type { GeoBBox } from '../utils/geo';
@@ -24,7 +26,8 @@ import { placeBucketKey } from '../utils/placeJourney';
 import { computeRebase, visibleRectForCamera } from '../utils/rebase';
 import { ClusterPin } from './ClusterPin';
 import { MapAnchor } from './MapAnchor';
-import { MapSvg } from './MapSvg';
+import { MapFloatingLabel, MapPlaceStamp, labelBoxSize, stampBoxSize } from './MapFloatingLabel';
+import { MapSvg, type MapDetail } from './MapSvg';
 
 const MIN_SCALE = 1;
 const MAX_FIT_SCALE = 5;
@@ -121,18 +124,56 @@ export function MapCanvas({
   const zoomRef = useRef<ResumableZoomRefType>(null);
   const framedKeyRef = useRef<string>('');
   const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const labelsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { onUpdate, state } = useTransformationState('common');
   const palette = getMapPalette(themeId);
+  /**
+   * Floating labels each own a Reanimated anchor. Hide them for the whole
+   * gesture (including decay) so pan/pinch only moves the SVG + pins.
+   */
+  const [labelsLive, setLabelsLive] = useState(true);
+
+  // Detail from rebased coverage: overview (full KR) → region (도/시) → local (구 stamps).
+  const detail: MapDetail = useMemo(() => {
+    if (baseBBox === null) {
+      return 'overview';
+    }
+    const lngSpan = baseBBox.maxLng - baseBBox.minLng;
+    const latSpan = baseBBox.maxLat - baseBBox.minLat;
+    return lngSpan < 1.2 || latSpan < 1.0 ? 'local' : 'region';
+  }, [baseBBox]);
 
   const {
     koreaPath,
     provincePaths,
     cityPaths,
+    districtPaths,
     labels,
     pinPositions,
     projection,
     reference,
-  } = useMapProjection(size, clusters, baseBBox);
+  } = useMapProjection(size, clusters, baseBBox, detail);
+
+  const placeLabels = useClusterPlaceLabels(clusters, detail === 'local');
+
+  const placeStamps = useMemo(() => {
+    if (!projection || detail !== 'local' || placeLabels.length === 0) {
+      return [];
+    }
+    // Skip stamp when a district centroid label already shows the same 구.
+    const labeled = new Set(labels.map((label) => label.text));
+    return placeLabels
+      .filter((label) => !labeled.has(label.text))
+      .map((label) => {
+        const [x, y] = projection.project([label.lng, label.lat]);
+        return {
+          key: label.clusterId,
+          text: label.text,
+          x,
+          y,
+        };
+      });
+  }, [detail, labels, placeLabels, projection]);
 
   // Full-Korea view: seat journal sketch marks in the projected focus frame.
   const landRect =
@@ -174,6 +215,28 @@ export function MapCanvas({
     }
   };
 
+  const cancelPendingLabels = () => {
+    if (labelsTimerRef.current !== null) {
+      clearTimeout(labelsTimerRef.current);
+      labelsTimerRef.current = null;
+    }
+  };
+
+  /** Bring labels back after inertia has mostly settled. */
+  const restoreLabelsSoon = () => {
+    cancelPendingLabels();
+    labelsTimerRef.current = setTimeout(() => {
+      labelsTimerRef.current = null;
+      setLabelsLive(true);
+    }, 260);
+  };
+
+  const beginGesture = () => {
+    cancelPendingSettle();
+    cancelPendingLabels();
+    setLabelsLive(false);
+  };
+
   /**
    * Queue a base swap. The base state changes now; the camera is applied in the
    * layout effect below, after the new SVG commits, so the two land together
@@ -202,49 +265,54 @@ export function MapCanvas({
    * rebuilds the Korea SVG and reads as a hitch at the end of a fling/pinch.
    */
   const settle = () => {
-    const zr = zoomRef.current;
-    if (!zr || !projection || !reference) {
-      return;
-    }
-    const current = zr.getState();
-    reportEffectiveScale(baseRatio * current.scale);
-
-    const visible = zr.getVisibleRect();
-    const zoomSettled =
-      Math.abs(current.scale - REBASE_HEADROOM) < SETTLE_EPSILON;
-
-    if (baseBBox === null) {
-      // Full Korea: nothing to sharpen until past the headroom band.
-      if (current.scale < REBASE_HEADROOM + SETTLE_EPSILON) {
+    try {
+      const zr = zoomRef.current;
+      if (!zr || !projection || !reference) {
         return;
       }
-    } else if (zoomSettled) {
-      const edgePad =
-        Math.min(visible.width, visible.height) * PAN_EDGE_FRACTION;
-      const nearEdge =
-        visible.x < edgePad ||
-        visible.y < edgePad ||
-        visible.x + visible.width > size.width - edgePad ||
-        visible.y + visible.height > size.height - edgePad;
-      if (!nearEdge) {
-        return;
-      }
-    }
+      const current = zr.getState();
+      reportEffectiveScale(baseRatio * current.scale);
 
-    const result = computeRebase({
-      visibleRect: visible,
-      projection,
-      reference,
-      viewport: size,
-      headroom: REBASE_HEADROOM,
-    });
-    if (result.type === 'reference') {
+      const visible = zr.getVisibleRect();
+      const zoomSettled =
+        Math.abs(current.scale - REBASE_HEADROOM) < SETTLE_EPSILON;
+
       if (baseBBox === null) {
-        return; // already on the reference base; the camera is the view
+        // Full Korea: nothing to sharpen until past the headroom band.
+        if (current.scale < REBASE_HEADROOM + SETTLE_EPSILON) {
+          return;
+        }
+      } else if (zoomSettled) {
+        const edgePad =
+          Math.min(visible.width, visible.height) * PAN_EDGE_FRACTION;
+        const nearEdge =
+          visible.x < edgePad ||
+          visible.y < edgePad ||
+          visible.x + visible.width > size.width - edgePad ||
+          visible.y + visible.height > size.height - edgePad;
+        if (!nearEdge) {
+          return;
+        }
       }
-      scheduleRebase(null, result.camera);
-    } else {
-      scheduleRebase(result.bbox, result.camera);
+
+      const result = computeRebase({
+        visibleRect: visible,
+        projection,
+        reference,
+        viewport: size,
+        headroom: REBASE_HEADROOM,
+      });
+      if (result.type === 'reference') {
+        if (baseBBox === null) {
+          return; // already on the reference base; the camera is the view
+        }
+        scheduleRebase(null, result.camera);
+      } else {
+        scheduleRebase(result.bbox, result.camera);
+      }
+    } finally {
+      // After finger-up + any rebase decision, bring labels back once fling cools.
+      restoreLabelsSoon();
     }
   };
 
@@ -329,6 +397,7 @@ export function MapCanvas({
   }, [size.width, size.height, frameKey, pinPositions.length]);
 
   useEffect(() => cancelPendingSettle, []);
+  useEffect(() => () => cancelPendingLabels(), []);
 
   const onLayout = (event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
@@ -386,11 +455,17 @@ export function MapCanvas({
               tapsEnabled
               allowPinchPanning
               onUpdate={onUpdate}
-              onPanStart={cancelPendingSettle}
-              onPinchStart={cancelPendingSettle}
+              onPanStart={beginGesture}
+              onPinchStart={beginGesture}
               onGestureEnd={settle}
             >
-              <View style={{ width: size.width, height: size.height }}>
+              <View
+                style={{ width: size.width, height: size.height }}
+                // Rasterize the heavy SVG while the layer is transformed — fewer
+                // per-frame vector redraws during pan/pinch on iOS.
+                shouldRasterizeIOS
+                renderToHardwareTextureAndroid
+              >
                 {/*
                  * Rendered 1:1 — no raster oversampling. react-native-svg
                  * re-rasterizes the vector paths crisply at the composited
@@ -405,14 +480,59 @@ export function MapCanvas({
                   koreaPath={koreaPath}
                   provincePaths={provincePaths}
                   cityPaths={cityPaths}
-                  labels={labels}
+                  districtPaths={districtPaths}
                   themeId={themeId}
+                  detail={detail}
                   landRect={landRect}
                 />
               </View>
             </ResumableZoom>
 
             <View style={[StyleSheet.absoluteFill, styles.overlay]} pointerEvents="box-none">
+              {labelsLive
+                ? labels.map((label) => {
+                    if (detail === 'overview' && label.tier > 1) {
+                      return null;
+                    }
+                    const box = labelBoxSize(label.text, label.tier);
+                    return (
+                      <MapAnchor
+                        key={label.key}
+                        x={label.x}
+                        y={label.y}
+                        width={size.width}
+                        height={size.height}
+                        camera={state}
+                        box={box}
+                      >
+                        <MapFloatingLabel
+                          text={label.text}
+                          tier={label.tier}
+                          detail={detail}
+                          palette={palette}
+                        />
+                      </MapAnchor>
+                    );
+                  })
+                : null}
+              {labelsLive
+                ? placeStamps.map((stamp) => {
+                    const box = stampBoxSize(stamp.text);
+                    return (
+                      <MapAnchor
+                        key={`stamp-${stamp.key}`}
+                        x={stamp.x}
+                        y={stamp.y}
+                        width={size.width}
+                        height={size.height}
+                        camera={state}
+                        box={box}
+                      >
+                        <MapPlaceStamp text={stamp.text} />
+                      </MapAnchor>
+                    );
+                  })
+                : null}
               {pinPositions.map(({ cluster, x, y }) => {
                 const placeKey = placeBucketKey(cluster.centerLat, cluster.centerLng);
                 return (
