@@ -15,7 +15,7 @@ const BASE_WIDTH = 270;
 const OUTER_PAD = 12;
 const FRAME_PAD = 12;
 /** Map strip height as a fraction of content width — keep below the hero photo. */
-const MAP_HEIGHT_RATIO = 0.38;
+const MAP_HEIGHT_RATIO = 0.44;
 
 /**
  * Story card (1080×1920, 9:16) in the Dawn Survey language: cream paper with a

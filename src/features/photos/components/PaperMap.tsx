@@ -15,13 +15,19 @@ import {
   type PackedGeometry,
 } from '../utils/geo';
 
-const MAP_PAD = 10;
+const MAP_PAD = 6;
 const FOCUS_BBOX = {
   minLng: 125.75,
   maxLng: 129.6,
   minLat: 33.08,
   maxLat: 38.62,
 };
+
+/** Minimum span (degrees) so a single pin still has a readable neighborhood. */
+const MIN_PIN_SPAN_LNG = 0.1;
+const MIN_PIN_SPAN_LAT = 0.085;
+/** Extra margin around the pin cluster — keep tight so the card map feels zoomed in. */
+const PIN_PAD_RATIO = 0.22;
 
 export interface PaperMapPin {
   id: string;
@@ -71,14 +77,19 @@ export function PaperMap({ pins, width, height }: PaperMapProps) {
         minLat = Math.min(minLat, pin.lat);
         maxLat = Math.max(maxLat, pin.lat);
       }
-      const padLng = Math.max(0.35, (maxLng - minLng) * 0.2);
-      const padLat = Math.max(0.3, (maxLat - minLat) * 0.2);
+      const spanLng = Math.max(maxLng - minLng, MIN_PIN_SPAN_LNG);
+      const spanLat = Math.max(maxLat - minLat, MIN_PIN_SPAN_LAT);
+      // Center the (possibly expanded) span on the pin cluster, then pad lightly.
+      const midLng = (minLng + maxLng) / 2;
+      const midLat = (minLat + maxLat) / 2;
+      const halfLng = (spanLng / 2) * (1 + PIN_PAD_RATIO);
+      const halfLat = (spanLat / 2) * (1 + PIN_PAD_RATIO);
       return createProjection(
         {
-          minLng: Math.max(focused.minLng, minLng - padLng),
-          maxLng: Math.min(focused.maxLng, maxLng + padLng),
-          minLat: Math.max(focused.minLat, minLat - padLat),
-          maxLat: Math.min(focused.maxLat, maxLat + padLat),
+          minLng: Math.max(focused.minLng, midLng - halfLng),
+          maxLng: Math.min(focused.maxLng, midLng + halfLng),
+          minLat: Math.max(focused.minLat, midLat - halfLat),
+          maxLat: Math.min(focused.maxLat, midLat + halfLat),
         },
         width,
         height,

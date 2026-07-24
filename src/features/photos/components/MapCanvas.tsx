@@ -129,11 +129,26 @@ export function MapCanvas({
     provincePaths,
     cityPaths,
     labels,
-    graticule,
     pinPositions,
     projection,
     reference,
   } = useMapProjection(size, clusters, baseBBox);
+
+  // Full-Korea view: seat journal sketch marks in the projected focus frame.
+  const landRect =
+    projection && baseBBox === null
+      ? (() => {
+          const { minLng, maxLng, minLat, maxLat } = projection.bbox;
+          const [x0, y0] = projection.project([minLng, maxLat]);
+          const [x1, y1] = projection.project([maxLng, minLat]);
+          return {
+            x: Math.min(x0, x1),
+            y: Math.min(y0, y1),
+            width: Math.abs(x1 - x0),
+            height: Math.abs(y1 - y0),
+          };
+        })()
+      : null;
 
   // How magnified the current base already is vs the full-Korea fit.
   const baseRatio =
@@ -349,8 +364,7 @@ export function MapCanvas({
         style={[
           styles.frame,
           {
-            backgroundColor: palette.frameBg,
-            borderColor: palette.frameBorder,
+            backgroundColor: palette.water,
           },
         ]}
         onLayout={onLayout}
@@ -392,8 +406,8 @@ export function MapCanvas({
                   provincePaths={provincePaths}
                   cityPaths={cityPaths}
                   labels={labels}
-                  graticule={graticule}
                   themeId={themeId}
+                  landRect={landRect}
                 />
               </View>
             </ResumableZoom>
@@ -460,8 +474,7 @@ const styles = StyleSheet.create({
   frame: {
     flex: 1,
     overflow: 'hidden',
-    borderRadius: theme.radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 0,
   },
   overlay: {
     zIndex: 1,

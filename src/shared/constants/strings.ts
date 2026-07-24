@@ -36,6 +36,8 @@ function countWord(n: number): string {
  */
 export const strings = {
   brand: '한달음',
+  /** Home hero line under the wordmark. */
+  tagline: '사진과 지도, 그리고 나의 이야기',
   common: {
     loading: '불러오는 중',
     error: '문제가 발생했습니다',
@@ -74,6 +76,8 @@ export const strings = {
     next: '다음',
     skip: '건너뛰기',
     grant: '사진 허용하고 시작',
+    /** Replay from Settings — no permission prompt. */
+    close: '닫기',
   },
   map: {
     emptyMonth: '이 달에는 위치가 있는 사진이 없습니다',
@@ -141,6 +145,7 @@ export const strings = {
     radiusHint: '집이 아파트 단지 안이면 넓게, 골목이면 좁게 잡으세요.',
     locationDenied: '위치 권한이 없어 집 위치를 지정할 수 없습니다',
     locationFailed: '위치를 확인하지 못했습니다. 다시 시도해 주세요',
+    viewOnboarding: '앱 소개 다시 보기',
     proSection: '프로',
     proDescription: (priceLabel: string) =>
       `최근 3개월보다 지난 달을 열고, 인사이트 일부 지표를 잠금 해제합니다. ${priceLabel} · 일회 구매.`,
@@ -171,13 +176,6 @@ export const strings = {
         },
       ],
     },
-    dummySection: '개발 · 더미 사진',
-    dummyDescription:
-      '앨범 대신 도시 몇 곳에 소량 핀(~18장)을 둡니다. 시뮬레이터 확인용 (__DEV__만).',
-    dummyOn: '더미 켜짐',
-    dummyOff: '더미 꺼짐',
-    dummyToggleOn: '더미 켜기',
-    dummyToggleOff: '더미 끄기',
   },
   months: {
     title: '월 선택',

@@ -12,12 +12,6 @@ import { getAssetLocationRaw, setAssetLocationRaw } from '@/lib/storage';
 import type { MonthKey, MonthlyPhotos, MonthSummary, PhotoRef } from '../types';
 import { monthBounds, monthKeyFromTimestamp } from '../utils/month';
 import { waitForAppForeground } from './appForeground';
-import {
-  buildDummyMonthSummaries,
-  buildDummyMonthlyPhotos,
-  isDevDummyPhotosEnabled,
-  isDummyAssetId,
-} from './dummyPhotos';
 
 /** Larger pages = fewer native round-trips when listing a month. */
 const PAGE_SIZE = 200;
@@ -133,12 +127,6 @@ export async function loadMonthlyPhotos(
   month: MonthKey,
   options?: LoadMonthlyPhotosOptions,
 ): Promise<MonthlyPhotos> {
-  if (isDevDummyPhotosEnabled()) {
-    const data = buildDummyMonthlyPhotos(month);
-    options?.onPartial?.(data);
-    return data;
-  }
-
   const { onPartial, shouldContinue } = options ?? {};
   const { startMs, endMs } = monthBounds(month);
   const assets = await collectAssets({
@@ -206,10 +194,6 @@ export async function loadMonthlyPhotos(
 
 /** Photo counts per month, for the month picker. */
 export async function loadMonthSummaries(): Promise<MonthSummary[]> {
-  if (isDevDummyPhotosEnabled()) {
-    return buildDummyMonthSummaries();
-  }
-
   const assets = await collectAssets({});
   const counts = new Map<MonthKey, number>();
 
@@ -236,13 +220,6 @@ export async function resolveAssetUri(assetId: string): Promise<string | null> {
   const hit = uriCache.get(assetId);
   if (hit !== undefined) {
     return hit;
-  }
-
-  if (isDummyAssetId(assetId)) {
-    const seed = encodeURIComponent(assetId);
-    const uri = `https://picsum.photos/seed/${seed}/600/800`;
-    uriCache.set(assetId, uri);
-    return uri;
   }
 
   if (Platform.OS === 'ios') {

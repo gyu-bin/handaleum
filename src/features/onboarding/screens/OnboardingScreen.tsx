@@ -1,15 +1,22 @@
-import { useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
-  FlatList,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
   Pressable,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import Animated, {
+  Extrapolation,
+  interpolate,
+  interpolateColor,
+  runOnJS,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+  type SharedValue,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/shared/components/Button';
@@ -22,31 +29,103 @@ import { AccessArt, CardArt, MapPinArt } from '../components/OnboardingArt';
 import { OnboardingSlide } from '../components/OnboardingSlide';
 import { useOnboarding } from '../hooks/useOnboarding';
 
-/** Animated brand visuals, index-matched to strings.onboarding.slides. */
-const ART = [<MapPinArt key="map" />, <CardArt key="card" />, <AccessArt key="access" />];
+/** Dot that stretches and tints smoothly as the pager scrolls past it. */
+function PagerDot({
+  index,
+  scrollX,
+  width,
+}: {
+  index: number;
+  scrollX: SharedValue<number>;
+  width: number;
+}) {
+  const style = useAnimatedStyle(() => {
+    const pos = scrollX.value / width;
+    return {
+      width: interpolate(
+        pos,
+        [index - 1, index, index + 1],
+        [7, 20, 7],
+        Extrapolation.CLAMP,
+      ),
+      backgroundColor: interpolateColor(
+        pos,
+        [index - 1, index, index + 1],
+        [theme.colors.border, theme.colors.accent, theme.colors.border],
+      ),
+    };
+  });
+  return <Animated.View style={[styles.dot, style]} />;
+}
 
 export function OnboardingScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
+  const params = useLocalSearchParams<{ replay?: string }>();
+  const isReplay = params.replay === '1';
   const { markSeen } = useOnboarding();
   const { request } = usePhotoPermission();
-  const listRef = useRef<FlatList<(typeof strings.onboarding.slides)[number]>>(null);
+  const scrollRef = useRef<Animated.ScrollView>(null);
+  const scrollX = useSharedValue(0);
   const [index, setIndex] = useState(0);
   const [busy, setBusy] = useState(false);
 
   const slides = strings.onboarding.slides;
   const isLast = index === slides.length - 1;
 
-  const goTo = (next: number) => {
-    listRef.current?.scrollToIndex({ index: next, animated: true });
-    setIndex(next);
-  };
+  // Stable art nodes — must not recreate on page index changes (causes swipe hitch).
+  const slideArts = useMemo(
+    () => [<MapPinArt key="map" />, <CardArt key="card" />, <AccessArt key="access" />],
+    [],
+  );
 
-  const onScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    setIndex(Math.round(e.nativeEvent.contentOffset.x / width));
-  };
+  const pages = useMemo(
+    () =>
+      slides.map((slide, i) => (
+        <OnboardingSlide
+          key={slide.title}
+          width={width}
+          index={i}
+          scrollX={scrollX}
+          art={slideArts[i]}
+          title={slide.title}
+          body={slide.body}
+        />
+      )),
+    [slides, width, slideArts, scrollX],
+  );
+
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (e) => {
+      scrollX.value = e.contentOffset.x;
+    },
+    onMomentumEnd: (e) => {
+      const next = Math.round(e.contentOffset.x / width);
+      runOnJS(setIndex)(next);
+    },
+  });
+
+  const goTo = useCallback(
+    (next: number) => {
+      scrollRef.current?.scrollTo({ x: next * width, animated: true });
+      setIndex(next);
+    },
+    [width],
+  );
+
+  const leaveReplay = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/');
+    }
+  }, [router]);
 
   const onFinish = async () => {
+    if (isReplay) {
+      leaveReplay();
+      return;
+    }
     setBusy(true);
     markSeen();
     const next = await request();
@@ -65,7 +144,16 @@ export function OnboardingScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
       <View style={styles.topRow}>
-        {isLast ? null : (
+        {isReplay ? (
+          <Pressable
+            onPress={leaveReplay}
+            hitSlop={8}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.skip, pressed && styles.skipPressed]}
+          >
+            <Text style={styles.skipText}>{strings.onboarding.close}</Text>
+          </Pressable>
+        ) : isLast ? null : (
           <Pressable
             onPress={() => goTo(slides.length - 1)}
             hitSlop={8}
@@ -77,31 +165,35 @@ export function OnboardingScreen() {
         )}
       </View>
 
-      <FlatList
-        ref={listRef}
-        data={slides}
-        keyExtractor={(item) => item.title}
+      <Animated.ScrollView
+        ref={scrollRef}
+        style={styles.list}
         horizontal
         pagingEnabled
+        bounces={false}
+        overScrollMode="never"
         showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={onScrollEnd}
-        getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
-        renderItem={({ item, index: i }) => (
-          <OnboardingSlide width={width} art={ART[i]} title={item.title} body={item.body} />
-        )}
-      />
+        onScroll={scrollHandler}
+        scrollEventThrottle={16}
+        decelerationRate="fast"
+      >
+        {pages}
+      </Animated.ScrollView>
 
       <View style={styles.footer}>
         <View style={styles.dots}>
           {slides.map((slide, i) => (
-            <View
-              key={slide.title}
-              style={[styles.dot, i === index && styles.dotActive]}
-            />
+            <PagerDot key={slide.title} index={i} scrollX={scrollX} width={width} />
           ))}
         </View>
         <Button
-          title={isLast ? strings.onboarding.grant : strings.onboarding.next}
+          title={
+            isLast
+              ? isReplay
+                ? strings.onboarding.close
+                : strings.onboarding.grant
+              : strings.onboarding.next
+          }
           variant="accent"
           loading={busy}
           onPress={onPrimary}
@@ -115,6 +207,9 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: theme.colors.canvas,
+  },
+  list: {
+    flex: 1,
   },
   topRow: {
     height: 44,
@@ -146,13 +241,7 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   dot: {
-    width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: theme.colors.border,
-  },
-  dotActive: {
-    backgroundColor: theme.colors.accent,
-    width: 20,
   },
 });

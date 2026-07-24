@@ -1,11 +1,13 @@
 import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import Animated, {
   cancelAnimation,
   Easing,
   ReduceMotion,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
   withRepeat,
   withTiming,
   type SharedValue,
@@ -15,8 +17,6 @@ import { BrandMark, PinGlyph } from '@/shared/components/BrandMark';
 import { KOREA_SILHOUETTE } from '@/shared/constants/brandMark';
 import { theme } from '@/shared/constants/theme';
 
-// Onboarding is a launch moment, so — like the splash — the motion always plays:
-// ReduceMotion.Never opts these loops out of the OS "reduce motion" setting.
 const LOOP = ReduceMotion.Never;
 
 function clamp01(v: number): number {
@@ -24,15 +24,34 @@ function clamp01(v: number): number {
   return Math.max(0, Math.min(1, v));
 }
 
-/* ── Slide 1 — pins stamp onto the map, one by one, on a loop ─────────────── */
+/* ── Slide 1 — map settles, then pins "write" on one by one (like CardArt) ── */
 
-const MAP_H = 194;
-const PIN_H = 30;
+const MAP_H = 248;
+const PIN_H = 26;
 const PIN_W = PIN_H * (24 / 32);
-const RIPPLE = 36;
-const DROP = 34;
-const STAMP_CITIES = KOREA_SILHOUETTE.pins.slice(0, 4); // 서울·강릉·부산·광주
-const STAMP_MS = 3400;
+const DROP = 22;
+const STAMP_CITIES = KOREA_SILHOUETTE.pins; // 서울→강릉→부산→광주→제주
+/** Same loop rhythm as CardArt: build → hold → soft clear. */
+const CYCLE_MS = 4200;
+
+/** Quiet paper silhouette: warm land, soft ink edge, tiny offset shadow. */
+function PaperKorea({ height }: { height: number }) {
+  const width = height * KOREA_SILHOUETTE.aspect;
+  const d = KOREA_SILHOUETTE.path;
+  return (
+    <Svg width={width} height={height} viewBox={KOREA_SILHOUETTE.viewBox}>
+      <Path d={d} fill={theme.tint.faint} transform="translate(0.9, 1.1)" />
+      <Path d={d} fill={theme.colors.land} />
+      <Path
+        d={d}
+        fill="none"
+        stroke={theme.colors.accent}
+        strokeWidth={0.7}
+        opacity={0.28}
+      />
+    </Svg>
+  );
+}
 
 function StampPin({
   cycle,
@@ -45,39 +64,26 @@ function StampPin({
   y: number;
   order: number;
 }) {
-  const dropStart = 0.06 + order * 0.13;
-  const dropDur = 0.16;
-  const landAt = dropStart + dropDur;
+  // After the map settles (~0.16), pins write in like CardArt skeleton lines.
+  const dropStart = 0.18 + order * 0.1;
+  const dropDur = 0.12;
 
   const pinStyle = useAnimatedStyle(() => {
     const wp = clamp01((cycle.value - dropStart) / dropDur);
-    const ep = clamp01((cycle.value - 0.82) / 0.15); // erase near the end
+    const ep = clamp01((cycle.value - 0.86) / 0.12);
+    const eased = 1 - (1 - wp) * (1 - wp) * (1 - wp);
     return {
-      opacity: Math.min(1, wp * 3) * (1 - ep),
-      transform: [{ translateY: (wp - 1) * DROP }],
-    };
-  });
-  const pingStyle = useAnimatedStyle(() => {
-    const ep = clamp01((cycle.value - 0.82) / 0.15);
-    const pingP = clamp01((cycle.value - landAt) / 0.22);
-    const active = cycle.value >= landAt ? 1 : 0;
-    return {
-      opacity: 0.45 * (1 - pingP) * (1 - ep) * active,
-      transform: [{ scale: 0.3 + pingP * 1.6 }],
+      opacity: Math.min(1, eased * 4) * (1 - ep),
+      transform: [{ translateY: (eased - 1) * DROP }],
     };
   });
 
   return (
-    <>
-      <Animated.View
-        style={[styles.ripple, { left: x - RIPPLE / 2, top: y - RIPPLE / 2 }, pingStyle]}
-      />
-      <Animated.View
-        style={[styles.pin, { left: x - PIN_W / 2, top: y - PIN_H }, pinStyle]}
-      >
-        <PinGlyph size={PIN_H} />
-      </Animated.View>
-    </>
+    <Animated.View
+      style={[styles.pin, { left: x - PIN_W / 2, top: y - PIN_H }, pinStyle]}
+    >
+      <PinGlyph size={PIN_H} />
+    </Animated.View>
   );
 }
 
@@ -87,7 +93,11 @@ export function MapPinArt() {
 
   useEffect(() => {
     cycle.value = withRepeat(
-      withTiming(1, { duration: STAMP_MS, easing: Easing.linear, reduceMotion: LOOP }),
+      withTiming(1, {
+        duration: CYCLE_MS,
+        easing: Easing.linear,
+        reduceMotion: LOOP,
+      }),
       -1,
       false,
       undefined,
@@ -98,9 +108,22 @@ export function MapPinArt() {
     };
   }, [cycle]);
 
+  // Map arrives first — same "page fills in" beat as the card photo/frame.
+  const mapStyle = useAnimatedStyle(() => {
+    const inP = clamp01(cycle.value / 0.16);
+    const ep = clamp01((cycle.value - 0.9) / 0.08);
+    const eased = 1 - (1 - inP) * (1 - inP);
+    return {
+      opacity: (0.2 + eased * 0.8) * (1 - ep * 0.35),
+      transform: [{ translateY: (1 - eased) * 10 }],
+    };
+  });
+
   return (
-    <View style={{ width, height: MAP_H }}>
-      <BrandMark height={MAP_H} />
+    <View style={[styles.mapStage, { width, height: MAP_H }]}>
+      <Animated.View style={mapStyle}>
+        <PaperKorea height={MAP_H} />
+      </Animated.View>
       {STAMP_CITIES.map((c, i) => (
         <StampPin
           key={c.name}
@@ -114,14 +137,13 @@ export function MapPinArt() {
   );
 }
 
-/* ── Slide 2 — skeleton text writes itself into the card, on a loop ───────── */
+/* ── Slide 2 — skeleton text writes itself into the card ──────────────────── */
 
 const CARD_W = 158;
 const CARD_H = 198;
 const CARD_PAD = 14;
 const INNER_W = CARD_W - CARD_PAD * 2;
-const WRITE_MS = 3200;
-/** Full widths per skeleton line (px), top to bottom. */
+const WRITE_MS = 3600;
 const LINE_FULL = [INNER_W, INNER_W * 0.82, INNER_W * 0.92, INNER_W * 0.55];
 
 function WriteLine({
@@ -137,8 +159,9 @@ function WriteLine({
   const wDur = 0.2;
   const style = useAnimatedStyle(() => {
     const wp = clamp01((cycle.value - wStart) / wDur);
-    const ep = clamp01((cycle.value - 0.84) / 0.14); // erase before repeating
-    return { width: full * wp * (1 - ep) };
+    const ep = clamp01((cycle.value - 0.84) / 0.14);
+    // Keep a hair of width so the card never looks empty mid-loop.
+    return { width: Math.max(full * 0.08, full * wp * (1 - ep * 0.92)) };
   });
   return <Animated.View style={[styles.line, style]} />;
 }
@@ -148,7 +171,11 @@ export function CardArt() {
 
   useEffect(() => {
     cycle.value = withRepeat(
-      withTiming(1, { duration: WRITE_MS, easing: Easing.linear, reduceMotion: LOOP }),
+      withTiming(1, {
+        duration: WRITE_MS,
+        easing: Easing.linear,
+        reduceMotion: LOOP,
+      }),
       -1,
       false,
       undefined,
@@ -174,50 +201,82 @@ export function CardArt() {
   );
 }
 
-/* ── Slide 3 — map inside a soft disc with a scanning pulse ring ───────────── */
+/* ── Slide 3 — breathing disc with staggered sonar rings ──────────────────── */
 
 const CIRCLE = 184;
 const DISC = 156;
+const PULSE_MS = 2600;
 
-export function AccessArt() {
+function SonarRing({ delay }: { delay: number }) {
   const pulse = useSharedValue(0);
 
   useEffect(() => {
-    pulse.value = withRepeat(
-      withTiming(1, { duration: 1900, easing: Easing.out(Easing.quad), reduceMotion: LOOP }),
-      -1,
-      false,
-      undefined,
-      LOOP,
+    pulse.value = withDelay(
+      delay,
+      withRepeat(
+        withTiming(1, {
+          duration: PULSE_MS,
+          easing: Easing.out(Easing.cubic),
+          reduceMotion: LOOP,
+        }),
+        -1,
+        false,
+        undefined,
+        LOOP,
+      ),
     );
     return () => {
       cancelAnimation(pulse);
     };
-  }, [pulse]);
+  }, [delay, pulse]);
 
-  const ringStyle = useAnimatedStyle(() => ({
-    opacity: 0.32 * (1 - pulse.value),
-    transform: [{ scale: 1 + pulse.value * 0.24 }],
+  const style = useAnimatedStyle(() => ({
+    opacity: 0.34 * (1 - pulse.value),
+    transform: [{ scale: 1 + pulse.value * 0.3 }],
+  }));
+
+  return <Animated.View style={[styles.pulseRing, style]} />;
+}
+
+export function AccessArt() {
+  const breathe = useSharedValue(0);
+
+  useEffect(() => {
+    breathe.value = withRepeat(
+      withTiming(1, {
+        duration: PULSE_MS,
+        easing: Easing.inOut(Easing.sin),
+        reduceMotion: LOOP,
+      }),
+      -1,
+      true,
+      undefined,
+      LOOP,
+    );
+    return () => {
+      cancelAnimation(breathe);
+    };
+  }, [breathe]);
+
+  const discStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 + breathe.value * 0.03 }],
   }));
 
   return (
     <View style={styles.discStage}>
-      <Animated.View style={[styles.pulseRing, ringStyle]} />
-      <View style={styles.disc}>
+      <SonarRing delay={0} />
+      <SonarRing delay={PULSE_MS / 2} />
+      <Animated.View style={[styles.disc, discStyle]}>
         <BrandMark height={118} />
-      </View>
+      </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  ripple: {
-    position: 'absolute',
-    width: RIPPLE,
-    height: RIPPLE,
-    borderRadius: RIPPLE / 2,
-    borderWidth: 2,
-    borderColor: theme.colors.accent,
+  mapStage: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pin: {
     position: 'absolute',

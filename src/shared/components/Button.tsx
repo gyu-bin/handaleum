@@ -9,7 +9,7 @@ import {
 
 import { theme } from '@/shared/constants/theme';
 
-export type ButtonVariant = 'primary' | 'accent' | 'secondary' | 'ghost';
+export type ButtonVariant = 'primary' | 'accent' | 'sand' | 'secondary' | 'ghost';
 export type ButtonSize = 'md' | 'lg';
 
 export interface ButtonProps extends Omit<PressableProps, 'style' | 'children'> {
@@ -36,7 +36,8 @@ export function Button({
   ...pressableProps
 }: ButtonProps) {
   const isDisabled = disabled || loading;
-  const isSolid = variant === 'primary' || variant === 'accent';
+  const isSolid = variant === 'primary' || variant === 'accent' || variant === 'sand';
+  const labelOnLight = variant === 'sand';
 
   return (
     <Pressable
@@ -47,6 +48,7 @@ export function Button({
         size === 'lg' ? styles.lg : styles.md,
         variant === 'primary' && styles.primary,
         variant === 'accent' && styles.accent,
+        variant === 'sand' && styles.sand,
         variant === 'secondary' && styles.secondary,
         variant === 'ghost' && styles.ghost,
         isSolid && !isDisabled && theme.shadows.raised,
@@ -58,7 +60,7 @@ export function Button({
     >
       {loading ? (
         <ActivityIndicator
-          color={isSolid ? theme.colors.surface : theme.colors.ink}
+          color={labelOnLight || !isSolid ? theme.colors.ink : theme.colors.surface}
         />
       ) : (
         <Text
@@ -66,6 +68,7 @@ export function Button({
             styles.label,
             variant === 'primary' && styles.labelOnSolid,
             variant === 'accent' && styles.labelOnSolid,
+            variant === 'sand' && styles.labelInk,
             variant === 'secondary' && styles.labelInk,
             variant === 'ghost' && styles.labelAccent,
           ]}
@@ -96,6 +99,9 @@ const styles = StyleSheet.create({
   },
   accent: {
     backgroundColor: theme.colors.accent,
+  },
+  sand: {
+    backgroundColor: theme.colors.sand,
   },
   secondary: {
     backgroundColor: theme.colors.surface,

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Location from 'expo-location';
+import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/shared/components/Button';
@@ -10,9 +11,7 @@ import { formatProPriceKrw, IS_MONETIZATION_LIVE } from '@/shared/constants/pric
 import { theme } from '@/shared/constants/theme';
 
 import { useHomeLocation } from '../hooks/useHomeLocation';
-import { useDevDummyPhotos } from '../hooks/useDevDummyPhotos';
 import { DEFAULT_HOME_RADIUS_M } from '../services/homeLocationStorage';
-import { dummyPhotoCount } from '../services/dummyPhotos';
 import { ProPaywallModal } from '@/features/insights/components/ProPaywallModal';
 import { useIsPro } from '@/features/insights/hooks/useIsPro';
 
@@ -23,9 +22,9 @@ function radiusLabel(radiusM: number): string {
 }
 
 export function SettingsScreen() {
+  const router = useRouter();
   const { home, setHome, clearHome } = useHomeLocation();
   const { isPro, isBusy, error: proError, purchase, restore } = useIsPro();
-  const dummy = useDevDummyPhotos();
   const [isLocating, setIsLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paywallOpen, setPaywallOpen] = useState(false);
@@ -171,27 +170,14 @@ export function SettingsScreen() {
           </View>
         ) : null}
 
-        {__DEV__ ? (
-          <View style={[styles.card, styles.cardSpaced]}>
-            <Text style={styles.sectionTitle}>{strings.settings.dummySection}</Text>
-            <Text style={styles.description}>{strings.settings.dummyDescription}</Text>
-            <Text style={[styles.status, dummy.enabled && styles.statusSet]}>
-              {dummy.enabled
-                ? `${strings.settings.dummyOn} · ${dummyPhotoCount()}장`
-                : strings.settings.dummyOff}
-            </Text>
-            <Button
-              title={
-                dummy.enabled
-                  ? strings.settings.dummyToggleOff
-                  : strings.settings.dummyToggleOn
-              }
-              variant={dummy.enabled ? 'secondary' : 'accent'}
-              size="md"
-              onPress={() => dummy.setEnabled(!dummy.enabled)}
-            />
-          </View>
-        ) : null}
+        <View style={[styles.card, styles.cardSpaced]}>
+          <Button
+            title={strings.settings.viewOnboarding}
+            variant="secondary"
+            size="md"
+            onPress={() => router.push('/onboarding?replay=1')}
+          />
+        </View>
       </ScrollView>
 
       <ProPaywallModal

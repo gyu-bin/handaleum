@@ -23,7 +23,6 @@ import { useMonthlyPhotos } from '../hooks/useMonthlyPhotos';
 import { usePhotoPermission } from '../hooks/usePhotoPermission';
 import { usePinCovers } from '../hooks/usePinCovers';
 import { clusterPhotos } from '../services/cluster';
-import { isDevDummyPhotosEnabled } from '../services/dummyPhotos';
 import type { MonthKey, PlaceCluster } from '../types';
 import { monthTimeBoundsIso } from '../utils/month';
 import { placeBucketKey } from '../utils/placeJourney';
@@ -51,7 +50,7 @@ export function MonthlyMapScreen() {
   const { seen: onboardingSeen } = useOnboarding();
   const { status, isReady } = usePhotoPermission();
   const hasLibraryAccess = status === 'granted' || status === 'limited';
-  const hasAccess = hasLibraryAccess || isDevDummyPhotosEnabled();
+  const hasAccess = hasLibraryAccess;
   const { month } = useCurrentMonth();
   const { themeId } = useMapTheme();
   const { covers, setCover } = usePinCovers(month);
@@ -84,7 +83,6 @@ export function MonthlyMapScreen() {
   );
 
   const { places: journeyPlaces } = useMonthJourney(filteredPhotos);
-  const journeyLine = strings.map.monthJourney(journeyPlaces);
 
   const onSelectCluster = useCallback((cluster: PlaceCluster) => {
     setSelected((prev) => (prev?.id === cluster.id ? null : cluster));
@@ -130,105 +128,101 @@ export function MonthlyMapScreen() {
   }
 
   const monthLabel = formatMonthLabel(month);
-  const monthNumber = Number(month.split('-')[1]);
   // Content destinations live in the thumb-reachable bottom bar; settings is a
   // low-frequency config, so it sits as a quiet link in the header instead.
   const navItems = [
-    { href: '/months' as const, label: strings.months.title },
-    { href: '/playback' as const, label: strings.playback.title },
-    { href: '/cards' as const, label: strings.cards.listTitle },
-    { href: '/insights' as const, label: strings.insights.title },
+    { href: '/months' as const, label: strings.months.title, icon: 'calendar' as const },
+    { href: '/playback' as const, label: strings.playback.title, icon: 'play' as const },
+    { href: '/cards' as const, label: strings.cards.listTitle, icon: 'card' as const },
+    { href: '/insights' as const, label: strings.insights.title, icon: 'chart' as const },
   ];
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-      <View style={styles.panel}>
+      <View style={styles.body}>
         <View style={styles.header}>
-          <View style={styles.topRow}>
-            <View style={styles.titleBlock}>
-              <Text style={styles.wordmark}>{strings.brand}</Text>
-              <Text style={styles.monthTitle} numberOfLines={1}>
-                {strings.map.monthTitle(monthNumber)}
-              </Text>
-              <Text style={styles.monthMeta} numberOfLines={1}>
-                {isFetching && data
-                  ? strings.map.resolvingLocations
-                  : strings.map.monthMeta(monthLabel, clusters.length)}
-              </Text>
-            </View>
-            <View style={styles.topActions}>
+          <Pressable
+            onPress={() => router.push('/settings')}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel={strings.map.settings}
+            style={({ pressed }) => [
+              styles.cornerBtn,
+              styles.cornerLeft,
+              pressed && styles.cornerBtnPressed,
+            ]}
+          >
+            <Text style={styles.cornerLabel}>{strings.map.settings}</Text>
+          </Pressable>
+
+          {data.noLocationCount > 0 || data.homeExcludedCount > 0 ? (
+            <Pressable
+              onPress={() => setShowNotices((v) => !v)}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: showNotices }}
+              accessibilityLabel={strings.map.infoToggle}
+              style={({ pressed }) => [
+                styles.cornerBtn,
+                styles.cornerRight,
+                pressed && styles.cornerBtnPressed,
+              ]}
+            >
+              <View style={[styles.infoDot, showNotices && styles.infoDotActive]}>
+                <Text
+                  style={[styles.infoDotText, showNotices && styles.infoDotTextActive]}
+                >
+                  !
+                </Text>
+              </View>
+            </Pressable>
+          ) : null}
+
+          <View style={styles.hero}>
+            <Text style={styles.wordmark}>{strings.brand}</Text>
+            <Text style={styles.tagline} numberOfLines={1}>
+              {strings.tagline}
+            </Text>
+            <Text style={styles.monthMeta} numberOfLines={1}>
+              {isFetching && data
+                ? strings.map.resolvingLocations
+                : strings.map.monthMeta(monthLabel, clusters.length)}
+              {journeyPlaces.length === 1 ? ` · ${journeyPlaces[0]}` : ''}
+            </Text>
+          </View>
+        </View>
+
+        {showNotices && (data.noLocationCount > 0 || data.homeExcludedCount > 0) ? (
+          <View style={styles.noticeRow}>
+            {data.noLocationCount > 0 ? (
+              <View style={styles.noticeChip}>
+                <Text style={styles.notice}>
+                  {strings.map.noLocationNotice(data.noLocationCount)}
+                </Text>
+              </View>
+            ) : null}
+            {data.homeExcludedCount > 0 ? (
               <Pressable
                 onPress={() => router.push('/settings')}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel={strings.map.settings}
+                hitSlop={6}
                 style={({ pressed }) => [
-                  styles.settingsBtn,
-                  pressed && styles.settingsBtnPressed,
+                  styles.noticeChip,
+                  pressed && styles.noticeChipPressed,
                 ]}
               >
-                <Text style={styles.settingsText}>{strings.map.settings}</Text>
+                <Text style={styles.notice}>
+                  {strings.map.homeExcludedNotice(data.homeExcludedCount)}
+                </Text>
               </Pressable>
-              {data.noLocationCount > 0 || data.homeExcludedCount > 0 ? (
-                <Pressable
-                  onPress={() => setShowNotices((v) => !v)}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityState={{ expanded: showNotices }}
-                  accessibilityLabel={strings.map.infoToggle}
-                  style={({ pressed }) => [
-                    styles.infoBtn,
-                    showNotices && styles.infoBtnActive,
-                    pressed && styles.infoBtnPressed,
-                  ]}
-                >
-                  <Text
-                    style={[styles.infoBtnText, showNotices && styles.infoBtnTextActive]}
-                  >
-                    !
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
+            ) : null}
           </View>
+        ) : null}
 
-          {journeyLine ? (
-            <View style={styles.journeyBlock}>
-              <Text style={styles.journey} numberOfLines={1}>
-                {journeyLine}
-              </Text>
-              {journeyPlaces.length > 1 ? (
-                <VisitChipRow labels={journeyPlaces} />
-              ) : null}
-            </View>
-          ) : null}
-
-          {showNotices && (data.noLocationCount > 0 || data.homeExcludedCount > 0) ? (
-            <View style={styles.noticeRow}>
-              {data.noLocationCount > 0 ? (
-                <View style={styles.noticeChip}>
-                  <Text style={styles.notice}>
-                    {strings.map.noLocationNotice(data.noLocationCount)}
-                  </Text>
-                </View>
-              ) : null}
-              {data.homeExcludedCount > 0 ? (
-                <Pressable
-                  onPress={() => router.push('/settings')}
-                  hitSlop={6}
-                  style={({ pressed }) => [
-                    styles.noticeChip,
-                    pressed && styles.noticeChipPressed,
-                  ]}
-                >
-                  <Text style={styles.notice}>
-                    {strings.map.homeExcludedNotice(data.homeExcludedCount)}
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
-          ) : null}
-        </View>
+        {journeyPlaces.length > 1 ? (
+          <View style={styles.journeyChips}>
+            <VisitChipRow labels={journeyPlaces} tone="quiet" />
+          </View>
+        ) : null}
 
         <View style={styles.mapBlock}>
           <MapCanvas
@@ -250,13 +244,15 @@ export function MonthlyMapScreen() {
             </View>
           ) : null}
         </View>
+
         <View style={styles.footer}>
           {data.photos.length > 0 ? (
             <TimeSlider bounds={bounds} value={timeRange} onChange={setTimeRange} />
           ) : null}
           <Button
             title={strings.cards.createTitle}
-            variant="accent"
+            variant="sand"
+            style={styles.createBtn}
             onPress={() => router.push('/cards/create')}
           />
         </View>
@@ -279,79 +275,65 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.canvas,
   },
-  panel: {
+  body: {
     flex: 1,
-    marginHorizontal: theme.spacing.md,
-    marginBottom: theme.spacing.md,
-    paddingTop: theme.spacing.md,
     paddingHorizontal: theme.spacing.md,
-    paddingBottom: theme.spacing.md,
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.hairline,
-    ...theme.shadows.card,
   },
   header: {
-    paddingBottom: theme.spacing.md,
-    gap: theme.spacing.sm,
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 2,
+    paddingBottom: theme.spacing.sm,
+    minHeight: 56,
   },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: theme.spacing.sm,
+  cornerBtn: {
+    position: 'absolute',
+    top: 2,
+    zIndex: 2,
+    paddingVertical: 4,
+    paddingHorizontal: 2,
   },
-  titleBlock: {
-    flex: 1,
-    gap: theme.spacing.xs,
+  cornerLeft: {
+    left: 0,
   },
-  /** Settings + the notices "!" stacked in the top-right corner. */
-  topActions: {
-    alignItems: 'flex-end',
-    gap: theme.spacing.sm,
+  cornerRight: {
+    right: 0,
   },
-  settingsBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.surfaceAlt,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.hairline,
+  cornerBtnPressed: {
+    opacity: 0.55,
   },
-  settingsBtnPressed: {
-    backgroundColor: theme.colors.accentSoft,
-  },
-  settingsText: {
+  cornerLabel: {
     ...theme.type.micro,
     color: theme.colors.subtle,
     fontWeight: '600',
-    letterSpacing: 0.4,
   },
-  /** Eyebrow, not a headline — the month below it is the loud thing. */
+  hero: {
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 56,
+  },
   wordmark: {
-    ...theme.type.micro,
-    color: theme.colors.subtle,
-    letterSpacing: 3.2,
-  },
-  monthTitle: {
-    ...theme.type.display,
     fontFamily: theme.fonts.serif,
     color: theme.colors.ink,
+    fontSize: 24,
+    lineHeight: 28,
+    letterSpacing: -0.5,
+    fontWeight: '600',
+  },
+  tagline: {
+    ...theme.type.micro,
+    color: theme.colors.inkSoft,
+    letterSpacing: -0.2,
+    fontSize: 11,
+    lineHeight: 14,
   },
   monthMeta: {
     ...theme.type.micro,
     color: theme.colors.subtle,
+    marginTop: 1,
   },
-  journeyBlock: {
-    gap: theme.spacing.sm,
-  },
-  journey: {
-    ...theme.type.body,
-    color: theme.colors.inkSoft,
-    fontWeight: '500',
-  },
-  infoBtn: {
+  infoDot: {
     width: 22,
     height: 22,
     borderRadius: 11,
@@ -361,26 +343,28 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.colors.hairline,
   },
-  infoBtnActive: {
+  infoDotActive: {
     backgroundColor: theme.colors.accent,
     borderColor: theme.colors.accent,
   },
-  infoBtnPressed: {
-    backgroundColor: theme.colors.accentSoft,
-  },
-  infoBtnText: {
+  infoDotText: {
     ...theme.type.micro,
     fontWeight: '700',
     color: theme.colors.subtle,
     lineHeight: 14,
   },
-  infoBtnTextActive: {
+  infoDotTextActive: {
     color: theme.colors.white,
+  },
+  journeyChips: {
+    paddingBottom: theme.spacing.sm,
   },
   noticeRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
+    justifyContent: 'center',
+    paddingBottom: theme.spacing.sm,
   },
   noticeChipPressed: {
     backgroundColor: theme.colors.accentSoft,
@@ -388,7 +372,7 @@ const styles = StyleSheet.create({
   noticeChip: {
     alignSelf: 'flex-start',
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 5,
     borderRadius: theme.radius.sm,
     backgroundColor: theme.colors.surfaceAlt,
   },
@@ -418,7 +402,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   footer: {
-    paddingTop: theme.spacing.md,
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.sm,
     gap: theme.spacing.sm,
+  },
+  createBtn: {
+    borderRadius: theme.radius.pill,
   },
 });
