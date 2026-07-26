@@ -511,11 +511,7 @@ export function MapCanvas({
             </ResumableZoom>
 
             <View style={[StyleSheet.absoluteFill, styles.overlay]} pointerEvents="box-none">
-              <MapCameraLayer
-                width={size.width}
-                height={size.height}
-                camera={state}
-              >
+              <MapCameraLayer camera={state}>
                 {labelsLive
                   ? labels.map((label) => {
                       if (detail === 'overview' && label.tier > 1) {
