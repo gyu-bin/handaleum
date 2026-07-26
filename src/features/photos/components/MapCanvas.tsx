@@ -166,19 +166,43 @@ export function MapCanvas({
     if (!projection || detail !== 'local' || placeLabels.length === 0) {
       return [];
     }
-    // Skip stamp when a district centroid label already shows the same 구.
+    // Skip stamp when an admin label already shows the same 구.
     const labeled = new Set(labels.map((label) => label.text));
-    return placeLabels
-      .filter((label) => !labeled.has(label.text))
-      .map((label) => {
-        const [x, y] = projection.project([label.lng, label.lat]);
-        return {
-          key: label.clusterId,
-          text: label.text,
-          x,
-          y,
-        };
-      });
+    // Greedy declutter in projected space: a stamp is dropped if its box hits an
+    // already-placed admin label or an earlier stamp (pins are intentionally
+    // excluded — a stamp names the area right around its cluster's pin).
+    type B = { l: number; r: number; t: number; b: number };
+    const overlaps = (a: B, x: B) =>
+      !(a.r < x.l || a.l > x.r || a.b < x.t || a.t > x.b);
+    const placed: B[] = labels.map((label) => {
+      const box = labelBoxSize(label.text, label.tier);
+      return {
+        l: label.x - box.width / 2,
+        r: label.x + box.width / 2,
+        t: label.y - box.height / 2,
+        b: label.y + box.height / 2,
+      };
+    });
+    const out: { key: string; text: string; x: number; y: number }[] = [];
+    for (const label of placeLabels) {
+      if (labeled.has(label.text)) {
+        continue;
+      }
+      const [x, y] = projection.project([label.lng, label.lat]);
+      const box = stampBoxSize(label.text);
+      const b: B = {
+        l: x - box.width / 2,
+        r: x + box.width / 2,
+        t: y - box.height / 2,
+        b: y + box.height / 2,
+      };
+      if (placed.some((p) => overlaps(b, p))) {
+        continue;
+      }
+      placed.push(b);
+      out.push({ key: label.clusterId, text: label.text, x, y });
+    }
+    return out;
   }, [detail, labels, placeLabels, projection]);
 
   // Full-Korea view: seat journal sketch marks in the projected focus frame.

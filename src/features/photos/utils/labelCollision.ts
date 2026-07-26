@@ -1,14 +1,13 @@
 import type { MapDetail, ProjectedLabel } from '../components/MapSvg';
-import { SCREEN_LABEL_SIZE } from './mapLabelStyle';
+import { labelPixelWidth, SCREEN_LABEL_SIZE } from './mapLabelStyle';
 
-const CHAR_WIDTH = 0.62;
 const PAD = 4;
 
 type Box = { left: number; right: number; top: number; bottom: number };
 
 function labelBox(label: ProjectedLabel): Box {
   const size = SCREEN_LABEL_SIZE[label.tier];
-  const halfW = (label.text.length * size * CHAR_WIDTH) / 2 + PAD;
+  const halfW = labelPixelWidth(label.text, size) / 2 + PAD;
   const halfH = size / 2 + PAD;
   return {
     left: label.x - halfW,

@@ -1,5 +1,11 @@
-import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -11,12 +17,16 @@ import { theme } from '@/shared/constants/theme';
 
 import { useCurrentMonth } from '../../photos/hooks/useCurrentMonth';
 import { useMonthlyPhotos } from '../../photos/hooks/useMonthlyPhotos';
+import type { PhotoRef } from '../../photos/types';
+import { CollageEditor } from '../components/CollageEditor';
 import { PhotoSelectGrid } from '../components/PhotoSelectGrid';
 import { useSaveCard } from '../hooks/useCards';
 import type { CardTemplate, MapSnapshot } from '../types';
 
-/** How many photos each template can actually place on the card. */
-const TEMPLATE_MAX: Record<CardTemplate, number> = { feed: 3, story: 1 };
+/** How many photos each template can place on the card (4 = 인생네컷). */
+const TEMPLATE_MAX: Record<CardTemplate, number> = { feed: 3, story: 4 };
+/** Cap the drag-to-arrange collage so it never dominates the picker. */
+const EDITOR_MAX = 300;
 
 /**
  * Photo selection + template choice. Title/comment inputs were removed
@@ -26,6 +36,7 @@ const TEMPLATE_MAX: Record<CardTemplate, number> = { feed: 3, story: 1 };
  */
 export function CardCreateScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
   const { month } = useCurrentMonth();
   const { data, isPending, isError, refetch } = useMonthlyPhotos(month);
   const saveCard = useSaveCard();
@@ -35,14 +46,29 @@ export function CardCreateScreen() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const maxPhotos = TEMPLATE_MAX[template];
+  const editorSize = Math.min(width - theme.spacing.lg * 2, EDITOR_MAX);
 
+  // Order-preserving: the collage renders in the drag order, not library order.
   const selectedPhotos = useMemo(() => {
     if (!data) {
       return [];
     }
-    const set = new Set(selectedAssetIds);
-    return data.allPhotos.filter((p) => set.has(p.assetId));
+    const byId = new Map(data.allPhotos.map((p) => [p.assetId, p]));
+    return selectedAssetIds
+      .map((id) => byId.get(id))
+      .filter((p): p is PhotoRef => p != null);
   }, [data, selectedAssetIds]);
+
+  const onSwap = useCallback((a: number, b: number) => {
+    setSelectedAssetIds((prev) => {
+      if (a < 0 || b < 0 || a >= prev.length || b >= prev.length) {
+        return prev;
+      }
+      const next = [...prev];
+      [next[a], next[b]] = [next[b]!, next[a]!];
+      return next;
+    });
+  }, []);
 
   const mapSnapshot: MapSnapshot = useMemo(() => {
     if (selectedPhotos.length === 0) {
@@ -215,6 +241,22 @@ export function CardCreateScreen() {
               </View>
             </View>
 
+            {selectedCount > 0 ? (
+              <View style={styles.section}>
+                <View style={styles.labelRow}>
+                  <Text style={styles.label}>{strings.cards.arrangeLabel}</Text>
+                  <Text style={styles.hint}>{strings.cards.arrangeHint}</Text>
+                </View>
+                <View style={styles.editorWrap}>
+                  <CollageEditor
+                    assetIds={selectedAssetIds}
+                    size={editorSize}
+                    onSwap={onSwap}
+                  />
+                </View>
+              </View>
+            ) : null}
+
             <View style={styles.labelRow}>
               <Text style={styles.label}>{strings.cards.photoLabel}</Text>
               <Text style={styles.selectedCount}>
@@ -275,6 +317,13 @@ const styles = StyleSheet.create({
     ...theme.type.label,
     color: theme.colors.accent,
     fontWeight: '700',
+  },
+  hint: {
+    ...theme.type.micro,
+    color: theme.colors.subtle,
+  },
+  editorWrap: {
+    alignItems: 'center',
   },
   templateRow: {
     flexDirection: 'row',

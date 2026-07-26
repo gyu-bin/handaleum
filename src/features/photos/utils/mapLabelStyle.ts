@@ -24,6 +24,19 @@ export const SCREEN_LABEL_SIZE: Record<LabelTier, number> = {
 
 export const PLACE_STAMP_SIZE = 11;
 
+/**
+ * Approximate rendered label width in px. Hangul/CJK glyphs are ~full-width;
+ * Latin and digits are much narrower. A single Latin ratio under-measured Korean
+ * by ~40%, so collision boxes were too narrow and dense labels slipped through.
+ */
+export function labelPixelWidth(text: string, size: number): number {
+  let em = 0;
+  for (const ch of text) {
+    em += /[가-힣ㄱ-ㆎ一-鿿]/.test(ch) ? 1.02 : 0.58;
+  }
+  return em * size;
+}
+
 export function screenLabelStyle(
   palette: MapPalette,
   detail: MapDetail,

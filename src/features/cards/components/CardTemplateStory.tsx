@@ -1,21 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Image } from 'expo-image';
 
 import { theme } from '@/shared/constants/theme';
 
 import { PaperMap } from '../../photos/components/PaperMap';
-import { resolveAssetUri } from '../../photos/services/mediaLibrary';
 import { resolveCardRegionLabel } from '../../photos/utils/placeJourney';
 import type { RecapCardDraft } from '../types';
 import { cardCentroid, cardCoordinate, formatMonthDot } from '../utils/cardMeta';
+import { CardCollage } from './CardCollage';
 
 /** Design width the fixed sizes below are authored against. */
 const BASE_WIDTH = 270;
-const OUTER_PAD = 12;
-const FRAME_PAD = 12;
-/** Map strip height as a fraction of content width — keep below the hero photo. */
-const MAP_HEIGHT_RATIO = 0.44;
+const OUTER_PAD = 8;
+const FRAME_PAD = 9;
+/** Map strip height as a fraction of content width — a thin, quiet locator band. */
+const MAP_HEIGHT_RATIO = 0.26;
 
 /**
  * Story card (1080×1920, 9:16) in the Dawn Survey language: cream paper with a
@@ -25,27 +24,13 @@ const MAP_HEIGHT_RATIO = 0.44;
 export function CardTemplateStory({ card, width = BASE_WIDTH }: CardTemplateStoryProps) {
   const s = width / BASE_WIDTH;
   const styles = useMemo(() => makeStyles(width), [width]);
-  const hero = card.photoRefs[0];
-  const [uri, setUri] = useState<string | null>(null);
   const [region, setRegion] = useState<string | null>(null);
+  // The collage fills the leftover vertical space (measured) so the card has no
+  // dead space under the footer and the photos stay as large as the frame allows.
+  const [heroBox, setHeroBox] = useState<{ w: number; h: number } | null>(null);
   const pinsKey = card.photoRefs
     .map((p) => `${p.assetId}:${p.lat.toFixed(3)},${p.lng.toFixed(3)}`)
     .join('|');
-
-  useEffect(() => {
-    if (!hero) {
-      return;
-    }
-    let cancelled = false;
-    void resolveAssetUri(hero.assetId).then((next) => {
-      if (!cancelled) {
-        setUri(next);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [hero]);
 
   useEffect(() => {
     const center = cardCentroid(card.photoRefs);
@@ -95,12 +80,24 @@ export function CardTemplateStory({ card, width = BASE_WIDTH }: CardTemplateStor
         </View>
         <View style={styles.rule} />
 
-        <View style={styles.hero}>
-          {uri ? (
-            <Image source={{ uri }} style={styles.image} contentFit="cover" />
-          ) : (
-            <View style={[styles.image, styles.placeholder]} />
-          )}
+        <View
+          style={styles.hero}
+          onLayout={(e) => {
+            const { width: w, height: h } = e.nativeEvent.layout;
+            setHeroBox((prev) =>
+              prev && prev.w === w && prev.h === h ? prev : { w, h },
+            );
+          }}
+        >
+          {heroBox ? (
+            <CardCollage
+              photos={card.photoRefs}
+              width={heroBox.w}
+              height={heroBox.h}
+              gutter={4 * s}
+              radius={3 * s}
+            />
+          ) : null}
         </View>
 
         <View style={styles.mapWrap}>
@@ -151,7 +148,7 @@ function makeStyles(width: number) {
       borderWidth: 1,
       borderColor: theme.tint.mid,
       padding: FRAME_PAD * s,
-      gap: 8 * s,
+      gap: 6 * s,
     },
     header: {
       flexDirection: 'row',
@@ -171,41 +168,30 @@ function makeStyles(width: number) {
       maxWidth: width * 0.58,
     },
     region: {
-      color: theme.colors.inkSoft,
-      fontSize: 9 * s,
+      color: theme.colors.subtle,
+      fontSize: 8 * s,
       fontWeight: '600',
       letterSpacing: 0.2 * s,
     },
     coord: {
       color: theme.colors.subtle,
-      fontSize: 8.5 * s,
-      letterSpacing: 0.6 * s,
+      fontSize: 7.5 * s,
+      letterSpacing: 0.5 * s,
     },
     rule: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: theme.tint.soft,
     },
     hero: {
-      flex: 2.4,
-      minHeight: width * 0.72,
-      borderRadius: 3 * s,
+      flex: 1,
       overflow: 'hidden',
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    image: {
-      width: '100%',
-      height: '100%',
-      backgroundColor: theme.colors.surfaceAlt,
-    },
-    placeholder: {
-      opacity: 0.5,
     },
     mapWrap: {
       borderRadius: 3 * s,
       overflow: 'hidden',
-      borderWidth: 1,
-      borderColor: theme.colors.border,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.tint.soft,
+      opacity: 0.88,
     },
     titleBlock: {
       gap: 3 * s,

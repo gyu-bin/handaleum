@@ -255,8 +255,10 @@ export function useMapProjection(
       }
     }
 
-    // Metro 자치구 names — region/local (collision drops the dense ones).
-    if (detail !== 'overview') {
+    // Metro 자치구 names — region only. At local (deep zoom) the blanket 구
+    // labels blanket the map, so there we name only where the user has photos
+    // (the per-cluster 구 stamps in MapCanvas) instead.
+    if (detail === 'region') {
       for (const district of districts) {
         const c = centroidOf(district);
         if (!inBBox(c[0], c[1], box, 0.1)) {

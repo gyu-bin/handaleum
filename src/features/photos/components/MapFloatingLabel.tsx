@@ -4,6 +4,7 @@ import type { MapPalette } from '@/shared/constants/mapThemes';
 import { theme } from '@/shared/constants/theme';
 
 import {
+  labelPixelWidth,
   PLACE_STAMP_SIZE,
   SCREEN_LABEL_SIZE,
   screenLabelStyle,
@@ -11,22 +12,20 @@ import {
 } from '../utils/mapLabelStyle';
 import type { MapDetail } from './MapSvg';
 
-const CHAR_WIDTH = 0.75;
-
 export function labelBoxSize(text: string, tier: LabelTier): {
   width: number;
   height: number;
 } {
   const size = SCREEN_LABEL_SIZE[tier];
   return {
-    width: Math.max(28, Math.ceil(text.length * size * CHAR_WIDTH) + 10),
+    width: Math.max(28, Math.ceil(labelPixelWidth(text, size)) + 10),
     height: size + 10,
   };
 }
 
 export function stampBoxSize(text: string): { width: number; height: number } {
   return {
-    width: Math.max(28, Math.ceil(text.length * PLACE_STAMP_SIZE * CHAR_WIDTH) + 10),
+    width: Math.max(28, Math.ceil(labelPixelWidth(text, PLACE_STAMP_SIZE)) + 10),
     height: PLACE_STAMP_SIZE + 24,
   };
 }

@@ -203,6 +203,8 @@ export const strings = {
     commentPlaceholder: '한 달을 한마디로',
     templateLabel: '템플릿',
     photoLabel: '사진 선택',
+    arrangeLabel: '배치',
+    arrangeHint: '드래그로 위치 바꾸기',
     templateFeed: '피드 4:5',
     templateStory: '스토리 9:16',
     shareFormatLabel: '공유 형식',
