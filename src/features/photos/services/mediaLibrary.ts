@@ -52,28 +52,6 @@ function refFromCoords(asset: Asset, lat: number, lng: number): PhotoRef {
   };
 }
 
-/**
- * Plausible bounds for a South-Korea photo, a shade past the outermost islands
- * (백령도 서단 ~124.6°E, 독도 동단 ~131.9°E, 마라도 남단 ~33.1°N, 최북단
- * ~38.6°N). A finite GPS fix outside this box can't sit on the Korea map — a
- * shot taken abroad, a 0/0 fix, or lat/lng transposed — so it's treated as
- * location-less. Otherwise one stray coordinate strands a pin in a sea corner
- * and drags the month's camera framing out to the whole country.
- */
-const KOREA_LAT_MIN = 33;
-const KOREA_LAT_MAX = 39;
-const KOREA_LNG_MIN = 124;
-const KOREA_LNG_MAX = 132;
-
-function isMappableKoreaLocation(lat: number, lng: number): boolean {
-  return (
-    lat >= KOREA_LAT_MIN &&
-    lat <= KOREA_LAT_MAX &&
-    lng >= KOREA_LNG_MIN &&
-    lng <= KOREA_LNG_MAX
-  );
-}
-
 /** Sync resolve from kv cache — no native call. */
 function fromCache(asset: Asset): PhotoRef | 'no-location' | 'miss' {
   const cached = getAssetLocationRaw(asset.id);
@@ -83,9 +61,7 @@ function fromCache(asset: Asset): PhotoRef | 'no-location' | 'miss' {
   if (cached != null) {
     const [lat, lng] = cached.split(',').map(Number);
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
-      return isMappableKoreaLocation(lat!, lng!)
-        ? refFromCoords(asset, lat!, lng!)
-        : 'no-location';
+      return refFromCoords(asset, lat!, lng!);
     }
   }
   return 'miss';
@@ -98,12 +74,7 @@ async function fetchLocation(asset: Asset): Promise<PhotoRef | 'no-location' | n
     // Native module exports coordinates as strings despite the number type.
     const lat = location == null ? NaN : Number(location.latitude);
     const lng = location == null ? NaN : Number(location.longitude);
-    if (
-      !Number.isFinite(lat) ||
-      !Number.isFinite(lng) ||
-      !isMappableKoreaLocation(lat, lng)
-    ) {
-      // Off-map (or missing) fix — cache as location-less so we never re-resolve it.
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
       setAssetLocationRaw(asset.id, 'x');
       return 'no-location';
     }
