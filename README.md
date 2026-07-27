@@ -21,6 +21,15 @@
 
 ---
 
+## 지원 · 개인정보
+
+- 사이트: https://gyu-bin.github.io/handaleum/
+- 지원: https://gyu-bin.github.io/handaleum/support/
+- 개인정보 처리방침: https://gyu-bin.github.io/handaleum/privacy/
+- 문의: [GitHub Issues](https://github.com/gyu-bin/handaleum/issues)
+
+---
+
 ## 스크린
 
 - **월간 지도** — 메인. 종이 지도 + 핀 + 시간 슬라이더

@@ -1,0 +1,116 @@
+:root {
+  --bg: #fbf9f4;
+  --ink: #2c3e50;
+  --soft: #5a6b7a;
+  --subtle: #93a1ad;
+  --accent: #3a5a78;
+  --line: rgba(44, 62, 80, 0.12);
+  --card: #f2ede4;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+    "Pretendard", "Noto Sans KR", sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  line-height: 1.65;
+}
+
+.wrap {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 3rem 1.25rem 4rem;
+}
+
+.eyebrow {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--subtle);
+  font-weight: 600;
+}
+
+h1 {
+  margin: 0 0 0.35rem;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 2.25rem;
+  letter-spacing: -0.03em;
+  font-weight: 600;
+}
+
+h2 {
+  margin: 2rem 0 0.65rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.lead {
+  margin: 0 0 1.25rem;
+  color: var(--soft);
+  font-size: 1.05rem;
+}
+
+p,
+li {
+  color: var(--ink);
+  font-size: 0.98rem;
+}
+
+ul {
+  padding-left: 1.2rem;
+}
+
+a {
+  color: var(--accent);
+  text-underline-offset: 0.15em;
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin: 2rem 0 2.5rem;
+}
+
+.links a {
+  display: inline-block;
+  padding: 0.55rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.links a:hover {
+  border-color: var(--accent);
+}
+
+.foot {
+  margin-top: 3rem;
+  font-size: 0.8rem;
+  color: var(--subtle);
+}
+
+.card {
+  margin: 1.25rem 0;
+  padding: 1rem 1.1rem;
+  background: var(--card);
+  border-radius: 12px;
+  border: 1px solid var(--line);
+}
+
+.back {
+  display: inline-block;
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+}
