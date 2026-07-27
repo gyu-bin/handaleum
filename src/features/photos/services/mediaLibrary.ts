@@ -12,6 +12,13 @@ import { getAssetLocationRaw, setAssetLocationRaw } from '@/lib/storage';
 import type { MonthKey, MonthlyPhotos, MonthSummary, PhotoRef } from '../types';
 import { monthBounds, monthKeyFromTimestamp } from '../utils/month';
 import { waitForAppForeground } from './appForeground';
+import {
+  buildDummyMonthSummaries,
+  buildDummyMonthlyPhotos,
+  dummyAssetImageUri,
+  isDevDummyPhotosEnabled,
+  isDummyAssetId,
+} from './dummyPhotos';
 
 /** Larger pages = fewer native round-trips when listing a month. */
 const PAGE_SIZE = 200;
@@ -127,6 +134,10 @@ export async function loadMonthlyPhotos(
   month: MonthKey,
   options?: LoadMonthlyPhotosOptions,
 ): Promise<MonthlyPhotos> {
+  if (isDevDummyPhotosEnabled()) {
+    return buildDummyMonthlyPhotos(month);
+  }
+
   const { onPartial, shouldContinue } = options ?? {};
   const { startMs, endMs } = monthBounds(month);
   const assets = await collectAssets({
@@ -194,6 +205,10 @@ export async function loadMonthlyPhotos(
 
 /** Photo counts per month, for the month picker. */
 export async function loadMonthSummaries(): Promise<MonthSummary[]> {
+  if (isDevDummyPhotosEnabled()) {
+    return buildDummyMonthSummaries();
+  }
+
   const assets = await collectAssets({});
   const counts = new Map<MonthKey, number>();
 
@@ -208,6 +223,7 @@ export async function loadMonthSummaries(): Promise<MonthSummary[]> {
 }
 
 const uriCache = new Map<string, string | null>();
+const fileUriCache = new Map<string, string | null>();
 
 /**
  * Resolve a display URI for a camera-roll asset. Every consumer feeds the
@@ -220,6 +236,12 @@ export async function resolveAssetUri(assetId: string): Promise<string | null> {
   const hit = uriCache.get(assetId);
   if (hit !== undefined) {
     return hit;
+  }
+
+  if (isDummyAssetId(assetId)) {
+    const uri = dummyAssetImageUri(assetId);
+    uriCache.set(assetId, uri);
+    return uri;
   }
 
   if (Platform.OS === 'ios') {
@@ -236,5 +258,46 @@ export async function resolveAssetUri(assetId: string): Promise<string | null> {
   } catch (error) {
     console.error('resolveAssetUri failed', assetId, error);
     return null; // transient — leave uncached so a retry can succeed
+  }
+}
+
+/**
+ * Resolve a `file://` (or readable local) URI for native map markers.
+ * Naver `image.httpUri` and UIView→bitmap snapshots cannot use iOS `ph://`
+ * or async expo-image surfaces — they need a real file path.
+ * Dummy assets use https picsum URLs, which Naver loads via httpUri.
+ */
+export async function resolveAssetFileUri(assetId: string): Promise<string | null> {
+  const hit = fileUriCache.get(assetId);
+  if (hit !== undefined) {
+    return hit;
+  }
+
+  if (isDummyAssetId(assetId)) {
+    const uri = dummyAssetImageUri(assetId);
+    fileUriCache.set(assetId, uri);
+    return uri;
+  }
+
+  try {
+    const info = await getAssetInfoAsync(assetId, { shouldDownloadFromNetwork: true });
+    const candidate = info.localUri ?? info.uri ?? null;
+    const uri =
+      candidate &&
+      (candidate.startsWith('file:') ||
+        candidate.startsWith('content:') ||
+        candidate.startsWith('/'))
+        ? candidate.startsWith('/')
+          ? `file://${candidate}`
+          : candidate
+        : null;
+    if (uri) {
+      fileUriCache.set(assetId, uri);
+    }
+    // Leave uncached on miss so iCloud download can succeed on retry.
+    return uri;
+  } catch (error) {
+    console.error('resolveAssetFileUri failed', assetId, error);
+    return null;
   }
 }

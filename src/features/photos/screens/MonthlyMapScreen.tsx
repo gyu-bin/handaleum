@@ -23,6 +23,7 @@ import { useMonthlyPhotos } from '../hooks/useMonthlyPhotos';
 import { usePhotoPermission } from '../hooks/usePhotoPermission';
 import { usePinCovers } from '../hooks/usePinCovers';
 import { clusterPhotos } from '../services/cluster';
+import { isDevDummyPhotosEnabled } from '../services/dummyPhotos';
 import type { MonthKey, PlaceCluster } from '../types';
 import { monthTimeBoundsIso } from '../utils/month';
 import { placeBucketKey } from '../utils/placeJourney';
@@ -50,7 +51,7 @@ export function MonthlyMapScreen() {
   const { seen: onboardingSeen } = useOnboarding();
   const { status, isReady } = usePhotoPermission();
   const hasLibraryAccess = status === 'granted' || status === 'limited';
-  const hasAccess = hasLibraryAccess;
+  const hasAccess = hasLibraryAccess || isDevDummyPhotosEnabled();
   const { month } = useCurrentMonth();
   const { themeId } = useMapTheme();
   const { covers, setCover } = usePinCovers(month);
@@ -141,43 +142,6 @@ export function MonthlyMapScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <View style={styles.body}>
         <View style={styles.header}>
-          <Pressable
-            onPress={() => router.push('/settings')}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel={strings.map.settings}
-            style={({ pressed }) => [
-              styles.cornerBtn,
-              styles.cornerLeft,
-              pressed && styles.cornerBtnPressed,
-            ]}
-          >
-            <Text style={styles.cornerLabel}>{strings.map.settings}</Text>
-          </Pressable>
-
-          {data.noLocationCount > 0 || data.homeExcludedCount > 0 ? (
-            <Pressable
-              onPress={() => setShowNotices((v) => !v)}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityState={{ expanded: showNotices }}
-              accessibilityLabel={strings.map.infoToggle}
-              style={({ pressed }) => [
-                styles.cornerBtn,
-                styles.cornerRight,
-                pressed && styles.cornerBtnPressed,
-              ]}
-            >
-              <View style={[styles.infoDot, showNotices && styles.infoDotActive]}>
-                <Text
-                  style={[styles.infoDotText, showNotices && styles.infoDotTextActive]}
-                >
-                  !
-                </Text>
-              </View>
-            </Pressable>
-          ) : null}
-
           <View style={styles.hero}>
             <Text style={styles.wordmark}>{strings.brand}</Text>
             <Text style={styles.tagline} numberOfLines={1}>
@@ -189,6 +153,46 @@ export function MonthlyMapScreen() {
                 : strings.map.monthMeta(monthLabel, clusters.length)}
               {journeyPlaces.length === 1 ? ` · ${journeyPlaces[0]}` : ''}
             </Text>
+          </View>
+
+          <View style={styles.headerActions}>
+            <Pressable
+              onPress={() => router.push('/settings')}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={strings.map.settings}
+              style={({ pressed }) => [
+                styles.actionBtn,
+                pressed && styles.actionBtnPressed,
+              ]}
+            >
+              <Text style={styles.actionLabel}>{strings.map.settings}</Text>
+            </Pressable>
+
+            {data.noLocationCount > 0 || data.homeExcludedCount > 0 ? (
+              <Pressable
+                onPress={() => setShowNotices((v) => !v)}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: showNotices }}
+                accessibilityLabel={strings.map.infoToggle}
+                style={({ pressed }) => [
+                  styles.actionBtn,
+                  pressed && styles.actionBtnPressed,
+                ]}
+              >
+                <View style={[styles.infoDot, showNotices && styles.infoDotActive]}>
+                  <Text
+                    style={[
+                      styles.infoDotText,
+                      showNotices && styles.infoDotTextActive,
+                    ]}
+                  >
+                    !
+                  </Text>
+                </View>
+              </Pressable>
+            ) : null}
           </View>
         </View>
 
@@ -280,38 +284,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
   },
   header: {
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: theme.spacing.sm,
     paddingTop: 2,
     paddingBottom: theme.spacing.sm,
-    minHeight: 56,
   },
-  cornerBtn: {
-    position: 'absolute',
-    top: 2,
-    zIndex: 2,
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingTop: 4,
+  },
+  actionBtn: {
     paddingVertical: 4,
-    paddingHorizontal: 2,
+    paddingHorizontal: 4,
   },
-  cornerLeft: {
-    left: 0,
-  },
-  cornerRight: {
-    right: 0,
-  },
-  cornerBtnPressed: {
+  actionBtnPressed: {
     opacity: 0.55,
   },
-  cornerLabel: {
+  actionLabel: {
     ...theme.type.micro,
     color: theme.colors.subtle,
     fontWeight: '600',
   },
   hero: {
-    alignItems: 'center',
+    flex: 1,
+    alignItems: 'flex-start',
     gap: 2,
-    paddingHorizontal: 56,
+    paddingRight: theme.spacing.sm,
   },
   wordmark: {
     fontFamily: theme.fonts.serif,
@@ -363,7 +365,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     paddingBottom: theme.spacing.sm,
   },
   noticeChipPressed: {

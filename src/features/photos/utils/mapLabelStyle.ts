@@ -12,17 +12,21 @@ export type ScreenLabelStyle = {
 };
 
 /**
- * Fixed on-screen sizes — labels ride MapCameraLayer outside the zoom transform,
- * so they must not depend on camera scale. Keep in sync with collideLabels.
+ * One on-screen size for every admin place name — hierarchy is color/opacity only.
+ * Labels ride outside the zoom transform, so this must not depend on camera scale.
+ * Keep in sync with collideLabels / ClusterPin place chips.
  */
+export const MAP_LABEL_SIZE = 11;
+
 export const SCREEN_LABEL_SIZE: Record<LabelTier, number> = {
-  0: 11,
-  1: 12,
-  2: 11,
-  3: 10,
+  0: MAP_LABEL_SIZE,
+  1: MAP_LABEL_SIZE,
+  2: MAP_LABEL_SIZE,
+  3: MAP_LABEL_SIZE,
 };
 
-export const PLACE_STAMP_SIZE = 11;
+/** Shared weight so bold vs regular don't read as different sizes. */
+const MAP_LABEL_WEIGHT: ScreenLabelStyle['weight'] = '500';
 
 /**
  * Approximate rendered label width in px. Hangul/CJK glyphs are ~full-width;
@@ -42,30 +46,31 @@ export function screenLabelStyle(
   detail: MapDetail,
   tier: LabelTier,
 ): ScreenLabelStyle {
-  const size = SCREEN_LABEL_SIZE[tier];
+  const size = MAP_LABEL_SIZE;
+  const weight = MAP_LABEL_WEIGHT;
   if (detail === 'overview') {
     const byTier: Record<LabelTier, ScreenLabelStyle> = {
-      0: { size, opacity: 0.35, weight: '500', color: palette.labelProvince },
-      1: { size, opacity: 0.55, weight: '600', color: palette.labelCity },
-      2: { size, opacity: 0.4, weight: '500', color: palette.labelProvince },
-      3: { size, opacity: 0.35, weight: '500', color: palette.labelMinor },
+      0: { size, weight, opacity: 0.55, color: palette.labelProvince },
+      1: { size, weight, opacity: 0.7, color: palette.labelCity },
+      2: { size, weight, opacity: 0.55, color: palette.labelProvince },
+      3: { size, weight, opacity: 0.5, color: palette.labelMinor },
     };
     return byTier[tier];
   }
   if (detail === 'region') {
     const byTier: Record<LabelTier, ScreenLabelStyle> = {
-      0: { size, opacity: 0.5, weight: '600', color: palette.labelProvince },
-      1: { size, opacity: 0.7, weight: '600', color: palette.labelCity },
-      2: { size, opacity: 0.58, weight: '500', color: palette.labelCity },
-      3: { size, opacity: 0.5, weight: '500', color: palette.labelMinor },
+      0: { size, weight, opacity: 0.55, color: palette.labelProvince },
+      1: { size, weight, opacity: 0.72, color: palette.labelCity },
+      2: { size, weight, opacity: 0.65, color: palette.labelCity },
+      3: { size, weight, opacity: 0.55, color: palette.labelMinor },
     };
     return byTier[tier];
   }
   const byTier: Record<LabelTier, ScreenLabelStyle> = {
-    0: { size, opacity: 0.35, weight: '500', color: palette.labelProvince },
-    1: { size, opacity: 0.7, weight: '600', color: palette.labelCity },
-    2: { size, opacity: 0.65, weight: '600', color: palette.labelCity },
-    3: { size, opacity: 0.58, weight: '500', color: palette.labelMinor },
+    0: { size, weight, opacity: 0.45, color: palette.labelProvince },
+    1: { size, weight, opacity: 0.7, color: palette.labelCity },
+    2: { size, weight, opacity: 0.65, color: palette.labelCity },
+    3: { size, weight, opacity: 0.6, color: palette.labelMinor },
   };
   return byTier[tier];
 }

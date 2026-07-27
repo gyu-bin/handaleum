@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
@@ -22,42 +24,89 @@ function clamp01(n: number): number {
   return Math.min(1, Math.max(0, n));
 }
 
+/** Keep the thumb fluid; don't re-cluster the map on every touch sample. */
+const EMIT_INTERVAL_MS = 80;
+
 /**
  * Single-thumb slider controlling the upper bound (`to`).
  * `from` stays at the month start (bounds.from).
  */
 export function TimeSlider({ bounds, value, onChange }: TimeSliderProps) {
-  const [trackWidth, setTrackWidth] = useState(1);
+  const [trackWidth, setTrackWidth] = useState(0);
   /** Live thumb position while dragging; null when the parent value governs. */
   const [dragRatio, setDragRatio] = useState<number | null>(null);
+
   const startMs = Date.parse(bounds.from);
   const endMs = Date.parse(bounds.to);
   const span = Math.max(1, endMs - startMs);
   const valueRatio = clamp01((Date.parse(value.to) - startMs) / span);
   const ratio = dragRatio ?? valueRatio;
 
-  const ratioFromX = (locationX: number) => clamp01(locationX / trackWidth);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const boundsFromRef = useRef(bounds.from);
+  boundsFromRef.current = bounds.from;
+  const startMsRef = useRef(startMs);
+  startMsRef.current = startMs;
+  const spanRef = useRef(span);
+  spanRef.current = span;
+  const trackWidthRef = useRef(trackWidth);
+  trackWidthRef.current = trackWidth;
+  const lastEmitAtRef = useRef(0);
 
-  const emit = (nextRatio: number) => {
-    onChange({
-      from: bounds.from,
-      to: new Date(startMs + nextRatio * span).toISOString(),
+  const emit = (nextRatio: number, force: boolean) => {
+    const now = performance.now();
+    if (!force && now - lastEmitAtRef.current < EMIT_INTERVAL_MS) {
+      return;
+    }
+    lastEmitAtRef.current = now;
+    onChangeRef.current({
+      from: boundsFromRef.current,
+      to: new Date(startMsRef.current + nextRatio * spanRef.current).toISOString(),
     });
   };
 
-  /** Drag: keep the thumb on local state so it never lags the parent render. */
-  const drag = (locationX: number) => {
-    const next = ratioFromX(locationX);
+  const setFromX = (x: number, forceEmit: boolean) => {
+    const width = trackWidthRef.current;
+    if (width <= 0) {
+      return;
+    }
+    const next = clamp01(x / width);
     setDragRatio(next);
-    emit(next);
+    emit(next, forceEmit);
   };
 
-  const release = (locationX: number) => {
-    emit(ratioFromX(locationX));
+  const endDrag = (x: number) => {
+    setFromX(x, true);
     setDragRatio(null);
   };
 
-  // Follows the thumb, not the parent value, so it can't lag mid-drag.
+  const cancelDrag = () => {
+    setDragRatio(null);
+  };
+
+  const pan = useMemo(
+    () =>
+      Gesture.Pan()
+        .minDistance(0)
+        .hitSlop({ top: 16, bottom: 16 })
+        .onBegin((e) => {
+          runOnJS(setFromX)(e.x, false);
+        })
+        .onUpdate((e) => {
+          runOnJS(setFromX)(e.x, false);
+        })
+        .onEnd((e) => {
+          runOnJS(endDrag)(e.x);
+        })
+        .onFinalize((_e, success) => {
+          if (!success) {
+            runOnJS(cancelDrag)();
+          }
+        }),
+    [],
+  );
+
   const label = new Date(startMs + ratio * span).toLocaleString('ko-KR', {
     month: 'short',
     day: 'numeric',
@@ -71,26 +120,21 @@ export function TimeSlider({ bounds, value, onChange }: TimeSliderProps) {
         <Text style={styles.label}>{strings.map.timeFilter}</Text>
         <Text style={styles.labelValue}>{label}</Text>
       </View>
-      <View
-        style={styles.track}
-        onLayout={(e) => {
-          setTrackWidth(Math.max(1, e.nativeEvent.layout.width));
-        }}
-        onStartShouldSetResponder={() => true}
-        onMoveShouldSetResponder={() => true}
-        // Keep the gesture once it starts — the map's pan/pinch sits behind.
-        onResponderTerminationRequest={() => false}
-        onResponderGrant={(e) => drag(e.nativeEvent.locationX)}
-        onResponderMove={(e) => drag(e.nativeEvent.locationX)}
-        onResponderRelease={(e) => release(e.nativeEvent.locationX)}
-        onResponderTerminate={() => setDragRatio(null)}
-      >
-        {/* pointerEvents none keeps the track itself the touch target, so
-            locationX stays track-relative instead of flipping to a child. */}
-        <View style={styles.trackBg} pointerEvents="none" />
-        <View style={[styles.fill, { width: `${ratio * 100}%` }]} pointerEvents="none" />
-        <View style={[styles.thumb, { left: `${ratio * 100}%` }]} pointerEvents="none" />
-      </View>
+      <GestureDetector gesture={pan}>
+        <View
+          style={styles.track}
+          onLayout={(e) => {
+            setTrackWidth(Math.max(0, e.nativeEvent.layout.width));
+          }}
+          accessibilityRole="adjustable"
+          accessibilityLabel={strings.map.timeFilter}
+          accessibilityValue={{ text: label }}
+        >
+          <View style={styles.trackBg} pointerEvents="none" />
+          <View style={[styles.fill, { width: `${ratio * 100}%` }]} pointerEvents="none" />
+          <View style={[styles.thumb, { left: `${ratio * 100}%` }]} pointerEvents="none" />
+        </View>
+      </GestureDetector>
     </View>
   );
 }
@@ -116,7 +160,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   track: {
-    height: 28,
+    height: 36,
     justifyContent: 'center',
   },
   trackBg: {
@@ -136,14 +180,14 @@ const styles = StyleSheet.create({
   },
   thumb: {
     position: 'absolute',
-    marginLeft: -10,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    marginLeft: -11,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: theme.colors.surface,
     borderWidth: 2,
     borderColor: theme.colors.accent,
-    top: 4,
+    top: 7,
     ...theme.shadows.card,
   },
 });

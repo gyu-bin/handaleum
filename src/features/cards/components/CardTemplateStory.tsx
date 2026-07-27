@@ -4,9 +4,12 @@ import { StyleSheet, Text, View } from 'react-native';
 import { theme } from '@/shared/constants/theme';
 
 import { PaperMap } from '../../photos/components/PaperMap';
-import { resolveCardRegionLabel } from '../../photos/utils/placeJourney';
+import {
+  resolveCardPinPlaces,
+  type CardPinPlace,
+} from '../../photos/utils/placeJourney';
 import type { RecapCardDraft } from '../types';
-import { cardCentroid, cardCoordinate, formatMonthDot } from '../utils/cardMeta';
+import { cardCoordinate, formatMonthDot } from '../utils/cardMeta';
 import { CardCollage } from './CardCollage';
 
 /** Design width the fixed sizes below are authored against. */
@@ -24,7 +27,7 @@ const MAP_HEIGHT_RATIO = 0.26;
 export function CardTemplateStory({ card, width = BASE_WIDTH }: CardTemplateStoryProps) {
   const s = width / BASE_WIDTH;
   const styles = useMemo(() => makeStyles(width), [width]);
-  const [region, setRegion] = useState<string | null>(null);
+  const [places, setPlaces] = useState<CardPinPlace[]>([]);
   // The collage fills the leftover vertical space (measured) so the card has no
   // dead space under the footer and the photos stay as large as the frame allows.
   const [heroBox, setHeroBox] = useState<{ w: number; h: number } | null>(null);
@@ -33,15 +36,10 @@ export function CardTemplateStory({ card, width = BASE_WIDTH }: CardTemplateStor
     .join('|');
 
   useEffect(() => {
-    const center = cardCentroid(card.photoRefs);
-    if (!center) {
-      setRegion(null);
-      return;
-    }
     let cancelled = false;
-    void resolveCardRegionLabel(center.lat, center.lng).then((label) => {
+    void resolveCardPinPlaces(card.photoRefs).then((next) => {
       if (!cancelled) {
-        setRegion(label);
+        setPlaces(next);
       }
     });
     return () => {
@@ -70,11 +68,6 @@ export function CardTemplateStory({ card, width = BASE_WIDTH }: CardTemplateStor
         <View style={styles.header}>
           <Text style={styles.brand}>한달음</Text>
           <View style={styles.metaCol}>
-            {region ? (
-              <Text style={styles.region} numberOfLines={1}>
-                {region}
-              </Text>
-            ) : null}
             {coord ? <Text style={styles.coord}>{coord}</Text> : null}
           </View>
         </View>
@@ -101,7 +94,12 @@ export function CardTemplateStory({ card, width = BASE_WIDTH }: CardTemplateStor
         </View>
 
         <View style={styles.mapWrap}>
-          <PaperMap pins={pins} width={mapW} height={mapW * MAP_HEIGHT_RATIO} />
+          <PaperMap
+            pins={pins}
+            width={mapW}
+            height={mapW * MAP_HEIGHT_RATIO}
+            places={places}
+          />
         </View>
 
         <View style={styles.titleBlock}>
@@ -166,12 +164,6 @@ function makeStyles(width: number) {
       alignItems: 'flex-end',
       gap: 1 * s,
       maxWidth: width * 0.58,
-    },
-    region: {
-      color: theme.colors.subtle,
-      fontSize: 8 * s,
-      fontWeight: '600',
-      letterSpacing: 0.2 * s,
     },
     coord: {
       color: theme.colors.subtle,

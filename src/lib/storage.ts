@@ -113,3 +113,17 @@ export function setIsProRaw(value: boolean): void {
     storage.remove(IS_PRO_KEY);
   }
 }
+
+const DEV_DUMMY_PHOTOS_KEY = 'devDummyPhotos';
+
+/**
+ * Dev-only sample photos. Absent in __DEV__ ⇒ on (simulator-friendly).
+ * Explicit "0" turns it off. Production always reads as off via the helper.
+ */
+export function getDevDummyPhotosRaw(): string | null {
+  return storage.getString(DEV_DUMMY_PHOTOS_KEY) ?? null;
+}
+
+export function setDevDummyPhotosRaw(enabled: boolean): void {
+  storage.set(DEV_DUMMY_PHOTOS_KEY, enabled ? '1' : '0');
+}

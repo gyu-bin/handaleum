@@ -56,13 +56,13 @@
 
 - Expo + RN + TypeScript (strict)
 - 저장: expo-sqlite/kv-store (2026-07-18 변경. 원래 MMKV — Expo Go 실기기 워크플로우를 위해 교체)
-- 지도: **SVG 자체 렌더 (종이지도 인포그래픽)** — react-native-svg + react-native-zoom-toolkit.
-  MapLibre / Mapbox / react-native-maps 미사용 (2026-07-18 확정. 오프라인·카드 캡처·스타일 통제)
-- 지도 스타일: **종이 팔레트 3종** (dawn / ink / warm). SVG 종이지도 유지 (2026-07-18 Discovery 2-A)
+- 지도: **홈 = 네이버 Dynamic Map** (`@mj-studio/react-native-naver-map`). 카드·스플래시는 SVG 종이지도.
+  Client ID는 app.json 플러그인에 설정. **development build 필수**(Expo Go 불가).
+- 지도 스타일: 네이버 Basic + locale ko
 - 사진 접근: expo-media-library
 - 카드 캡처: react-native-view-shot 우선, 품질 미달 시 @shopify/react-native-skia
-- 플랫폼: iOS + Android 동시 (Android 독립 빌드 시 Google Maps API 키 필요 — 지도 엔진 미사용으로 사실상 불필요)
-- 실행: Expo Go (dev build 불필요)
+- 플랫폼: iOS + Android 동시
+- 실행: **Expo dev client** (`npx expo run:ios` / `run:android`)
 - SDK: **Expo SDK 54 고정** (2026-07-18. App Store의 Expo Go가 애플 심사 문제로 SDK 54에 묶여 있음.
   SDK 55+는 실기기 Expo Go 실행에 유료 Apple Developer + eas go 필요. App Store Expo Go가
   최신 SDK를 지원하게 되면 업그레이드 재검토)
@@ -87,7 +87,7 @@
 - [ ] EXIF GPS 없는 사진은 지도에서 제외하되, "위치 없는 사진 N장" 카운트 표시
 - [ ] 카드 이미지 내보내기: 피드 1080×1350, 스토리 1080×1920, 3초 이내 생성
 - [ ] 내보낸 카드에서 텍스트가 깨지거나 흐릿하지 않음 (@2x 이상 렌더)
-- [ ] 오프라인에서 회고카드 열람 가능 (SVG 지도라 타일 불필요)
+- [ ] 오프라인에서 회고카드 열람 가능 (카드 SVG는 타일 불필요. 홈 타일 맵은 온라인 권장)
 - [ ] Android 뒤로가기 정상 동작
 
 ## 7. 범위 제외 ★
@@ -102,9 +102,9 @@
 - 다국어 (문자열 상수 분리만 해둠)
 - 위젯, 알림
 - 해외 사진의 지도 표시 (카운트만 — 추후)
-- 도로·강·POI·구/군 라벨
-- 진짜 지도 엔진(MapLibre/Mapbox/react-native-maps) · 지도 타일 fetch
-- 여행 일러스트(노란 땅·파란 바다) 스타일 — 새벽 블루 종이지도로 확정 (2026-07-18)
+- MapLibre / 커스텀 타일셋 (보류)
+- Expo Go로 홈 맵 실행
+- 홈 맵의 종이 일러스트 전면 교체 (카드·스플래시 SVG만 유지)
 
 ## 8. 미결정
 

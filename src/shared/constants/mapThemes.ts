@@ -3,9 +3,12 @@ import type { MapThemeId } from '@/features/photos/types';
 /**
  * Paper-map color palette. MapSvg / MapCanvas frame colors must come from here.
  *
- * `dawn` is the only palette, and that is the design: the dawn paper map is
- * what the app looks like, not something the user configures. The keyed shape
- * is kept so a future theme pack can add entries without a rewrite.
+ * Tuned toward the Figma survey-map mock: warm parchment land, soft sky-water,
+ * charcoal ink borders, muted mountain/pine accents. Zoom stays SVG — tone
+ * only, not a raster swap of the illustrated Seoul canvas.
+ *
+ * `dawn` is the only palette. The keyed shape is kept so a future theme pack
+ * can add entries without a rewrite.
  */
 export type MapPalette = {
   id: MapThemeId;
@@ -14,6 +17,8 @@ export type MapPalette = {
   swatch: string;
   water: string;
   land: string;
+  /** Slightly deeper land wash for drop-shadow / relief. */
+  landDeep: string;
   landShadow: string;
   border: string;
   provinceStroke: string;
@@ -21,6 +26,14 @@ export type MapPalette = {
   labelProvince: string;
   labelCity: string;
   labelMinor: string;
+  /** Sketch mountain strokes (Figma gray peaks). */
+  mountain: string;
+  /** Sketch pine strokes (Figma muted green). */
+  pine: string;
+  /** Survey teardrop pin (Figma Map Home). */
+  pin: string;
+  /** Cream chip under a visit pin. */
+  pinChipBg: string;
   frameBg: string;
   frameBorder: string;
 };
@@ -30,18 +43,24 @@ export const MAP_THEMES: Record<MapThemeId, MapPalette> = {
     id: 'dawn',
     label: '새벽',
     swatch: '#3A5A78',
-    // Soft dawn sea — clear enough to read as water against cream land.
-    water: '#A9D0EA',
-    land: '#F6F0E6',
-    landShadow: 'rgba(44,62,80,0.07)',
-    border: '#C9D4DE',
-    provinceStroke: '#4A5F72',
-    cityStroke: '#C9D4DE',
+    // Soft sky-sea against warm hanji land (Figma survey map).
+    water: '#BFD7E8',
+    land: '#F5EBD6',
+    landDeep: '#E9DFC8',
+    landShadow: 'rgba(55,48,40,0.12)',
+    border: '#C5D0DA',
+    // Charcoal ink — readable district lines like the mock.
+    provinceStroke: '#3A3F46',
+    cityStroke: '#5C6570',
     labelProvince: '#5A6B7A',
     labelCity: '#2C3E50',
     labelMinor: '#5A6B7A',
-    frameBg: '#A9D0EA',
-    frameBorder: '#C9D4DE',
+    mountain: '#6B6E72',
+    pine: '#6B7A5E',
+    pin: '#1A1F26',
+    pinChipBg: '#F6F0E4',
+    frameBg: '#BFD7E8',
+    frameBorder: '#C5D0DA',
   },
 };
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -16,6 +16,8 @@ import { collageRects, type CollageRect } from '../utils/collageLayout';
 
 const GUTTER = 6;
 const RADIUS = 6;
+/** Long enough that a normal tap/scroll won't steal the swap gesture. */
+const LONG_PRESS_MS = 220;
 
 function useUri(assetId: string): string | null {
   const [uri, setUri] = useState<string | null>(null);
@@ -40,6 +42,7 @@ function EditableCell({
   dragIndex,
   dx,
   dy,
+  onDragActive,
   onDrop,
 }: {
   assetId: string;
@@ -48,25 +51,36 @@ function EditableCell({
   dragIndex: SharedValue<number>;
   dx: SharedValue<number>;
   dy: SharedValue<number>;
+  onDragActive: (active: boolean) => void;
   onDrop: (index: number, tx: number, ty: number) => void;
 }) {
   const uri = useUri(assetId);
 
-  const pan = Gesture.Pan()
-    .activateAfterLongPress(140)
-    .onStart(() => {
-      dragIndex.value = index;
-    })
-    .onUpdate((e) => {
-      dx.value = e.translationX;
-      dy.value = e.translationY;
-    })
-    .onEnd((e) => {
-      runOnJS(onDrop)(index, e.translationX, e.translationY);
-      dragIndex.value = -1;
-      dx.value = 0;
-      dy.value = 0;
-    });
+  // Slot-stable gesture: index is the collage cell, not the photo identity.
+  const pan = useMemo(
+    () =>
+      Gesture.Pan()
+        .activateAfterLongPress(LONG_PRESS_MS)
+        .maxPointers(1)
+        .onStart(() => {
+          dragIndex.value = index;
+          runOnJS(onDragActive)(true);
+        })
+        .onUpdate((e) => {
+          dx.value = e.translationX;
+          dy.value = e.translationY;
+        })
+        .onFinalize((e) => {
+          if (dragIndex.value === index) {
+            runOnJS(onDrop)(index, e.translationX, e.translationY);
+          }
+          dragIndex.value = -1;
+          dx.value = 0;
+          dy.value = 0;
+          runOnJS(onDragActive)(false);
+        }),
+    [dragIndex, dx, dy, index, onDragActive, onDrop],
+  );
 
   const style = useAnimatedStyle(() => {
     const active = dragIndex.value === index;
@@ -85,7 +99,13 @@ function EditableCell({
       <Animated.View
         style={[
           styles.cell,
-          { left: rect.x, top: rect.y, width: rect.w, height: rect.h, borderRadius: RADIUS },
+          {
+            left: rect.x,
+            top: rect.y,
+            width: rect.w,
+            height: rect.h,
+            borderRadius: RADIUS,
+          },
           style,
         ]}
       >
@@ -106,18 +126,35 @@ export interface CollageEditorProps {
   size: number;
   /** Swap two positions (updates the parent's order). */
   onSwap: (a: number, b: number) => void;
+  /** Parent locks its scroll while a cell is being dragged. */
+  onDraggingChange?: (dragging: boolean) => void;
 }
 
 /**
  * Interactive 인생네컷 collage: long-press then drag a photo onto another cell to
  * swap their positions. The order it produces is what CardTemplateStory renders.
  */
-export function CollageEditor({ assetIds, size, onSwap }: CollageEditorProps) {
+export function CollageEditor({
+  assetIds,
+  size,
+  onSwap,
+  onDraggingChange,
+}: CollageEditorProps) {
   const shown = assetIds.slice(0, 4);
-  const rects = collageRects(shown.length, size, size, GUTTER);
+  const rects = useMemo(
+    () => collageRects(shown.length, size, size, GUTTER),
+    [shown.length, size],
+  );
   const dragIndex = useSharedValue(-1);
   const dx = useSharedValue(0);
   const dy = useSharedValue(0);
+
+  const onDragActive = useCallback(
+    (active: boolean) => {
+      onDraggingChange?.(active);
+    },
+    [onDraggingChange],
+  );
 
   const handleDrop = useCallback(
     (index: number, tx: number, ty: number) => {
@@ -138,16 +175,19 @@ export function CollageEditor({ assetIds, size, onSwap }: CollageEditorProps) {
   );
 
   return (
-    <View style={{ width: size, height: size }}>
+    <View style={{ width: size, height: size }} collapsable={false}>
       {shown.map((id, i) => (
         <EditableCell
-          key={id}
+          // Slot key: keep the cell mounted when photos swap so the gesture
+          // and layout stay stable (keying by assetId remounted mid-drag).
+          key={`slot-${i}`}
           assetId={id}
           index={i}
           rect={rects[i]!}
           dragIndex={dragIndex}
           dx={dx}
           dy={dy}
+          onDragActive={onDragActive}
           onDrop={handleDrop}
         />
       ))}

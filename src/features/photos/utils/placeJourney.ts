@@ -187,7 +187,8 @@ export async function resolveClusterGuLabel(
     return null;
   }
   const parsed = await reverseParsed(lat, lng);
-  return parsed?.gu ?? null;
+  // Figma Map Home chips: 구 preferred, else 시 (e.g. 성남시).
+  return parsed?.gu ?? parsed?.city ?? null;
 }
 
 async function reverseParsed(lat: number, lng: number): Promise<ParsedPlace | null> {
@@ -247,6 +248,57 @@ export async function resolveCardRegionLabel(
   return city ?? province ?? parsed.journeyLabel ?? null;
 }
 
+export type CardPinPlace = { label: string; lat: number; lng: number };
+
+/**
+ * Per-place chips for the card map: one entry per distinct 구/시 across the
+ * photo set, anchored at the centroid of that place's own photos.
+ * Label grain: 구 when known (마포구), otherwise 시 (성남시).
+ * Requests location permission if needed (user-initiated card flow).
+ */
+export async function resolveCardPinPlaces(
+  photos: PhotoRef[],
+): Promise<CardPinPlace[]> {
+  if (photos.length === 0) {
+    return [];
+  }
+  const permission = await Location.getForegroundPermissionsAsync();
+  if (permission.status !== 'granted') {
+    const requested = await Location.requestForegroundPermissionsAsync();
+    if (requested.status !== 'granted') {
+      return [];
+    }
+  }
+
+  const bucketLabel = new Map<string, string | null>();
+  const groups = new Map<string, { latSum: number; lngSum: number; n: number }>();
+  for (const photo of photos) {
+    const key = placeBucketKey(photo.lat, photo.lng);
+    if (!bucketLabel.has(key)) {
+      const parsed = await reverseParsed(photo.lat, photo.lng);
+      bucketLabel.set(
+        key,
+        parsed ? (parsed.gu ?? parsed.city ?? parsed.province) : null,
+      );
+    }
+    const label = bucketLabel.get(key);
+    if (!label) {
+      continue;
+    }
+    const group = groups.get(label) ?? { latSum: 0, lngSum: 0, n: 0 };
+    group.latSum += photo.lat;
+    group.lngSum += photo.lng;
+    group.n += 1;
+    groups.set(label, group);
+  }
+
+  return [...groups.entries()].map(([label, group]) => ({
+    label,
+    lat: group.latSum / group.n,
+    lng: group.lngSum / group.n,
+  }));
+}
+
 function collectBuckets(photos: PhotoRef[]): Bucket[] {
   const map = new Map<string, Bucket>();
   for (const photo of photos) {
@@ -286,6 +338,66 @@ export async function placesVisitedAlbumStyle(
     labels.push(place.label);
   }
   return labels;
+}
+
+export type PlacePhotoSection = {
+  title: string;
+  data: PhotoRef[];
+};
+
+/**
+ * Group month photos under journey-style place headers for the card picker.
+ * Section order = first visit; photos within a section = newest first.
+ */
+export async function groupPhotosByJourneyPlace(
+  photos: PhotoRef[],
+  unknownLabel: string,
+): Promise<PlacePhotoSection[]> {
+  if (photos.length === 0) {
+    return [];
+  }
+
+  const permission = await Location.getForegroundPermissionsAsync();
+  if (permission.status !== 'granted') {
+    const requested = await Location.requestForegroundPermissionsAsync();
+    if (requested.status !== 'granted') {
+      return [
+        {
+          title: unknownLabel,
+          data: [...photos].sort((a, b) => b.takenAt.localeCompare(a.takenAt)),
+        },
+      ];
+    }
+  }
+
+  const bucketLabel = new Map<string, string>();
+  type Acc = { title: string; photos: PhotoRef[]; firstTakenAt: string };
+  const groups = new Map<string, Acc>();
+
+  for (const photo of photos) {
+    const key = placeBucketKey(photo.lat, photo.lng);
+    if (!bucketLabel.has(key)) {
+      const parsed = await reverseParsed(photo.lat, photo.lng);
+      bucketLabel.set(key, parsed?.journeyLabel ?? unknownLabel);
+    }
+    const title = bucketLabel.get(key)!;
+    let acc = groups.get(title);
+    if (!acc) {
+      acc = { title, photos: [], firstTakenAt: photo.takenAt };
+      groups.set(title, acc);
+    }
+    acc.photos.push(photo);
+    if (photo.takenAt < acc.firstTakenAt) {
+      acc.firstTakenAt = photo.takenAt;
+    }
+  }
+
+  return [...groups.values()]
+    .sort((a, b) => a.firstTakenAt.localeCompare(b.firstTakenAt))
+    .map((group) => ({
+      title: group.title,
+      data: [...group.photos].sort((a, b) => b.takenAt.localeCompare(a.takenAt)),
+    }));
 }
 
 /**

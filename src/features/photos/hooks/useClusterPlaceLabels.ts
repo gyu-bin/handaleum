@@ -11,8 +11,8 @@ export interface ClusterPlaceLabel {
 }
 
 /**
- * Reverse-geocode cluster centers for on-map 구 stamps when zoomed in.
- * One stamp per 구 (deduped). Cities without a 구 stay silent — 시 labels cover them.
+ * Reverse-geocode cluster centers for cream chips under visit pins.
+ * One chip per 구 (deduped). Enabled from region zoom up (Figma Map Home).
  */
 export function useClusterPlaceLabels(
   clusters: PlaceCluster[],

@@ -6,6 +6,10 @@ import { theme } from '@/shared/constants/theme';
 
 import { PaperMap } from '../../photos/components/PaperMap';
 import { resolveAssetUri } from '../../photos/services/mediaLibrary';
+import {
+  resolveCardPinPlaces,
+  type CardPinPlace,
+} from '../../photos/utils/placeJourney';
 import type { RecapCardDraft } from '../types';
 import { cardCoordinate, formatMonthDot } from '../utils/cardMeta';
 
@@ -25,6 +29,10 @@ export function CardTemplateFeed({ card, width = BASE_WIDTH }: CardTemplateFeedP
   const photos = card.photoRefs.slice(0, 3);
   const photoIds = photos.map((p) => p.assetId).join('|');
   const [uris, setUris] = useState<(string | null)[]>([]);
+  const [places, setPlaces] = useState<CardPinPlace[]>([]);
+  const pinsKey = card.photoRefs
+    .map((p) => `${p.assetId}:${p.lat.toFixed(3)},${p.lng.toFixed(3)}`)
+    .join('|');
 
   useEffect(() => {
     let cancelled = false;
@@ -38,6 +46,19 @@ export function CardTemplateFeed({ card, width = BASE_WIDTH }: CardTemplateFeedP
       cancelled = true;
     };
   }, [photoIds]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void resolveCardPinPlaces(card.photoRefs).then((next) => {
+      if (!cancelled) {
+        setPlaces(next);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pinsKey captures photo set
+  }, [pinsKey]);
 
   const pins = useMemo(
     () =>
@@ -63,7 +84,7 @@ export function CardTemplateFeed({ card, width = BASE_WIDTH }: CardTemplateFeedP
         <View style={styles.rule} />
 
         <View style={styles.mapWrap}>
-          <PaperMap pins={pins} width={mapW} height={mapW * 0.62} />
+          <PaperMap pins={pins} width={mapW} height={mapW * 0.62} places={places} />
         </View>
 
         <View style={styles.strip}>

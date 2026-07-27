@@ -20,13 +20,11 @@ export interface MapCamera {
  * applies a view's transform about its CENTER (transformOrigin defaults to
  * 50% 50%). That built-in centering already yields
  *   screen = center + translate + scale * (base - center)
- * for an absolute-fill layer. An earlier version re-centered by hand with an
- * extra translate(±center) pair, which double-counted the origin and pushed
- * every marker off by center*(1 - scale) — pins drifted to the top-left corner
- * as the camera zoomed in. Let RN do the centering; do not add it back.
+ * for an absolute-fill layer.
  *
- * Children sit at projected base coordinates (left/top). Wrap markers in a
+ * Children sit at projected base coordinates (left/top). Wrap photo pins in a
  * shared inverse-scale Animated style (see MapCanvas) so they stay screen-sized.
+ * Prefer {@link MapScreenAnchor} for Text — inverse-scale blurs glyphs.
  */
 export function MapCameraLayer({
   camera,
@@ -49,6 +47,46 @@ export function MapCameraLayer({
       collapsable={false}
       style={[StyleSheet.absoluteFill, style]}
     >
+      {children}
+    </Animated.View>
+  );
+}
+
+/**
+ * Places a child at the screen projection of a base map point WITHOUT scaling
+ * the child. Text stays crisp at every zoom.
+ */
+export function MapScreenAnchor({
+  camera,
+  baseX,
+  baseY,
+  viewportW,
+  viewportH,
+  children,
+}: {
+  camera: MapCamera;
+  baseX: number;
+  baseY: number;
+  viewportW: number;
+  viewportH: number;
+  children: ReactNode;
+}) {
+  const style = useAnimatedStyle(() => {
+    const cx = viewportW / 2;
+    const cy = viewportH / 2;
+    const s = camera.scale.value;
+    // Integer pixels — fractional left/top makes Text AA shimmer every frame.
+    const x = Math.round(cx + camera.translateX.value + s * (baseX - cx));
+    const y = Math.round(cy + camera.translateY.value + s * (baseY - cy));
+    return {
+      position: 'absolute' as const,
+      left: x,
+      top: y,
+    };
+  });
+
+  return (
+    <Animated.View pointerEvents="none" collapsable={false} style={style}>
       {children}
     </Animated.View>
   );

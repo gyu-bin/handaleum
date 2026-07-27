@@ -29,6 +29,12 @@ const MIN_PIN_SPAN_LAT = 0.085;
 /** Extra margin around the pin cluster — keep tight so the card map feels zoomed in. */
 const PIN_PAD_RATIO = 0.22;
 
+/** Place-chip metrics (SVG units — PaperMap renders at point scale). */
+const CHIP_FONT = 7;
+const CHIP_PAD_X = 4;
+const CHIP_PAD_Y = 2.5;
+const CHIP_GAP = 7;
+
 export interface PaperMapPin {
   id: string;
   lat: number;
@@ -36,10 +42,18 @@ export interface PaperMapPin {
   highlight?: boolean;
 }
 
+export interface PaperMapPlace {
+  label: string;
+  lat: number;
+  lng: number;
+}
+
 export interface PaperMapProps {
   pins: PaperMapPin[];
   width: number;
   height: number;
+  /** Per-place name chips rendered next to their anchor point (구/시 grain). */
+  places?: PaperMapPlace[];
 }
 
 type ProvinceFeature = PackedGeometry & { id: string };
@@ -48,7 +62,7 @@ type MuniFeature = PackedGeometry & { id: string };
 /**
  * Static paper Korea map for card templates (no zoom, no footpath).
  */
-export function PaperMap({ pins, width, height }: PaperMapProps) {
+export function PaperMap({ pins, width, height, places }: PaperMapProps) {
   const southKorea = koreaGeo.korea as unknown as PackedGeometry;
   const provinces = provincesGeo.provinces as unknown as ProvinceFeature[];
   const municipalities =
@@ -125,16 +139,55 @@ export function PaperMap({ pins, width, height }: PaperMapProps) {
     }));
   }, [municipalities, projection]);
 
+  const placeChips = useMemo(() => {
+    if (!projection || !places || places.length === 0) {
+      return [];
+    }
+    const chipH = CHIP_FONT + CHIP_PAD_Y * 2;
+    const placed: { x: number; y: number; w: number; h: number }[] = [];
+    const chips: {
+      label: string;
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+    }[] = [];
+    for (const place of places) {
+      const [px, py] = projection.project([place.lng, place.lat]);
+      // Korean glyphs are roughly square at this weight.
+      const w = place.label.length * CHIP_FONT + CHIP_PAD_X * 2;
+      let x = px + CHIP_GAP;
+      if (x + w > width - 2) {
+        x = px - CHIP_GAP - w; // flip to the left near the right edge
+      }
+      x = Math.min(Math.max(x, 2), width - w - 2);
+      const y = Math.min(Math.max(py - chipH / 2, 2), height - chipH - 2);
+      const box = { x, y, w, h: chipH };
+      if (placed.some((b) => boxesOverlap(b, box))) {
+        continue; // greedy: first chip wins, overlapping ones are dropped
+      }
+      placed.push(box);
+      chips.push({ label: place.label, ...box });
+    }
+    return chips;
+  }, [places, projection, width, height]);
+
   const cityLabels = useMemo(() => {
     if (!projection) {
       return [];
     }
     const near = pins.map((p) => ({ lng: p.lng, lat: p.lat }));
-    return KOREA_CITIES.filter((city) => isCityNearPins(city, near)).map((city) => {
-      const [x, y] = projection.project(city.c);
-      return { name: city.name, x: x + 4, y, tier: city.tier };
-    });
-  }, [pins, projection]);
+    const chipNames = new Set(placeChips.map((chip) => chip.label));
+    return KOREA_CITIES.filter((city) => isCityNearPins(city, near))
+      .filter(
+        // A hub label duplicating a chip (성남 vs 성남시) reads as noise.
+        (city) => ![...chipNames].some((name) => name.startsWith(city.name)),
+      )
+      .map((city) => {
+        const [x, y] = projection.project(city.c);
+        return { name: city.name, x: x + 4, y, tier: city.tier };
+      });
+  }, [pins, projection, placeChips]);
 
   const pinPoints = useMemo(() => {
     if (!projection) {
@@ -223,9 +276,41 @@ export function PaperMap({ pins, width, height }: PaperMapProps) {
             <Circle cx={pin.x} cy={pin.y} r={3.2} fill={theme.colors.landDeep} />
           </G>
         ))}
+
+        {placeChips.map((chip) => (
+          <G key={chip.label}>
+            <Rect
+              x={chip.x}
+              y={chip.y}
+              width={chip.w}
+              height={chip.h}
+              rx={3}
+              fill={theme.colors.labelBg}
+              stroke={theme.colors.border}
+              strokeWidth={0.5}
+            />
+            <SvgText
+              x={chip.x + chip.w / 2}
+              y={chip.y + chip.h / 2 + CHIP_FONT * 0.36}
+              fontSize={CHIP_FONT}
+              fontWeight="700"
+              fill={theme.colors.ink}
+              textAnchor="middle"
+            >
+              {chip.label}
+            </SvgText>
+          </G>
+        ))}
       </Svg>
     </View>
   );
+}
+
+function boxesOverlap(
+  a: { x: number; y: number; w: number; h: number },
+  b: { x: number; y: number; w: number; h: number },
+): boolean {
+  return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 }
 
 const styles = StyleSheet.create({

@@ -155,6 +155,14 @@ export const strings = {
     proRestore: '구매 복원',
     proToggleOn: '프로 켜기',
     proToggleOff: '프로 끄기',
+    /** __DEV__ only — Seoul/Gyeonggi sample pins instead of the camera roll. */
+    devDummySection: '개발용 샘플',
+    devDummyDescription: (count: number) =>
+      `서울·경기 ${count}장 샘플로 지도·카드를 확인합니다. 끄면 실제 앨범을 씁니다.`,
+    devDummyOn: '샘플 데이터 사용 중',
+    devDummyOff: '실제 앨범 사용 중',
+    devDummyEnable: '샘플 켜기',
+    devDummyDisable: '샘플 끄기',
     proPaywall: {
       title: '한달음 프로',
       subtitle: '지도를 더 멀리, 기록을 더 깊게',
@@ -203,8 +211,11 @@ export const strings = {
     commentPlaceholder: '한 달을 한마디로',
     templateLabel: '템플릿',
     photoLabel: '사진 선택',
+    sortNewest: '최신순',
+    sortByPlace: '위치별',
+    placeUnknown: '위치 미확인',
     arrangeLabel: '배치',
-    arrangeHint: '드래그로 위치 바꾸기',
+    arrangeHint: '길게 눌러 드래그해 위치 바꾸기',
     templateFeed: '피드 4:5',
     templateStory: '스토리 9:16',
     shareFormatLabel: '공유 형식',

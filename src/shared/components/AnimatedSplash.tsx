@@ -2,7 +2,9 @@ import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
+  Extrapolation,
   ReduceMotion,
+  interpolate,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
@@ -10,6 +12,7 @@ import Animated, {
   withTiming,
   type EasingFunction,
   type EasingFunctionFactory,
+  type SharedValue,
 } from 'react-native-reanimated';
 
 import { KOREA_SILHOUETTE } from '@/shared/constants/brandMark';
@@ -21,70 +24,74 @@ import { BrandMark, PinGlyph } from './BrandMark';
 export interface AnimatedSplashProps {
   /** Called once the splash has played and faded out. */
   onFinish: () => void;
+  /** Fired after the first frame is painted — hide the native splash then. */
+  onReady?: () => void;
 }
 
 const MAP_H = 232;
-const PIN_H = 30;
+const PIN_H = 28;
 const PIN_W = PIN_H * (24 / 32);
-const RIPPLE = 36;
-/** How far above its resting spot each pin starts before dropping. */
-const DROP_FROM = 48;
-/**
- * Map fade-in, then one stamp per city. Stamps begin before the map fade ends
- * and overlap each other (fall > cadence) so the sequence reads as one motion,
- * not five separate pops.
- */
-const MAP_IN_MS = 380;
-const FIRST_STAMP_MS = 300;
-const STAMP_EVERY_MS = 340;
-const STAMP_FALL_MS = 420;
-/** Beat between the last stamp landing and the fade into the app. */
-const EXIT_BEAT_MS = 260;
+const RIPPLE = 32;
+const DROP_FROM = 40;
 
 /**
- * This is the one branded moment of the launch, so the animation always plays:
- * ReduceMotion.Never opts these tweens out of the OS "reduce motion" setting,
- * which would otherwise jump every value to its end state and leave a frozen
- * map on screen.
+ * One continuous stamp wave: pins cascade with heavy overlap so the sequence
+ * reads as one motion, not five discrete pops.
  */
+const MAP_IN_MS = 520;
+const FIRST_STAMP_MS = 180;
+const STAMP_EVERY_MS = 150;
+const STAMP_FALL_MS = 560;
+const EXIT_BEAT_MS = 320;
+const EXIT_FADE_MS = 380;
+
+const PIN_COUNT = KOREA_SILHOUETTE.pins.length;
+/** Shared 0→1 covers first stamp start through last stamp land. */
+const STAMP_WAVE_MS =
+  FIRST_STAMP_MS + (PIN_COUNT - 1) * STAMP_EVERY_MS + STAMP_FALL_MS;
+
 function anim(duration: number, easing: EasingFunction | EasingFunctionFactory) {
   return { duration, easing, reduceMotion: ReduceMotion.Never };
 }
 
 /**
- * One city stamp: the pin accelerates straight down and stops dead on the city
- * (single hit, no bounce), with a locator ping spreading from the impact.
+ * Pin driven by the shared stamp wave — no per-pin timers (avoids staggered
+ * JS scheduling hitch that made landings feel choppy).
  */
-function StampPin({ x, y, delay }: { x: number; y: number; delay: number }) {
-  const drop = useSharedValue(0);
-  const ping = useSharedValue(0);
+function StampPin({
+  x,
+  y,
+  index,
+  wave,
+}: {
+  x: number;
+  y: number;
+  index: number;
+  wave: SharedValue<number>;
+}) {
+  const pinStyle = useAnimatedStyle(() => {
+    const startMs = FIRST_STAMP_MS + index * STAMP_EVERY_MS;
+    const start = startMs / STAMP_WAVE_MS;
+    const end = (startMs + STAMP_FALL_MS) / STAMP_WAVE_MS;
+    const t = interpolate(wave.value, [start, end], [0, 1], Extrapolation.CLAMP);
+    // Ease into the city — soft settle, not a slam.
+    const eased = t * t * (3 - 2 * t);
+    return {
+      opacity: interpolate(eased, [0, 0.28], [0, 1], Extrapolation.CLAMP),
+      transform: [{ translateY: (eased - 1) * DROP_FROM }],
+    };
+  });
 
-  useEffect(() => {
-    // Quick through the middle, decelerating into the landing — the pin
-    // settles onto the city instead of slamming into it.
-    drop.value = withDelay(
-      delay,
-      withTiming(1, anim(STAMP_FALL_MS, Easing.bezier(0.4, 0, 0.2, 1))),
-      ReduceMotion.Never,
-    );
-    // Ping starts just before full rest so the two motions blend.
-    ping.value = withDelay(
-      delay + STAMP_FALL_MS - 80,
-      withTiming(1, anim(560, Easing.out(Easing.quad))),
-      ReduceMotion.Never,
-    );
-  }, [delay, drop, ping]);
-
-  const pinStyle = useAnimatedStyle(() => ({
-    // Fade in over the first third of the fall — a hard 0→1 pop at the drop
-    // start is what makes the sequence feel choppy.
-    opacity: Math.min(1, drop.value * 3),
-    transform: [{ translateY: (drop.value - 1) * DROP_FROM }],
-  }));
-  const pingStyle = useAnimatedStyle(() => ({
-    opacity: 0.5 * (1 - ping.value),
-    transform: [{ scale: 0.3 + ping.value * 1.7 }],
-  }));
+  const pingStyle = useAnimatedStyle(() => {
+    const startMs = FIRST_STAMP_MS + index * STAMP_EVERY_MS;
+    const land = (startMs + STAMP_FALL_MS - 90) / STAMP_WAVE_MS;
+    const end = Math.min(1, land + 0.28);
+    const t = interpolate(wave.value, [land, end], [0, 1], Extrapolation.CLAMP);
+    return {
+      opacity: 0.45 * (1 - t),
+      transform: [{ scale: 0.25 + t * 1.6 }],
+    };
+  });
 
   return (
     <>
@@ -105,48 +112,53 @@ function StampPin({ x, y, delay }: { x: number; y: number; delay: number }) {
 }
 
 /**
- * Full-screen brand splash played once at launch, on top of the app. The map
- * fades in at full size (no scaling — size changes read as glitches), then five
- * pins stamp onto it city by city (서울→강릉→부산→광주→제주), each with one
- * locator ping. A timer (not the animation chain) drives dismissal.
+ * Full-screen brand splash. Solid canvas → map fade → cascading pin stamps →
+ * fade into the app. Native splash must match canvas color with no icon.
  */
-export function AnimatedSplash({ onFinish }: AnimatedSplashProps) {
+export function AnimatedSplash({ onFinish, onReady }: AnimatedSplashProps) {
   const mapW = MAP_H * KOREA_SILHOUETTE.aspect;
 
   const root = useSharedValue(1);
   const mark = useSharedValue(0);
   const word = useSharedValue(0);
-
-  const lastLandAt =
-    FIRST_STAMP_MS +
-    (KOREA_SILHOUETTE.pins.length - 1) * STAMP_EVERY_MS +
-    STAMP_FALL_MS;
+  const wave = useSharedValue(0);
 
   useEffect(() => {
+    // Wait two frames so AnimatedSplash is composited before native splash drops.
+    const id = requestAnimationFrame(() => {
+      requestAnimationFrame(() => onReady?.());
+    });
     mark.value = withTiming(1, anim(MAP_IN_MS, Easing.out(Easing.cubic)));
-    // Wordmark rises while the stamps are still landing, so nothing waits.
+    // One continuous wave drives every pin — smoother than five delayed timers.
+    wave.value = withTiming(1, anim(STAMP_WAVE_MS, Easing.linear));
     word.value = withDelay(
       FIRST_STAMP_MS + STAMP_EVERY_MS * 2,
-      withTiming(1, anim(400, Easing.out(Easing.quad))),
+      withTiming(1, anim(480, Easing.out(Easing.cubic))),
       ReduceMotion.Never,
     );
 
-    // The moment the last pin lands (plus one beat), fade straight into the app.
     const timer = setTimeout(() => {
-      root.value = withTiming(0, anim(320, Easing.in(Easing.quad)), (finished) => {
-        if (finished) {
-          runOnJS(onFinish)();
-        }
-      });
-    }, lastLandAt + EXIT_BEAT_MS);
-    return () => clearTimeout(timer);
-  }, [lastLandAt, mark, root, word, onFinish]);
+      root.value = withTiming(
+        0,
+        anim(EXIT_FADE_MS, Easing.in(Easing.quad)),
+        (finished) => {
+          if (finished) {
+            runOnJS(onFinish)();
+          }
+        },
+      );
+    }, STAMP_WAVE_MS + EXIT_BEAT_MS);
+    return () => {
+      cancelAnimationFrame(id);
+      clearTimeout(timer);
+    };
+  }, [mark, onFinish, onReady, root, wave, word]);
 
   const rootStyle = useAnimatedStyle(() => ({ opacity: root.value }));
   const markStyle = useAnimatedStyle(() => ({ opacity: mark.value }));
   const wordStyle = useAnimatedStyle(() => ({
     opacity: word.value,
-    transform: [{ translateY: (1 - word.value) * 8 }],
+    transform: [{ translateY: (1 - word.value) * 6 }],
   }));
 
   return (
@@ -159,7 +171,8 @@ export function AnimatedSplash({ onFinish }: AnimatedSplashProps) {
               key={pin.name}
               x={pin.fx * mapW}
               y={pin.fy * MAP_H}
-              delay={FIRST_STAMP_MS + i * STAMP_EVERY_MS}
+              index={i}
+              wave={wave}
             />
           ))}
         </Animated.View>
@@ -174,6 +187,7 @@ export function AnimatedSplash({ onFinish }: AnimatedSplashProps) {
 const styles = StyleSheet.create({
   fill: {
     ...StyleSheet.absoluteFillObject,
+    // Must match native splash backgroundColor — seamless handoff, no icon flash.
     backgroundColor: theme.colors.canvas,
     zIndex: 10,
     alignItems: 'center',
@@ -188,12 +202,11 @@ const styles = StyleSheet.create({
     width: RIPPLE,
     height: RIPPLE,
     borderRadius: RIPPLE / 2,
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: theme.colors.accent,
   },
   pin: {
     position: 'absolute',
-    ...theme.shadows.card,
   },
   wordmark: {
     ...theme.type.display,

@@ -21,6 +21,10 @@ import type { PhotoRef } from '../../photos/types';
 import { CollageEditor } from '../components/CollageEditor';
 import { PhotoSelectGrid } from '../components/PhotoSelectGrid';
 import { useSaveCard } from '../hooks/useCards';
+import {
+  usePhotoPlaceSections,
+  type PickerSortMode,
+} from '../hooks/usePhotoPlaceSections';
 import type { CardTemplate, MapSnapshot } from '../types';
 
 /** How many photos each template can place on the card (4 = 인생네컷). */
@@ -44,20 +48,32 @@ export function CardCreateScreen() {
   const [template, setTemplate] = useState<CardTemplate>('story');
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
+  const [collageDragging, setCollageDragging] = useState(false);
+  const [sortMode, setSortMode] = useState<PickerSortMode>('newest');
 
   const maxPhotos = TEMPLATE_MAX[template];
   const editorSize = Math.min(width - theme.spacing.lg * 2, EDITOR_MAX);
 
-  // Order-preserving: the collage renders in the drag order, not library order.
-  const selectedPhotos = useMemo(() => {
+  // Newest first in the picker — monthly load is chronological (oldest→newest).
+  const pickerPhotos = useMemo(() => {
     if (!data) {
       return [];
     }
-    const byId = new Map(data.allPhotos.map((p) => [p.assetId, p]));
+    return [...data.allPhotos].sort((a, b) => b.takenAt.localeCompare(a.takenAt));
+  }, [data]);
+
+  const { sections: placeSections, isLoading: placeLoading } = usePhotoPlaceSections(
+    pickerPhotos,
+    sortMode === 'place',
+  );
+
+  // Order-preserving: the collage renders in the drag order, not library order.
+  const selectedPhotos = useMemo(() => {
+    const byId = new Map(pickerPhotos.map((p) => [p.assetId, p]));
     return selectedAssetIds
       .map((id) => byId.get(id))
       .filter((p): p is PhotoRef => p != null);
-  }, [data, selectedAssetIds]);
+  }, [pickerPhotos, selectedAssetIds]);
 
   const onSwap = useCallback((a: number, b: number) => {
     setSelectedAssetIds((prev) => {
@@ -108,10 +124,10 @@ export function CardCreateScreen() {
   };
 
   // Switching to a smaller template keeps the earliest picks.
-  const onSelectTemplate = (next: CardTemplate) => {
+  const onSelectTemplate = useCallback((next: CardTemplate) => {
     setTemplate(next);
     setSelectedAssetIds((prev) => prev.slice(0, TEMPLATE_MAX[next]));
-  };
+  }, []);
 
   const onSave = async () => {
     setFormError(null);
@@ -170,6 +186,100 @@ export function CardCreateScreen() {
 
   const selectedCount = selectedAssetIds.length;
 
+  const listHeader = useMemo(
+    () => (
+      <View style={styles.headerBox}>
+        <View style={styles.section}>
+          <Text style={styles.label}>{strings.cards.templateLabel}</Text>
+          <View style={styles.templateRow}>
+            <Pressable
+              onPress={() => onSelectTemplate('story')}
+              style={[
+                styles.templateChip,
+                template === 'story' && styles.templateChipOn,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.templateText,
+                  template === 'story' && styles.templateTextOn,
+                ]}
+              >
+                {strings.cards.templateStory}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+
+        {selectedCount > 0 ? (
+          <View style={styles.section}>
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>{strings.cards.arrangeLabel}</Text>
+              <Text style={styles.hint}>{strings.cards.arrangeHint}</Text>
+            </View>
+            <View style={styles.editorWrap}>
+              <CollageEditor
+                assetIds={selectedAssetIds}
+                size={editorSize}
+                onSwap={onSwap}
+                onDraggingChange={setCollageDragging}
+              />
+            </View>
+          </View>
+        ) : null}
+
+        <View style={styles.labelRow}>
+          <Text style={styles.label}>{strings.cards.photoLabel}</Text>
+          <Text style={styles.selectedCount}>
+            {strings.cards.selectedCount(selectedCount, maxPhotos)}
+          </Text>
+        </View>
+        <View style={styles.sortRow}>
+          <Pressable
+            onPress={() => setSortMode('newest')}
+            accessibilityRole="button"
+            accessibilityState={{ selected: sortMode === 'newest' }}
+            style={[styles.sortChip, sortMode === 'newest' && styles.sortChipOn]}
+          >
+            <Text
+              style={[
+                styles.sortChipText,
+                sortMode === 'newest' && styles.sortChipTextOn,
+              ]}
+            >
+              {strings.cards.sortNewest}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setSortMode('place')}
+            accessibilityRole="button"
+            accessibilityState={{ selected: sortMode === 'place' }}
+            style={[styles.sortChip, sortMode === 'place' && styles.sortChipOn]}
+          >
+            <Text
+              style={[
+                styles.sortChipText,
+                sortMode === 'place' && styles.sortChipTextOn,
+              ]}
+            >
+              {strings.cards.sortByPlace}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    ),
+    [
+      editorSize,
+      maxPhotos,
+      onSelectTemplate,
+      onSwap,
+      selectedAssetIds,
+      selectedCount,
+      sortMode,
+      template,
+    ],
+  );
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <ScreenHeader
@@ -193,78 +303,21 @@ export function CardCreateScreen() {
       {formError ? <Text style={styles.error}>{formError}</Text> : null}
       {/* The grid owns the scroll (virtualized); the template picker rides
           along as its header — nesting the FlatList in a ScrollView breaks
-          windowing and warns. Save lives in the screen header. */}
+          windowing and warns. Save lives in the screen header.
+          Header is memoized so toggling scrollEnabled during collage drag
+          does not remount CollageEditor mid-gesture. */}
       <PhotoSelectGrid
-        photos={data.allPhotos}
+        key={sortMode}
+        photos={pickerPhotos}
+        sections={
+          sortMode === 'place' ? (placeLoading ? [] : placeSections) : null
+        }
+        sectionsLoading={sortMode === 'place' && placeLoading}
         selectedAssetIds={selectedAssetIds}
         onToggle={onToggle}
+        scrollEnabled={!collageDragging}
         contentContainerStyle={styles.scroll}
-        ListHeaderComponent={
-          <View style={styles.headerBox}>
-            <View style={styles.section}>
-              <Text style={styles.label}>{strings.cards.templateLabel}</Text>
-              <View style={styles.templateRow}>
-                {/* Feed temporarily hidden — story only (2026-07-22).
-                <Pressable
-                  onPress={() => onSelectTemplate('feed')}
-                  style={[
-                    styles.templateChip,
-                    template === 'feed' && styles.templateChipOn,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.templateText,
-                      template === 'feed' && styles.templateTextOn,
-                    ]}
-                  >
-                    {strings.cards.templateFeed}
-                  </Text>
-                </Pressable>
-                */}
-                <Pressable
-                  onPress={() => onSelectTemplate('story')}
-                  style={[
-                    styles.templateChip,
-                    template === 'story' && styles.templateChipOn,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.templateText,
-                      template === 'story' && styles.templateTextOn,
-                    ]}
-                  >
-                    {strings.cards.templateStory}
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-
-            {selectedCount > 0 ? (
-              <View style={styles.section}>
-                <View style={styles.labelRow}>
-                  <Text style={styles.label}>{strings.cards.arrangeLabel}</Text>
-                  <Text style={styles.hint}>{strings.cards.arrangeHint}</Text>
-                </View>
-                <View style={styles.editorWrap}>
-                  <CollageEditor
-                    assetIds={selectedAssetIds}
-                    size={editorSize}
-                    onSwap={onSwap}
-                  />
-                </View>
-              </View>
-            ) : null}
-
-            <View style={styles.labelRow}>
-              <Text style={styles.label}>{strings.cards.photoLabel}</Text>
-              <Text style={styles.selectedCount}>
-                {strings.cards.selectedCount(selectedCount, maxPhotos)}
-              </Text>
-            </View>
-          </View>
-        }
+        ListHeaderComponent={listHeader}
       />
     </SafeAreaView>
   );
@@ -312,6 +365,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  sortRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    marginTop: -theme.spacing.sm,
+  },
+  sortChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: theme.radius.pill,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+  },
+  sortChipOn: {
+    backgroundColor: theme.colors.accentSoft,
+    borderColor: theme.colors.accent,
+  },
+  sortChipText: {
+    ...theme.type.micro,
+    color: theme.colors.inkSoft,
+    fontWeight: '600',
+  },
+  sortChipTextOn: {
+    color: theme.colors.accent,
+    fontWeight: '700',
   },
   selectedCount: {
     ...theme.type.label,
