@@ -288,29 +288,42 @@ function normalizeFileCandidate(uri: string): string | null {
 
 /**
  * Copy (and shrink) a Photos asset into the app cache as `file://`.
- * DCIM / `ph://` paths are not readable by RN Image or Naver UIView snapshots.
+ * Naver markers load this via `image.httpUri` (native file:// reader).
+ *
+ * On iOS, prefer `ph://` — ImageManipulator loads it via PHImageManager.
+ * Raw DCIM `localUri` often fails `isReadableFile` (iOS 18 sandbox) and must
+ * never be passed straight to Naver (NSData can't read it either).
  */
 async function exportPinThumbFileUri(assetId: string): Promise<string | null> {
   // Warm iCloud / paired resources before reading pixels.
-  let infoUri: string | null = null;
   let infoLocal: string | null = null;
   try {
-    const info = await getAssetInfoAsync(assetId, { shouldDownloadFromNetwork: true });
+    let info = await getAssetInfoAsync(assetId, { shouldDownloadFromNetwork: true });
     infoLocal = info.localUri ?? null;
-    infoUri = info.uri ?? null;
+    if (!infoLocal && Platform.OS === 'ios') {
+      await new Promise((r) => setTimeout(r, 450));
+      info = await getAssetInfoAsync(assetId, { shouldDownloadFromNetwork: true });
+      infoLocal = info.localUri ?? null;
+    }
   } catch (error) {
     console.error('getAssetInfoAsync for pin thumb failed', assetId, error);
   }
 
   const sources: string[] = [];
+  // 1) ph:// — dedicated Photo Library path in expo-image-manipulator.
   if (Platform.OS === 'ios') {
     sources.push(`ph://${assetId}`);
   }
+  // 2) localUri only when it looks like an app-readable file (not DCIM Media/).
   if (infoLocal) {
-    sources.push(sanitizeMediaUri(infoLocal));
-  }
-  if (infoUri) {
-    sources.push(sanitizeMediaUri(infoUri));
+    const cleaned = sanitizeMediaUri(infoLocal);
+    const isAppFile =
+      (cleaned.startsWith('file:') || cleaned.startsWith('/')) &&
+      !cleaned.includes('/Media/DCIM/') &&
+      !cleaned.includes('/Mobile/Media/');
+    if (isAppFile || cleaned.startsWith('content:')) {
+      sources.push(cleaned);
+    }
   }
 
   const tried = new Set<string>();
@@ -326,6 +339,7 @@ async function exportPinThumbFileUri(assetId: string): Promise<string | null> {
         { compress: 0.82, format: SaveFormat.JPEG },
       );
       const fileUri = normalizeFileCandidate(out.uri) ?? out.uri;
+      // Only accept manipulator cache output — never a Photos DCIM path.
       if (fileUri.startsWith('file:') || fileUri.startsWith('content:')) {
         return fileUri;
       }
@@ -334,17 +348,14 @@ async function exportPinThumbFileUri(assetId: string): Promise<string | null> {
     }
   }
 
-  // Last resort: sandbox-readable localUri without re-encode (may still fail to paint).
-  if (infoLocal) {
-    return normalizeFileCandidate(infoLocal);
-  }
   return null;
 }
 
 /**
  * Resolve a `file://` (or readable local) URI for native map markers.
- * Naver custom markers snapshot a UIView — iOS `ph://` and Photos DCIM paths
- * do not paint there. We export a small JPEG into the app cache instead.
+ * Naver loads it via `image.httpUri` (supports file:// natively). Do not pass
+ * thumbs as custom React children — iOS snapshots those with renderInContext
+ * and RN Image pixels are often missing on device.
  * Dummy assets keep https picsum URLs.
  */
 export async function resolveAssetFileUri(assetId: string): Promise<string | null> {
