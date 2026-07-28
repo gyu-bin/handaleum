@@ -22,7 +22,8 @@
 | 캡처는 react-native-view-shot 우선 | @shopify/react-native-skia | spec 확정. 품질 미달 시에만 skia 재검토 | 2026-07-17 |
 | 템플릿 2종 고정 (feed 1:1, story 9:16) | 확장 가능 구조 | spec 확정. 요청 전 확장 금지 | 2026-07-17 |
 | 사진 피커 정렬: **최신순 / 위치별** 토글. 위치별은 journey 라벨 섹션(첫 방문순) | 최신만 / 오래된순 포함 | 사용자 선택 C | 2026-07-27 |
-| 공유 시트 라이브러리 미확정 | expo-sharing / RN Share API | 구현 단계에서 사용자 승인 후 결정 (확인 필요) | 2026-07-17 |
+| 공유 시트 라이브러리 미확정 | expo-sharing / RN Share API | **임시:** iOS=`Share.share({url})`, Android=앨범 저장 후 갤러리 안내. expo-sharing 도입은 사용자 승인 후 | 2026-07-28 |
+| 캡처 전 콜라주 ready 게이트 | 즉시 captureRef | 빈 사진 카드 방지. CardCollage onLoad + offscreen onReady 대기 | 2026-07-28 |
 
 ## 경계
 

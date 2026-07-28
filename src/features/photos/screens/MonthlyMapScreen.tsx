@@ -9,7 +9,7 @@ import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
-import { useOnboarding } from '@/features/onboarding';
+import { useOnboarding } from '@/features/onboarding/hooks/useOnboarding';
 
 import { DEFAULT_MAP_ZOOM, MapCanvas } from '../components/MapCanvas';
 import { HomeNavBar } from '../components/HomeNavBar';

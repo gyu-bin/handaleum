@@ -57,11 +57,24 @@ export function MapClusterMarker({
     }
     let cancelled = false;
     setSnapKey(0);
-    void resolveAssetFileUri(displayAssetId).then((next) => {
-      if (!cancelled) {
-        setFileUri(next);
+    setFileUri(null);
+
+    const load = async () => {
+      // iCloud / first-open: one miss should not leave a blank pin forever.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const next = await resolveAssetFileUri(displayAssetId);
+        if (cancelled) {
+          return;
+        }
+        if (next) {
+          setFileUri(next);
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 350 * (attempt + 1)));
       }
-    });
+    };
+
+    void load();
     return () => {
       cancelled = true;
     };
@@ -72,8 +85,13 @@ export function MapClusterMarker({
     setSnapKey(0);
   }, [selected]);
 
+  // Key the overlay itself — Naver snapshots on insert; child-only remounts
+  // often leave a blank thumb on device after file:// becomes ready.
+  const overlayKey = `${cluster.id}/${displayAssetId ?? 'x'}/${fileUri ?? 'pending'}/${snapKey}/${selected ? 1 : 0}`;
+
   return (
     <NaverMapMarkerOverlay
+      key={overlayKey}
       latitude={cluster.centerLat}
       longitude={cluster.centerLng}
       width={markerW}
@@ -84,7 +102,6 @@ export function MapClusterMarker({
       onTap={() => onSelect(cluster)}
     >
       <View
-        key={`${displayAssetId ?? 'x'}/${fileUri ?? ''}/${snapKey}/${selected}`}
         collapsable={false}
         style={{ width: markerW, height: markerH, alignItems: 'center' }}
       >

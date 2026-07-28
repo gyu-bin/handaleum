@@ -16,6 +16,12 @@ export const theme = {
     inkSoft: '#5A6B7A',
     subtle: '#93A1AD',
 
+    /**
+     * Splash / loading brand mark — slate navy from the stamp splash reference.
+     * Map silhouette + wordmark share this; keep separate from UI ink.
+     */
+    splashMark: '#33475B',
+
     // Dawn blue accent
     accent: '#3A5A78',
     accentSoft: 'rgba(58,90,120,0.12)',

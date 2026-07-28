@@ -16,10 +16,13 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { KOREA_SILHOUETTE } from '@/shared/constants/brandMark';
+import { SPLASH_MAP_H, SPLASH_STAMP } from '@/shared/constants/splashPins';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
-import { BrandMark, PinGlyph } from './BrandMark';
+import { BrandMark } from './BrandMark';
+import { PaperGrain } from './PaperGrain';
+import { SplashStampPin } from './SplashStampPin';
 
 export interface AnimatedSplashProps {
   /** Called once the splash has played and faded out. */
@@ -28,11 +31,11 @@ export interface AnimatedSplashProps {
   onReady?: () => void;
 }
 
-const MAP_H = 232;
-const PIN_H = 28;
-const PIN_W = PIN_H * (24 / 32);
-const RIPPLE = 32;
-const DROP_FROM = 40;
+const MAP_H = SPLASH_MAP_H;
+const PIN_W = SPLASH_STAMP.frameW;
+const PIN_H = SPLASH_STAMP.totalH;
+const RIPPLE = 40;
+const DROP_FROM = 52;
 
 /**
  * One continuous stamp wave: pins cascade with heavy overlap so the sequence
@@ -42,7 +45,8 @@ const MAP_IN_MS = 520;
 const FIRST_STAMP_MS = 180;
 const STAMP_EVERY_MS = 150;
 const STAMP_FALL_MS = 560;
-const EXIT_BEAT_MS = 320;
+/** Hold the fully-stamped frame so the brand can be read before exit. */
+const HOLD_MS = 1500;
 const EXIT_FADE_MS = 380;
 
 const PIN_COUNT = KOREA_SILHOUETTE.pins.length;
@@ -59,11 +63,13 @@ function anim(duration: number, easing: EasingFunction | EasingFunctionFactory) 
  * JS scheduling hitch that made landings feel choppy).
  */
 function StampPin({
+  name,
   x,
   y,
   index,
   wave,
 }: {
+  name: (typeof KOREA_SILHOUETTE.pins)[number]['name'];
   x: number;
   y: number;
   index: number;
@@ -88,7 +94,7 @@ function StampPin({
     const end = Math.min(1, land + 0.28);
     const t = interpolate(wave.value, [land, end], [0, 1], Extrapolation.CLAMP);
     return {
-      opacity: 0.45 * (1 - t),
+      opacity: 0.4 * (1 - t),
       transform: [{ scale: 0.25 + t * 1.6 }],
     };
   });
@@ -105,14 +111,14 @@ function StampPin({
       <Animated.View
         style={[styles.pin, { left: x - PIN_W / 2, top: y - PIN_H }, pinStyle]}
       >
-        <PinGlyph size={PIN_H} />
+        <SplashStampPin name={name} showRipples />
       </Animated.View>
     </>
   );
 }
 
 /**
- * Full-screen brand splash. Solid canvas → map fade → cascading pin stamps →
+ * Full-screen brand splash. Cream paper → dark map → cascading polaroid stamps →
  * fade into the app. Native splash must match canvas color with no icon.
  */
 export function AnimatedSplash({ onFinish, onReady }: AnimatedSplashProps) {
@@ -131,9 +137,10 @@ export function AnimatedSplash({ onFinish, onReady }: AnimatedSplashProps) {
     mark.value = withTiming(1, anim(MAP_IN_MS, Easing.out(Easing.cubic)));
     // One continuous wave drives every pin — smoother than five delayed timers.
     wave.value = withTiming(1, anim(STAMP_WAVE_MS, Easing.linear));
+    // Wordmark with the map — brand name should read clearly, not as an afterthought.
     word.value = withDelay(
-      FIRST_STAMP_MS + STAMP_EVERY_MS * 2,
-      withTiming(1, anim(480, Easing.out(Easing.cubic))),
+      MAP_IN_MS * 0.45,
+      withTiming(1, anim(520, Easing.out(Easing.cubic))),
       ReduceMotion.Never,
     );
 
@@ -147,7 +154,7 @@ export function AnimatedSplash({ onFinish, onReady }: AnimatedSplashProps) {
           }
         },
       );
-    }, STAMP_WAVE_MS + EXIT_BEAT_MS);
+    }, STAMP_WAVE_MS + HOLD_MS);
     return () => {
       cancelAnimationFrame(id);
       clearTimeout(timer);
@@ -163,12 +170,14 @@ export function AnimatedSplash({ onFinish, onReady }: AnimatedSplashProps) {
 
   return (
     <Animated.View style={[styles.fill, rootStyle]} pointerEvents="none">
+      <PaperGrain />
       <View style={styles.center}>
         <Animated.View style={[{ width: mapW, height: MAP_H }, markStyle]}>
-          <BrandMark height={MAP_H} />
+          <BrandMark height={MAP_H} color={theme.colors.splashMark} />
           {KOREA_SILHOUETTE.pins.map((pin, i) => (
             <StampPin
               key={pin.name}
+              name={pin.name}
               x={pin.fx * mapW}
               y={pin.fy * MAP_H}
               index={i}
@@ -203,16 +212,18 @@ const styles = StyleSheet.create({
     height: RIPPLE,
     borderRadius: RIPPLE / 2,
     borderWidth: 1.5,
-    borderColor: theme.colors.accent,
+    borderColor: theme.colors.white,
   },
   pin: {
     position: 'absolute',
   },
   wordmark: {
     ...theme.type.display,
+    fontSize: 38,
+    lineHeight: 44,
     fontFamily: theme.fonts.serif,
     fontWeight: '700',
-    color: theme.colors.ink,
-    letterSpacing: 1,
+    color: theme.colors.splashMark,
+    letterSpacing: 2,
   },
 });

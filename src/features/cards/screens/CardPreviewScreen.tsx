@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Platform,
   ScrollView,
   Share,
   StyleSheet,
@@ -28,6 +29,16 @@ export interface CardPreviewScreenProps {
 
 /** On-screen preview width for story (points). */
 const PREVIEW_WIDTH = 270;
+/** Max wait for off-screen collage images before capture. */
+const EXPORT_READY_MS = 8000;
+/** Let the native layer paint after Image onLoad before view-shot. */
+const CAPTURE_SETTLE_MS = 120;
+
+function waitMs(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
 
 /**
  * Final card view. Story-only for now (feed format chips commented out).
@@ -41,8 +52,20 @@ export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
   const { data, isPending, isError, refetch } = useCard(cardId);
   const deleteCard = useDeleteCard();
   const captureTarget = useRef<View>(null);
+  const exportReadyRef = useRef(false);
+  const [exportReady, setExportReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    exportReadyRef.current = false;
+    setExportReady(false);
+  }, [cardId]);
+
+  const onExportReady = useCallback(() => {
+    exportReadyRef.current = true;
+    setExportReady(true);
+  }, []);
 
   const goBack = () => {
     // After 만들기, land on 카드 만들기 — never home.
@@ -61,10 +84,30 @@ export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
     }
   };
 
+  const waitUntilExportReady = async (): Promise<boolean> => {
+    if (exportReadyRef.current) {
+      return true;
+    }
+    const start = Date.now();
+    while (Date.now() - start < EXPORT_READY_MS) {
+      if (exportReadyRef.current) {
+        return true;
+      }
+      await waitMs(50);
+    }
+    return exportReadyRef.current;
+  };
+
   const capture = async (): Promise<string | null> => {
     if (!captureTarget.current) {
       return null;
     }
+    const ready = await waitUntilExportReady();
+    if (!ready) {
+      console.error('captureCardImage: export collage not ready in time');
+      return null;
+    }
+    await waitMs(CAPTURE_SETTLE_MS);
     try {
       return await captureCardImage(captureTarget);
     } catch (error) {
@@ -82,7 +125,14 @@ export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
         setActionError(strings.common.error);
         return;
       }
-      await Share.share({ url: uri, message: data?.title });
+      if (Platform.OS === 'ios') {
+        await Share.share({ url: uri, message: data?.title });
+        return;
+      }
+      // Android Share API does not attach file:// images via `url`.
+      // expo-sharing is still an open product decision (cards/ARCHITECTURE.md).
+      await saveToLibraryAsync(uri);
+      Alert.alert(strings.cards.saved, strings.cards.shareAndroidHint);
     } catch (error) {
       console.error('share failed', error);
       setActionError(strings.common.error);
@@ -204,12 +254,13 @@ export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
           title={strings.cards.share}
           variant="primary"
           loading={busy}
+          disabled={!exportReady && !busy}
           onPress={() => void onShare()}
         />
         <Button
           title={strings.cards.saveToAlbum}
           variant="secondary"
-          disabled={busy}
+          disabled={busy || !exportReady}
           onPress={() => void onSaveImage()}
         />
         {/* Story: no title/comment edit (2026-07-22).
@@ -228,7 +279,11 @@ export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
           collapsable={false}
           style={{ width: EXPORT_RENDER_WIDTH }}
         >
-          <CardTemplateStory card={draft} width={EXPORT_RENDER_WIDTH} />
+          <CardTemplateStory
+            card={draft}
+            width={EXPORT_RENDER_WIDTH}
+            onReady={onExportReady}
+          />
         </View>
       </View>
     </SafeAreaView>

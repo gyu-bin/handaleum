@@ -12,10 +12,13 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { KOREA_SILHOUETTE } from '@/shared/constants/brandMark';
+import { SPLASH_MAP_H, SPLASH_STAMP } from '@/shared/constants/splashPins';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
-import { BrandMark, PinGlyph } from './BrandMark';
+import { BrandMark } from './BrandMark';
+import { PaperGrain } from './PaperGrain';
+import { SplashStampPin } from './SplashStampPin';
 
 export interface LoadingViewProps {
   /** Optional line under the mark. Defaults to the common loading string. */
@@ -24,10 +27,10 @@ export interface LoadingViewProps {
 
 // Same size as the splash mark so the splash → loading handoff is seamless:
 // the loading screen IS the splash's final frame, with the ping kept alive.
-const MAP_H = 232;
-const PIN_H = 30;
-const PIN_W = PIN_H * (24 / 32);
-const RIPPLE = 36;
+const MAP_H = SPLASH_MAP_H;
+const PIN_W = SPLASH_STAMP.frameW;
+const PIN_H = SPLASH_STAMP.totalH;
+const RIPPLE = 40;
 /** One ping per city, hopping 서울→강릉→부산→광주→제주 on a loop. */
 const PING_MS = 900;
 
@@ -69,16 +72,17 @@ export function LoadingView({ message = strings.common.loading }: LoadingViewPro
     return {
       left: xs[idx]! - RIPPLE / 2,
       top: ys[idx]! - RIPPLE / 2,
-      opacity: 0.5 * (1 - t),
+      opacity: 0.45 * (1 - t),
       transform: [{ scale: 0.3 + t * 1.7 }],
     };
   });
 
   return (
     <SafeAreaView style={styles.safe}>
+      <PaperGrain />
       <View style={styles.center}>
         <View style={{ width: mapW, height: MAP_H }}>
-          <BrandMark height={MAP_H} />
+          <BrandMark height={MAP_H} color={theme.colors.splashMark} />
           <Animated.View style={[styles.ping, pingStyle]} />
           {KOREA_SILHOUETTE.pins.map((pin) => (
             <View
@@ -91,7 +95,7 @@ export function LoadingView({ message = strings.common.loading }: LoadingViewPro
                 },
               ]}
             >
-              <PinGlyph size={PIN_H} />
+              <SplashStampPin name={pin.name} showRipples />
             </View>
           ))}
         </View>
@@ -111,7 +115,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: theme.spacing.md,
+    gap: theme.spacing.lg,
   },
   ping: {
     position: 'absolute',
@@ -119,18 +123,20 @@ const styles = StyleSheet.create({
     height: RIPPLE,
     borderRadius: RIPPLE / 2,
     borderWidth: 2,
-    borderColor: theme.colors.accent,
+    borderColor: theme.colors.white,
   },
   pin: {
     position: 'absolute',
-    ...theme.shadows.card,
   },
   /** The loading screen has no content to compete with — the brand is the one loud thing here. */
   wordmark: {
     ...theme.type.display,
+    fontSize: 38,
+    lineHeight: 44,
     fontFamily: theme.fonts.serif,
     fontWeight: '700',
-    color: theme.colors.ink,
+    color: theme.colors.splashMark,
+    letterSpacing: 2,
   },
   message: {
     ...theme.type.micro,

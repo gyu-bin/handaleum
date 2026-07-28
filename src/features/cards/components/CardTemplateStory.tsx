@@ -24,16 +24,25 @@ const MAP_HEIGHT_RATIO = 0.26;
  * registration frame, a framed hero photo, the paper map, and instrument-style
  * annotations. Same family as the feed card, taller composition.
  */
-export function CardTemplateStory({ card, width = BASE_WIDTH }: CardTemplateStoryProps) {
+export function CardTemplateStory({
+  card,
+  width = BASE_WIDTH,
+  onReady,
+}: CardTemplateStoryProps) {
   const s = width / BASE_WIDTH;
   const styles = useMemo(() => makeStyles(width), [width]);
   const [places, setPlaces] = useState<CardPinPlace[]>([]);
   // The collage fills the leftover vertical space (measured) so the card has no
   // dead space under the footer and the photos stay as large as the frame allows.
   const [heroBox, setHeroBox] = useState<{ w: number; h: number } | null>(null);
+  const [collageReady, setCollageReady] = useState(false);
   const pinsKey = card.photoRefs
     .map((p) => `${p.assetId}:${p.lat.toFixed(3)},${p.lng.toFixed(3)}`)
     .join('|');
+
+  useEffect(() => {
+    setCollageReady(false);
+  }, [pinsKey, width]);
 
   useEffect(() => {
     let cancelled = false;
@@ -47,6 +56,12 @@ export function CardTemplateStory({ card, width = BASE_WIDTH }: CardTemplateStor
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- pinsKey captures photo set
   }, [pinsKey]);
+
+  useEffect(() => {
+    if (heroBox && collageReady) {
+      onReady?.();
+    }
+  }, [heroBox, collageReady, onReady]);
 
   const pins = useMemo(
     () =>
@@ -63,7 +78,7 @@ export function CardTemplateStory({ card, width = BASE_WIDTH }: CardTemplateStor
   const monthLabel = formatMonthDot(card.month);
 
   return (
-    <View style={styles.root}>
+    <View style={styles.root} collapsable={false}>
       <View style={styles.frame}>
         <View style={styles.header}>
           <Text style={styles.brand}>한달음</Text>
@@ -89,6 +104,7 @@ export function CardTemplateStory({ card, width = BASE_WIDTH }: CardTemplateStor
               height={heroBox.h}
               gutter={4 * s}
               radius={3 * s}
+              onReady={() => setCollageReady(true)}
             />
           ) : null}
         </View>
@@ -130,6 +146,8 @@ export interface CardTemplateStoryProps {
   /** Render width in points. Everything scales from it so the card composes
    *  identically at preview size and at export size (see cardExport). */
   width?: number;
+  /** Fires when hero collage is laid out and images have loaded (or failed). */
+  onReady?: () => void;
 }
 
 function makeStyles(width: number) {

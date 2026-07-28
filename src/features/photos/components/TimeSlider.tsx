@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { runOnJS } from 'react-native-reanimated';
 
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
@@ -25,11 +24,14 @@ function clamp01(n: number): number {
 }
 
 /** Keep the thumb fluid; don't re-cluster the map on every touch sample. */
-const EMIT_INTERVAL_MS = 80;
+const EMIT_INTERVAL_MS = 100;
 
 /**
  * Single-thumb slider controlling the upper bound (`to`).
  * `from` stays at the month start (bounds.from).
+ *
+ * Uses `onStart` (gesture ACTIVE), not `onBegin` — Begin can fire then fail on
+ * the first touch, which looked like “slide once, nothing happens”.
  */
 export function TimeSlider({ bounds, value, onChange }: TimeSliderProps) {
   const [trackWidth, setTrackWidth] = useState(0);
@@ -53,6 +55,7 @@ export function TimeSlider({ bounds, value, onChange }: TimeSliderProps) {
   const trackWidthRef = useRef(trackWidth);
   trackWidthRef.current = trackWidth;
   const lastEmitAtRef = useRef(0);
+  const draggingRef = useRef(false);
 
   const emit = (nextRatio: number, force: boolean) => {
     const now = performance.now();
@@ -77,33 +80,38 @@ export function TimeSlider({ bounds, value, onChange }: TimeSliderProps) {
   };
 
   const endDrag = (x: number) => {
+    draggingRef.current = false;
     setFromX(x, true);
-    setDragRatio(null);
-  };
-
-  const cancelDrag = () => {
     setDragRatio(null);
   };
 
   const pan = useMemo(
     () =>
       Gesture.Pan()
+        // JS thread: setState + parent onChange without UI↔JS bridging quirks.
+        .runOnJS(true)
         .minDistance(0)
-        .hitSlop({ top: 16, bottom: 16 })
-        .onBegin((e) => {
-          runOnJS(setFromX)(e.x, false);
+        .hitSlop({ top: 20, bottom: 20, left: 8, right: 8 })
+        .shouldCancelWhenOutside(false)
+        .onStart((e) => {
+          draggingRef.current = true;
+          setFromX(e.x, true);
         })
         .onUpdate((e) => {
-          runOnJS(setFromX)(e.x, false);
+          if (!draggingRef.current) {
+            draggingRef.current = true;
+          }
+          setFromX(e.x, false);
         })
         .onEnd((e) => {
-          runOnJS(endDrag)(e.x);
+          endDrag(e.x);
         })
-        .onFinalize((_e, success) => {
-          if (!success) {
-            runOnJS(cancelDrag)();
-          }
+        .onFinalize(() => {
+          draggingRef.current = false;
+          setDragRatio(null);
         }),
+    // Intentionally stable — handlers read latest values via refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- gesture identity must stay stable
     [],
   );
 
@@ -124,7 +132,9 @@ export function TimeSlider({ bounds, value, onChange }: TimeSliderProps) {
         <View
           style={styles.track}
           onLayout={(e) => {
-            setTrackWidth(Math.max(0, e.nativeEvent.layout.width));
+            const w = Math.max(0, e.nativeEvent.layout.width);
+            trackWidthRef.current = w;
+            setTrackWidth(w);
           }}
           accessibilityRole="adjustable"
           accessibilityLabel={strings.map.timeFilter}
@@ -160,7 +170,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   track: {
-    height: 36,
+    height: 44,
     justifyContent: 'center',
   },
   trackBg: {
@@ -187,7 +197,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     borderWidth: 2,
     borderColor: theme.colors.accent,
-    top: 7,
+    top: 11,
     ...theme.shadows.card,
   },
 });

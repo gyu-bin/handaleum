@@ -23,7 +23,7 @@ import { Button } from '@/shared/components/Button';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
-import { usePhotoPermission } from '@/features/photos';
+import { usePhotoPermission } from '@/features/photos/hooks/usePhotoPermission';
 
 import { AccessArt, CardArt, MapPinArt } from '../components/OnboardingArt';
 import { OnboardingSlide } from '../components/OnboardingSlide';

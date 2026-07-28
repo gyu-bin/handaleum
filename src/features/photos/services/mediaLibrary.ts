@@ -6,6 +6,7 @@ import {
   SortBy,
   type Asset,
 } from 'expo-media-library';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 
 import { getAssetLocationRaw, setAssetLocationRaw } from '@/lib/storage';
 
@@ -224,6 +225,10 @@ export async function loadMonthSummaries(): Promise<MonthSummary[]> {
 
 const uriCache = new Map<string, string | null>();
 const fileUriCache = new Map<string, string | null>();
+const fileUriInflight = new Map<string, Promise<string | null>>();
+
+/** Pin thumbs are ~44pt; 160px covers @3x without shipping full camera-roll files. */
+const PIN_THUMB_WIDTH = 160;
 
 /**
  * Resolve a display URI for a camera-roll asset. Every consumer feeds the
@@ -253,7 +258,10 @@ export async function resolveAssetUri(assetId: string): Promise<string | null> {
   try {
     const info = await getAssetInfoAsync(assetId, { shouldDownloadFromNetwork: false });
     const uri = info.localUri ?? info.uri ?? null;
-    uriCache.set(assetId, uri);
+    // Only cache hits — a null miss may be transient (iCloud / permission).
+    if (uri) {
+      uriCache.set(assetId, uri);
+    }
     return uri;
   } catch (error) {
     console.error('resolveAssetUri failed', assetId, error);
@@ -261,11 +269,83 @@ export async function resolveAssetUri(assetId: string): Promise<string | null> {
   }
 }
 
+/** Strip iOS 18+ metadata fragments that break Image / manipulator loaders. */
+function sanitizeMediaUri(uri: string): string {
+  const hash = uri.indexOf('#');
+  return hash >= 0 ? uri.slice(0, hash) : uri;
+}
+
+function normalizeFileCandidate(uri: string): string | null {
+  const cleaned = sanitizeMediaUri(uri);
+  if (cleaned.startsWith('file:') || cleaned.startsWith('content:')) {
+    return cleaned;
+  }
+  if (cleaned.startsWith('/')) {
+    return `file://${cleaned}`;
+  }
+  return null;
+}
+
+/**
+ * Copy (and shrink) a Photos asset into the app cache as `file://`.
+ * DCIM / `ph://` paths are not readable by RN Image or Naver UIView snapshots.
+ */
+async function exportPinThumbFileUri(assetId: string): Promise<string | null> {
+  // Warm iCloud / paired resources before reading pixels.
+  let infoUri: string | null = null;
+  let infoLocal: string | null = null;
+  try {
+    const info = await getAssetInfoAsync(assetId, { shouldDownloadFromNetwork: true });
+    infoLocal = info.localUri ?? null;
+    infoUri = info.uri ?? null;
+  } catch (error) {
+    console.error('getAssetInfoAsync for pin thumb failed', assetId, error);
+  }
+
+  const sources: string[] = [];
+  if (Platform.OS === 'ios') {
+    sources.push(`ph://${assetId}`);
+  }
+  if (infoLocal) {
+    sources.push(sanitizeMediaUri(infoLocal));
+  }
+  if (infoUri) {
+    sources.push(sanitizeMediaUri(infoUri));
+  }
+
+  const tried = new Set<string>();
+  for (const src of sources) {
+    if (tried.has(src)) {
+      continue;
+    }
+    tried.add(src);
+    try {
+      const out = await manipulateAsync(
+        src,
+        [{ resize: { width: PIN_THUMB_WIDTH } }],
+        { compress: 0.82, format: SaveFormat.JPEG },
+      );
+      const fileUri = normalizeFileCandidate(out.uri) ?? out.uri;
+      if (fileUri.startsWith('file:') || fileUri.startsWith('content:')) {
+        return fileUri;
+      }
+    } catch (error) {
+      console.warn('pin thumb export failed', assetId, src.slice(0, 48), error);
+    }
+  }
+
+  // Last resort: sandbox-readable localUri without re-encode (may still fail to paint).
+  if (infoLocal) {
+    return normalizeFileCandidate(infoLocal);
+  }
+  return null;
+}
+
 /**
  * Resolve a `file://` (or readable local) URI for native map markers.
- * Naver `image.httpUri` and UIView→bitmap snapshots cannot use iOS `ph://`
- * or async expo-image surfaces — they need a real file path.
- * Dummy assets use https picsum URLs, which Naver loads via httpUri.
+ * Naver custom markers snapshot a UIView — iOS `ph://` and Photos DCIM paths
+ * do not paint there. We export a small JPEG into the app cache instead.
+ * Dummy assets keep https picsum URLs.
  */
 export async function resolveAssetFileUri(assetId: string): Promise<string | null> {
   const hit = fileUriCache.get(assetId);
@@ -273,31 +353,33 @@ export async function resolveAssetFileUri(assetId: string): Promise<string | nul
     return hit;
   }
 
-  if (isDummyAssetId(assetId)) {
-    const uri = dummyAssetImageUri(assetId);
-    fileUriCache.set(assetId, uri);
-    return uri;
+  const pending = fileUriInflight.get(assetId);
+  if (pending) {
+    return pending;
   }
 
-  try {
-    const info = await getAssetInfoAsync(assetId, { shouldDownloadFromNetwork: true });
-    const candidate = info.localUri ?? info.uri ?? null;
-    const uri =
-      candidate &&
-      (candidate.startsWith('file:') ||
-        candidate.startsWith('content:') ||
-        candidate.startsWith('/'))
-        ? candidate.startsWith('/')
-          ? `file://${candidate}`
-          : candidate
-        : null;
-    if (uri) {
+  const work = (async (): Promise<string | null> => {
+    if (isDummyAssetId(assetId)) {
+      const uri = dummyAssetImageUri(assetId);
       fileUriCache.set(assetId, uri);
+      return uri;
     }
-    // Leave uncached on miss so iCloud download can succeed on retry.
-    return uri;
-  } catch (error) {
-    console.error('resolveAssetFileUri failed', assetId, error);
-    return null;
-  }
+
+    try {
+      const uri = await exportPinThumbFileUri(assetId);
+      if (uri) {
+        fileUriCache.set(assetId, uri);
+      }
+      // Leave uncached on miss so iCloud download can succeed on retry.
+      return uri;
+    } catch (error) {
+      console.error('resolveAssetFileUri failed', assetId, error);
+      return null;
+    }
+  })().finally(() => {
+    fileUriInflight.delete(assetId);
+  });
+
+  fileUriInflight.set(assetId, work);
+  return work;
 }
