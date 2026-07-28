@@ -46,6 +46,11 @@ export const strings = {
     cancel: '취소',
     back: '뒤로',
   },
+  ota: {
+    checking: '업데이트 확인 중',
+    updating: '업데이트 중',
+    done: '업데이트 완료',
+  },
   permission: {
     title: '사진 접근 권한이 필요합니다',
     // Explicit break: left to wrap on its own, this line orphans its last
