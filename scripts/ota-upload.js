@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * EAS Update 업로드 래퍼 (High-noon / see-on CLI 호환).
+ * EAS Update 업로드 래퍼.
  *
  * 사용:
  *   npm run ota:upload
@@ -13,7 +13,6 @@
  *   --runtime-version <ver>        app.json version(runtime)과 다르면 경고
  *   --apply-mode immediate|next-launch  기록용 (앱은 런치 시 업데이트 체크)
  *   --message / -m <text>          없으면 시각 기준 자동 메시지
- *   --api-base-url <url>           see-on CLI 호환 — EAS에서는 무시
  */
 const { spawnSync } = require('child_process');
 const fs = require('fs');
@@ -47,11 +46,7 @@ function parseArgs(argv) {
     else if (a === '--apply-mode') out.applyMode = next();
     else if (a === '--message' || a === '-m') out.message = next();
     else if (a === '--help' || a === '-h') out.help = true;
-    else if (a === '--api-base-url') {
-      // see-on 프로젝트 CLI 호환 — EAS Update에서는 무시
-      next();
-      console.warn('[ota:upload] --api-base-url 은 EAS Update에서 무시됩니다.');
-    } else {
+    else {
       console.error(`[ota:upload] 알 수 없는 옵션: ${a}`);
       process.exit(1);
     }
@@ -93,7 +88,6 @@ Flags:
   --runtime-version <ver>        warn if mismatch with app.json (appVersion policy)
   --apply-mode immediate|next-launch  (info only)
   --message / -m <text>          (default: auto timestamp)
-  --api-base-url <url>           ignored (EAS Update uses Expo CDN)
 `);
 }
 
