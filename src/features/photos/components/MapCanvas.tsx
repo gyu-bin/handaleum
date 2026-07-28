@@ -13,6 +13,7 @@ import type { MapThemeId, PlaceCluster } from '../types';
 import { journeyPathCoords } from '../utils/journeyPath';
 import { placeBucketKey } from '../utils/placeJourney';
 import { MapClusterMarker } from './MapClusterMarker';
+import { MapPinBakeHost } from './MapPinBakeHost';
 
 /** Approximate zoom from latitude span (clustering grain). */
 export function zoomFromLatitudeDelta(latitudeDelta: number): number {
@@ -341,6 +342,8 @@ export function MapCanvas({
           <Text style={styles.zoomBtnHome}>⌂</Text>
         </Pressable>
       </View>
+      {/* Outside the map — view-shot bake host for framed pin PNGs. */}
+      <MapPinBakeHost />
     </View>
   );
 }

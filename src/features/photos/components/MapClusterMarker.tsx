@@ -5,12 +5,13 @@ import { NaverMapMarkerOverlay } from '@mj-studio/react-native-naver-map';
 import { theme } from '@/shared/constants/theme';
 
 import { resolveAssetFileUri } from '../services/mediaLibrary';
+import { requestMapPinBake } from '../services/mapPinBake';
 import type { PlaceCluster } from '../types';
 
 const CARD = 38;
 const CARD_SELECTED = 44;
-/** Tip allowance so the photo sits above the geo point (anchor y=1). */
-const TIP = 8;
+const BORDER = 2.5;
+const CARET_H = 8;
 
 export interface MapClusterMarkerProps {
   cluster: PlaceCluster;
@@ -20,11 +21,8 @@ export interface MapClusterMarkerProps {
 }
 
 /**
- * Photo map pin via Naver's native `image` prop (file:// / https).
- *
- * Custom React children are snapshotted with UIView `renderInContext`, which
- * does not paint RN Image contents reliably on device — that left beige empty
- * frames on TestFlight. Native httpUri loading reads file:// with NSData.
+ * Photo map pin: paper frame + caret, delivered as a pre-baked PNG via Naver
+ * `image.httpUri` (custom React children don't paint RN Image on device).
  */
 export function MapClusterMarker({
   cluster,
@@ -40,18 +38,20 @@ export function MapClusterMarker({
   const displayAssetId = display?.assetId;
 
   const cardSize = selected ? CARD_SELECTED : CARD;
-  const markerW = cardSize;
-  const markerH = cardSize + TIP;
+  const markerW = cardSize + BORDER * 2;
+  const markerH = markerW + CARET_H;
 
-  const [fileUri, setFileUri] = useState<string | null>(null);
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [pinUri, setPinUri] = useState<string | null>(null);
 
   useEffect(() => {
     if (!displayAssetId) {
-      setFileUri(null);
+      setPhotoUri(null);
       return;
     }
     let cancelled = false;
-    setFileUri(null);
+    setPhotoUri(null);
+    setPinUri(null);
 
     const load = async () => {
       for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -60,7 +60,7 @@ export function MapClusterMarker({
           return;
         }
         if (next) {
-          setFileUri(next);
+          setPhotoUri(next);
           return;
         }
         await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
@@ -73,16 +73,32 @@ export function MapClusterMarker({
     };
   }, [displayAssetId]);
 
+  useEffect(() => {
+    if (!photoUri) {
+      setPinUri(null);
+      return;
+    }
+    let cancelled = false;
+    setPinUri(null);
+    void requestMapPinBake(photoUri, selected, cardSize).then((baked) => {
+      if (!cancelled) {
+        setPinUri(baked);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [photoUri, selected, cardSize]);
+
   const image = useMemo(() => {
-    if (fileUri) {
+    if (pinUri) {
       return {
-        httpUri: fileUri,
-        reuseIdentifier: `pin-${displayAssetId ?? 'x'}`,
+        httpUri: pinUri,
+        reuseIdentifier: `framed-${displayAssetId ?? 'x'}-${selected ? 1 : 0}-${cardSize}`,
       };
     }
-    // Neutral placeholder until the thumb file is ready.
     return { symbol: 'gray' as const };
-  }, [fileUri, displayAssetId]);
+  }, [pinUri, displayAssetId, selected, cardSize]);
 
   const count = cluster.photos.length;
 
@@ -96,7 +112,6 @@ export function MapClusterMarker({
       zIndex={selected ? 2 : 1}
       isHideCollidedSymbols
       image={image}
-      tintColor={selected ? theme.colors.accent : undefined}
       caption={
         count > 1
           ? {
