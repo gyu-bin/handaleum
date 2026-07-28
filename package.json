@@ -52,8 +52,9 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "prebuild": "expo prebuild",
-    "update:production": "eas update --channel production",
-    "update:preview": "eas update --channel preview"
+    "ota:upload": "node scripts/ota-upload.js",
+    "update:production": "node scripts/ota-upload.js --channel production",
+    "update:preview": "node scripts/ota-upload.js --channel preview"
   },
   "private": true
 }
