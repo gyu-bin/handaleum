@@ -155,12 +155,12 @@ export async function resolveClusterDetailLabel(
     return detailLabelCache.get(key) ?? null;
   }
 
-  const permission = await Location.getForegroundPermissionsAsync();
-  if (permission.status !== 'granted') {
-    return null; // don't prompt from the detail sheet
-  }
-
   try {
+    const permission = await Location.getForegroundPermissionsAsync();
+    if (permission.status !== 'granted') {
+      return null; // don't prompt from the detail sheet
+    }
+
     const results = await Location.reverseGeocodeAsync({
       latitude: lat,
       longitude: lng,
@@ -182,13 +182,18 @@ export async function resolveClusterGuLabel(
   lat: number,
   lng: number,
 ): Promise<string | null> {
-  const permission = await Location.getForegroundPermissionsAsync();
-  if (permission.status !== 'granted') {
+  try {
+    const permission = await Location.getForegroundPermissionsAsync();
+    if (permission.status !== 'granted') {
+      return null;
+    }
+    const parsed = await reverseParsed(lat, lng);
+    // Figma Map Home chips: 구 preferred, else 시 (e.g. 성남시).
+    return parsed?.gu ?? parsed?.city ?? null;
+  } catch (error) {
+    console.warn('resolveClusterGuLabel failed', error);
     return null;
   }
-  const parsed = await reverseParsed(lat, lng);
-  // Figma Map Home chips: 구 preferred, else 시 (e.g. 성남시).
-  return parsed?.gu ?? parsed?.city ?? null;
 }
 
 async function reverseParsed(lat: number, lng: number): Promise<ParsedPlace | null> {
@@ -262,12 +267,16 @@ export async function resolveCardPinPlaces(
   if (photos.length === 0) {
     return [];
   }
-  const permission = await Location.getForegroundPermissionsAsync();
-  if (permission.status !== 'granted') {
-    const requested = await Location.requestForegroundPermissionsAsync();
-    if (requested.status !== 'granted') {
-      return [];
+  try {
+    const permission = await Location.getForegroundPermissionsAsync();
+    if (permission.status !== 'granted') {
+      const requested = await Location.requestForegroundPermissionsAsync();
+      if (requested.status !== 'granted') {
+        return [];
+      }
     }
+  } catch {
+    return [];
   }
 
   const bucketLabel = new Map<string, string | null>();
@@ -357,17 +366,27 @@ export async function groupPhotosByJourneyPlace(
     return [];
   }
 
-  const permission = await Location.getForegroundPermissionsAsync();
-  if (permission.status !== 'granted') {
-    const requested = await Location.requestForegroundPermissionsAsync();
-    if (requested.status !== 'granted') {
-      return [
-        {
-          title: unknownLabel,
-          data: [...photos].sort((a, b) => b.takenAt.localeCompare(a.takenAt)),
-        },
-      ];
+  try {
+    const permission = await Location.getForegroundPermissionsAsync();
+    if (permission.status !== 'granted') {
+      const requested = await Location.requestForegroundPermissionsAsync();
+      if (requested.status !== 'granted') {
+        return [
+          {
+            title: unknownLabel,
+            data: [...photos].sort((a, b) => b.takenAt.localeCompare(a.takenAt)),
+          },
+        ];
+      }
     }
+  } catch (error) {
+    console.warn('groupPhotosByJourneyPlace permission failed', error);
+    return [
+      {
+        title: unknownLabel,
+        data: [...photos].sort((a, b) => b.takenAt.localeCompare(a.takenAt)),
+      },
+    ];
   }
 
   const bucketLabel = new Map<string, string>();
@@ -409,12 +428,17 @@ export async function resolveVisitPlaces(photos: PhotoRef[]): Promise<VisitPlace
     return [];
   }
 
-  const permission = await Location.getForegroundPermissionsAsync();
-  if (permission.status !== 'granted') {
-    const requested = await Location.requestForegroundPermissionsAsync();
-    if (requested.status !== 'granted') {
-      return [];
+  try {
+    const permission = await Location.getForegroundPermissionsAsync();
+    if (permission.status !== 'granted') {
+      const requested = await Location.requestForegroundPermissionsAsync();
+      if (requested.status !== 'granted') {
+        return [];
+      }
     }
+  } catch (error) {
+    console.warn('resolveVisitPlaces permission failed', error);
+    return [];
   }
 
   const buckets = collectBuckets(photos);

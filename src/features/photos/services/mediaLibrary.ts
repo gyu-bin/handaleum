@@ -9,6 +9,10 @@ import {
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 
 import { getAssetLocationRaw, setAssetLocationRaw } from '@/lib/storage';
+import {
+  createConcurrencyLimiter,
+  lruSet,
+} from '@/shared/utils/concurrency';
 
 import type { MonthKey, MonthlyPhotos, MonthSummary, PhotoRef } from '../types';
 import { monthBounds, monthKeyFromTimestamp } from '../utils/month';
@@ -23,8 +27,21 @@ import {
 
 /** Larger pages = fewer native round-trips when listing a month. */
 const PAGE_SIZE = 200;
-/** Parallel getAssetInfoAsync calls for uncached assets only. */
-const LOCATION_BATCH = 40;
+/**
+ * Parallel getAssetInfoAsync for uncached GPS. Keep low — large months used to
+ * fan out 40 native reads and jetsam the process.
+ */
+const LOCATION_BATCH = 8;
+/** Cap simultaneous ImageManipulator exports (map pin thumbs). */
+const PIN_EXPORT_CONCURRENCY = 2;
+/** Cap simultaneous Android URI lookups while scrolling grids. */
+const ANDROID_URI_CONCURRENCY = 6;
+/** Bound in-memory URI maps so multi-month sessions don't grow forever. */
+const URI_CACHE_MAX = 400;
+const FILE_URI_CACHE_MAX = 80;
+
+const limitPinExport = createConcurrencyLimiter(PIN_EXPORT_CONCURRENCY);
+const limitAndroidUri = createConcurrencyLimiter(ANDROID_URI_CONCURRENCY);
 
 async function collectAssets(options: {
   createdAfter?: number;
@@ -227,8 +244,8 @@ const uriCache = new Map<string, string | null>();
 const fileUriCache = new Map<string, string | null>();
 const fileUriInflight = new Map<string, Promise<string | null>>();
 
-/** Pin thumbs are ~44pt; 160px covers @3x without shipping full camera-roll files. */
-const PIN_THUMB_WIDTH = 160;
+/** Pin thumbs are ~44pt; 128px covers @3x without shipping full camera-roll files. */
+const PIN_THUMB_WIDTH = 128;
 
 /**
  * Resolve a display URI for a camera-roll asset. Every consumer feeds the
@@ -245,28 +262,37 @@ export async function resolveAssetUri(assetId: string): Promise<string | null> {
 
   if (isDummyAssetId(assetId)) {
     const uri = dummyAssetImageUri(assetId);
-    uriCache.set(assetId, uri);
+    lruSet(uriCache, assetId, uri, URI_CACHE_MAX);
     return uri;
   }
 
   if (Platform.OS === 'ios') {
     const uri = `ph://${assetId}`;
-    uriCache.set(assetId, uri);
+    lruSet(uriCache, assetId, uri, URI_CACHE_MAX);
     return uri;
   }
 
-  try {
-    const info = await getAssetInfoAsync(assetId, { shouldDownloadFromNetwork: false });
-    const uri = info.localUri ?? info.uri ?? null;
-    // Only cache hits — a null miss may be transient (iCloud / permission).
-    if (uri) {
-      uriCache.set(assetId, uri);
+  return limitAndroidUri(async () => {
+    // Re-check after waiting in the queue — another cell may have filled cache.
+    const queuedHit = uriCache.get(assetId);
+    if (queuedHit !== undefined) {
+      return queuedHit;
     }
-    return uri;
-  } catch (error) {
-    console.error('resolveAssetUri failed', assetId, error);
-    return null; // transient — leave uncached so a retry can succeed
-  }
+    try {
+      const info = await getAssetInfoAsync(assetId, {
+        shouldDownloadFromNetwork: false,
+      });
+      const uri = info.localUri ?? info.uri ?? null;
+      // Only cache hits — a null miss may be transient (iCloud / permission).
+      if (uri) {
+        lruSet(uriCache, assetId, uri, URI_CACHE_MAX);
+      }
+      return uri;
+    } catch (error) {
+      console.error('resolveAssetUri failed', assetId, error);
+      return null; // transient — leave uncached so a retry can succeed
+    }
+  });
 }
 
 /** Strip iOS 18+ metadata fragments that break Image / manipulator loaders. */
@@ -336,7 +362,7 @@ async function exportPinThumbFileUri(assetId: string): Promise<string | null> {
       const out = await manipulateAsync(
         src,
         [{ resize: { width: PIN_THUMB_WIDTH } }],
-        { compress: 0.82, format: SaveFormat.JPEG },
+        { compress: 0.78, format: SaveFormat.JPEG },
       );
       const fileUri = normalizeFileCandidate(out.uri) ?? out.uri;
       // Only accept manipulator cache output — never a Photos DCIM path.
@@ -372,14 +398,15 @@ export async function resolveAssetFileUri(assetId: string): Promise<string | nul
   const work = (async (): Promise<string | null> => {
     if (isDummyAssetId(assetId)) {
       const uri = dummyAssetImageUri(assetId);
-      fileUriCache.set(assetId, uri);
+      lruSet(fileUriCache, assetId, uri, FILE_URI_CACHE_MAX);
       return uri;
     }
 
     try {
-      const uri = await exportPinThumbFileUri(assetId);
+      // One slot covers getAssetInfoAsync + manipulateAsync (avoid parallel decode storms).
+      const uri = await limitPinExport(() => exportPinThumbFileUri(assetId));
       if (uri) {
-        fileUriCache.set(assetId, uri);
+        lruSet(fileUriCache, assetId, uri, FILE_URI_CACHE_MAX);
       }
       // Leave uncached on miss so iCloud download can succeed on retry.
       return uri;

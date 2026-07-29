@@ -157,35 +157,8 @@ export function CardCreateScreen() {
     }
   };
 
-  if (isPending) {
-    return <LoadingView />;
-  }
-
-  if (isError || !data) {
-    return (
-      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-        <ScreenHeader title={strings.cards.createTitle} />
-        <StateView
-          icon="⚠️"
-          title={strings.common.error}
-          actionLabel={strings.common.retry}
-          onAction={() => void refetch()}
-        />
-      </SafeAreaView>
-    );
-  }
-
-  if (data.allPhotos.length === 0) {
-    return (
-      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-        <ScreenHeader title={strings.cards.createTitle} />
-        <StateView icon="🖼️" title={strings.map.emptyMonth} />
-      </SafeAreaView>
-    );
-  }
-
+  // Must stay above early returns — loading→ready would otherwise change hook count.
   const selectedCount = selectedAssetIds.length;
-
   const listHeader = useMemo(
     () => (
       <View style={styles.headerBox}>
@@ -279,6 +252,33 @@ export function CardCreateScreen() {
       template,
     ],
   );
+
+  if (isPending) {
+    return <LoadingView />;
+  }
+
+  if (isError || !data) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+        <ScreenHeader title={strings.cards.createTitle} />
+        <StateView
+          icon="⚠️"
+          title={strings.common.error}
+          actionLabel={strings.common.retry}
+          onAction={() => void refetch()}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  if (data.allPhotos.length === 0) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+        <ScreenHeader title={strings.cards.createTitle} />
+        <StateView icon="🖼️" title={strings.map.emptyMonth} />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>

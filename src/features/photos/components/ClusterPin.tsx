@@ -63,11 +63,15 @@ export function ClusterPin({
       return;
     }
     let cancelled = false;
-    void resolveAssetUri(displayAssetId).then((next) => {
-      if (!cancelled) {
-        setUri(next);
-      }
-    });
+    void resolveAssetUri(displayAssetId)
+      .then((next) => {
+        if (!cancelled) {
+          setUri(next);
+        }
+      })
+      .catch((error) => {
+        console.warn('ClusterPin uri failed', displayAssetId, error);
+      });
     return () => {
       cancelled = true;
     };

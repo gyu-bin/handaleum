@@ -50,7 +50,8 @@
 | 방문 마커: **종이 프레임+꼬리 PNG를 view-shot으로 bake** → Naver `image.httpUri`. 커스텀 children은 실기기 Image 미페인트. export는 `ph://`→manipulator 캐시 | 사각 httpUri만 / 커스텀 View | 실기기에서 사진+핀 크롬 동시 | 2026-07-28 |
 | 지도 정돈(A): **BUILDING 등 레이어 off** + 핀 `isHideCollidedSymbols`. POI 랜드마크 단독 필터는 SDK 미지원 | 커스텀 방문 라벨(B) | 사용자 선택 A | 2026-07-27 |
 | 지도 라벨: 제스처 중에도 **마운트 유지** (MapScreenAnchor). 숨김은 깜빡임의 원인 | 제스처 중 unmount | 확대/패닝 시 라벨 깜빡임 해소 | 2026-07-27 |
-| 클러스터링: **공간 그리드 O(n)** + **줌별 핀 상한** (넘치면 셀 확대). 개요≈30핀, 확대 시 증가 | 시드+haversine O(n²) / 상한 없음 | 대량·전국 산포 시 핀 카펫·튕김 방지 | 2026-07-23 |
+| 클러스터링: **공간 그리드 O(n)** + **줌별 핀 상한** (넘치면 셀 확대). 개요≈20핀, 확대 시 ≤116 | 시드+haversine O(n²) / 상한 없음 | 대량·전국 산포 시 핀 카펫·튕김 방지 | 2026-07-23 |
+| 대량 사진 안정성: GPS `LOCATION_BATCH=8`, 핀 thumb export **동시 2**, URI/bake **LRU**, 그리드 FlatList window 축소 + expo-image recycling/clearMemoryCache | 무제한 Promise.all / 캐시 무한 성장 | 수백 장 월에서 ImageManipulator·디코드 jetsam 완화 | 2026-07-29 |
 | __DEV__ 더미: **서울·경기 고정 ~55장** (구/시 허브). picsum 썸네일. 설정에서 off | 전국 랜덤 / 수백~수천 스트레스 | 시뮬·위치별 피커 확인용 | 2026-07-27 |
 | 유료: 계획=무료 3개월 / 프로 전체·₩3,990. **지금은 `IS_MONETIZATION_LIVE=false`로 전부 개방** | 출시 전 결제 강제 | 도그푸드·출시 우선 | 2026-07-23 |
 | 월 GPS 로드: **캐시 히트 즉시 맵 + 배치 점진 갱신**; 다른 달은 현재 월 완료 후 **인접→나머지** 워밍업. 백그라운드면 배치 사이 일시정지, 복귀 시 재개 (`assetLoc` 유지). OS 백그라운드 페치 미도입 | 완료 전 전면 로딩 / OS background-fetch | 첫 페인트 체감 + 라이브러리 없이 재개 | 2026-07-23 |

@@ -30,29 +30,36 @@ export function useClusterPlaceLabels(
     const targets = clusters.slice(0, 40);
 
     void (async () => {
-      const next: ClusterPlaceLabel[] = [];
-      const seenGu = new Set<string>();
-      for (const cluster of targets) {
-        const gu = await resolveClusterGuLabel(
-          cluster.centerLat,
-          cluster.centerLng,
-        );
-        if (cancelled) {
-          return;
+      try {
+        const next: ClusterPlaceLabel[] = [];
+        const seenGu = new Set<string>();
+        for (const cluster of targets) {
+          const gu = await resolveClusterGuLabel(
+            cluster.centerLat,
+            cluster.centerLng,
+          );
+          if (cancelled) {
+            return;
+          }
+          if (!gu || seenGu.has(gu)) {
+            continue;
+          }
+          seenGu.add(gu);
+          next.push({
+            clusterId: cluster.id,
+            text: gu,
+            lat: cluster.centerLat,
+            lng: cluster.centerLng,
+          });
         }
-        if (!gu || seenGu.has(gu)) {
-          continue;
+        if (!cancelled) {
+          setLabels(next);
         }
-        seenGu.add(gu);
-        next.push({
-          clusterId: cluster.id,
-          text: gu,
-          lat: cluster.centerLat,
-          lng: cluster.centerLng,
-        });
-      }
-      if (!cancelled) {
-        setLabels(next);
+      } catch (error) {
+        console.warn('useClusterPlaceLabels failed', error);
+        if (!cancelled) {
+          setLabels([]);
+        }
       }
     })();
 

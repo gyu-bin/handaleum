@@ -7,7 +7,11 @@ import type { MonthKey } from '../types';
 export type PinCoverMap = Record<string, string>;
 
 export function readPinCovers(month: MonthKey): PinCoverMap {
-  const key = monthKeySchema.parse(month);
+  const parsedKey = monthKeySchema.safeParse(month);
+  if (!parsedKey.success) {
+    return {};
+  }
+  const key = parsedKey.data;
   const raw = getPinCoversRaw(key);
   if (!raw) {
     return {};

@@ -6,7 +6,8 @@ import type { PhotoRef, PlaceCluster } from '../types';
  */
 function maxPinsForZoom(zoom: number): number {
   const z = Math.max(6, Math.min(18, zoom));
-  return Math.round(24 + (z - 6) * 10); // 24 @6 → 84 @12 → 144 @18
+  // Soft cap: overview stays readable; deep zoom still bounded for native memory.
+  return Math.round(20 + (z - 6) * 8); // 20 @6 → 68 @12 → 116 @18
 }
 
 /** Starting cell size in degrees from map zoom (~km/111). */

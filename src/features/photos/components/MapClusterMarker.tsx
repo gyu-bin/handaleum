@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { NaverMapMarkerOverlay } from '@mj-studio/react-native-naver-map';
 
@@ -12,6 +12,10 @@ const CARD = 38;
 const CARD_SELECTED = 44;
 const BORDER = 2.5;
 const CARET_H = 8;
+
+type MarkerImage =
+  | { httpUri: string; reuseIdentifier: string }
+  | { symbol: 'gray' };
 
 export interface MapClusterMarkerProps {
   cluster: PlaceCluster;
@@ -43,27 +47,38 @@ export function MapClusterMarker({
 
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [pinUri, setPinUri] = useState<string | null>(null);
+  /** Keep last httpUri so we don't thrash Naver with symbol↔httpUri flips. */
+  const lastHttpRef = useRef<Extract<MarkerImage, { httpUri: string }> | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!displayAssetId) {
       setPhotoUri(null);
+      setPinUri(null);
+      lastHttpRef.current = null;
       return;
     }
     let cancelled = false;
+    // Keep previous pinUri until the next bake finishes — clearing both
+    // forces symbol↔httpUri thrash on Naver markers (cover change / select).
     setPhotoUri(null);
-    setPinUri(null);
 
     const load = async () => {
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        const next = await resolveAssetFileUri(displayAssetId);
-        if (cancelled) {
-          return;
+      try {
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          const next = await resolveAssetFileUri(displayAssetId);
+          if (cancelled) {
+            return;
+          }
+          if (next) {
+            setPhotoUri(next);
+            return;
+          }
+          await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
         }
-        if (next) {
-          setPhotoUri(next);
-          return;
-        }
-        await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+      } catch (error) {
+        console.warn('MapClusterMarker load failed', displayAssetId, error);
       }
     };
 
@@ -75,27 +90,37 @@ export function MapClusterMarker({
 
   useEffect(() => {
     if (!photoUri) {
-      setPinUri(null);
       return;
     }
     let cancelled = false;
-    setPinUri(null);
-    void requestMapPinBake(photoUri, selected, cardSize).then((baked) => {
-      if (!cancelled) {
-        setPinUri(baked);
-      }
-    });
+    void requestMapPinBake(photoUri, selected, cardSize)
+      .then((baked) => {
+        if (!cancelled) {
+          setPinUri(baked);
+        }
+      })
+      .catch((error) => {
+        console.warn('map pin bake request failed', error);
+        if (!cancelled) {
+          setPinUri(null);
+        }
+      });
     return () => {
       cancelled = true;
     };
   }, [photoUri, selected, cardSize]);
 
-  const image = useMemo(() => {
+  const image = useMemo((): MarkerImage => {
     if (pinUri) {
-      return {
+      const next = {
         httpUri: pinUri,
         reuseIdentifier: `framed-${displayAssetId ?? 'x'}-${selected ? 1 : 0}-${cardSize}`,
       };
+      lastHttpRef.current = next;
+      return next;
+    }
+    if (lastHttpRef.current) {
+      return lastHttpRef.current;
     }
     return { symbol: 'gray' as const };
   }, [pinUri, displayAssetId, selected, cardSize]);

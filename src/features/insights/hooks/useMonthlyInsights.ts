@@ -96,18 +96,27 @@ export function useMonthlyInsights(month: MonthKey): {
 
     setLabelsResolving(true);
     void (async () => {
-      const [fLabel, tLabel] = await Promise.all([
-        farthest
-          ? resolveClusterDetailLabel(farthest.centerLat, farthest.centerLng)
-          : Promise.resolve(null),
-        top
-          ? resolveClusterDetailLabel(top.centerLat, top.centerLng)
-          : Promise.resolve(null),
-      ]);
-      if (!cancelled) {
-        setFarthestLabel(fLabel);
-        setTopLabel(tLabel);
-        setLabelsResolving(false);
+      try {
+        const [fLabel, tLabel] = await Promise.all([
+          farthest
+            ? resolveClusterDetailLabel(farthest.centerLat, farthest.centerLng)
+            : Promise.resolve(null),
+          top
+            ? resolveClusterDetailLabel(top.centerLat, top.centerLng)
+            : Promise.resolve(null),
+        ]);
+        if (!cancelled) {
+          setFarthestLabel(fLabel);
+          setTopLabel(tLabel);
+          setLabelsResolving(false);
+        }
+      } catch (error) {
+        console.warn('insights place labels failed', error);
+        if (!cancelled) {
+          setFarthestLabel(null);
+          setTopLabel(null);
+          setLabelsResolving(false);
+        }
       }
     })();
 

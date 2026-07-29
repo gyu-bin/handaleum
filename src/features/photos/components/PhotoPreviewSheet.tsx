@@ -43,11 +43,15 @@ function PhotoThumb({
 
   useEffect(() => {
     let cancelled = false;
-    void resolveAssetUri(photo.assetId).then((next) => {
-      if (!cancelled) {
-        setUri(next);
-      }
-    });
+    void resolveAssetUri(photo.assetId)
+      .then((next) => {
+        if (!cancelled) {
+          setUri(next);
+        }
+      })
+      .catch((error) => {
+        console.warn('PhotoThumb uri failed', photo.assetId, error);
+      });
     return () => {
       cancelled = true;
     };
@@ -67,7 +71,13 @@ function PhotoThumb({
       style={{ width: size, height: size, margin: theme.spacing.sm / 2 }}
     >
       {uri ? (
-        <Image source={{ uri }} style={styles.thumb} contentFit="cover" />
+        <Image
+          source={{ uri }}
+          style={styles.thumb}
+          contentFit="cover"
+          recyclingKey={photo.assetId}
+          cachePolicy="memory-disk"
+        />
       ) : (
         <View style={[styles.thumb, styles.thumbPlaceholder]} />
       )}
@@ -99,17 +109,20 @@ export function PhotoPreviewSheet({
   useEffect(() => {
     if (!cluster) {
       setPlaceLabel(null);
+      void Image.clearMemoryCache();
       return;
     }
     let cancelled = false;
     setPlaceLabel(null);
-    void resolveClusterDetailLabel(cluster.centerLat, cluster.centerLng).then(
-      (label) => {
+    void resolveClusterDetailLabel(cluster.centerLat, cluster.centerLng)
+      .then((label) => {
         if (!cancelled) {
           setPlaceLabel(label);
         }
-      },
-    );
+      })
+      .catch((error) => {
+        console.warn('resolveClusterDetailLabel failed', error);
+      });
     return () => {
       cancelled = true;
     };
@@ -148,6 +161,11 @@ export function PhotoPreviewSheet({
             keyExtractor={(item) => item.assetId}
             numColumns={3}
             contentContainerStyle={styles.list}
+            initialNumToRender={12}
+            maxToRenderPerBatch={6}
+            windowSize={5}
+            updateCellsBatchingPeriod={50}
+            removeClippedSubviews
             renderItem={({ item }) => (
               <PhotoThumb
                 photo={item}

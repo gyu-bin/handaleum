@@ -46,11 +46,15 @@ export function CardTemplateStory({
 
   useEffect(() => {
     let cancelled = false;
-    void resolveCardPinPlaces(card.photoRefs).then((next) => {
-      if (!cancelled) {
-        setPlaces(next);
-      }
-    });
+    void resolveCardPinPlaces(card.photoRefs)
+      .then((next) => {
+        if (!cancelled) {
+          setPlaces(next);
+        }
+      })
+      .catch((error) => {
+        console.warn('resolveCardPinPlaces failed', error);
+      });
     return () => {
       cancelled = true;
     };

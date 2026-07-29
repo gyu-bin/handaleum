@@ -36,8 +36,21 @@ export function MapPinBakeHost() {
       return;
     }
     let cancelled = false;
+    let completed = false;
+    // Always release the module queue — cancelled captures must not leave `active` stuck.
+    const finish = (uri: string | null) => {
+      if (completed) {
+        return;
+      }
+      completed = true;
+      completePinBake(uri);
+    };
     const timer = setTimeout(() => {
-      if (!ref.current || cancelled) {
+      if (cancelled) {
+        return;
+      }
+      if (!ref.current) {
+        finish(null);
         return;
       }
       void captureRef(ref, {
@@ -47,19 +60,20 @@ export function MapPinBakeHost() {
       })
         .then((uri) => {
           if (!cancelled) {
-            completePinBake(uri);
+            finish(uri);
           }
         })
         .catch((error) => {
           console.warn('map pin bake failed', error);
           if (!cancelled) {
-            completePinBake(null);
+            finish(null);
           }
         });
     }, CAPTURE_SETTLE_MS);
     return () => {
       cancelled = true;
       clearTimeout(timer);
+      finish(null);
     };
   }, [job, photoReady]);
 

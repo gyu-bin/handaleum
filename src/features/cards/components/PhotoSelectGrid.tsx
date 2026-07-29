@@ -92,11 +92,15 @@ const Cell = memo(function Cell({
 
   useEffect(() => {
     let cancelled = false;
-    void resolveAssetUri(photo.assetId).then((next) => {
-      if (!cancelled) {
-        setUri(next);
-      }
-    });
+    void resolveAssetUri(photo.assetId)
+      .then((next) => {
+        if (!cancelled) {
+          setUri(next);
+        }
+      })
+      .catch((error) => {
+        console.warn('PhotoSelectGrid uri failed', photo.assetId, error);
+      });
     return () => {
       cancelled = true;
     };
@@ -110,7 +114,13 @@ const Cell = memo(function Cell({
       accessibilityState={{ checked: selected }}
     >
       {uri ? (
-        <Image source={{ uri }} style={styles.image} contentFit="cover" />
+        <Image
+          source={{ uri }}
+          style={styles.image}
+          contentFit="cover"
+          recyclingKey={photo.assetId}
+          cachePolicy="memory-disk"
+        />
       ) : (
         <View style={[styles.image, styles.placeholder]} />
       )}
@@ -147,6 +157,13 @@ export function PhotoSelectGrid({
   const size = (width - theme.spacing.lg * 2) / COLS;
   const selected = new Set(selectedAssetIds);
 
+  useEffect(() => {
+    return () => {
+      // Drop decoded bitmaps when leaving card create (large months).
+      void Image.clearMemoryCache();
+    };
+  }, []);
+
   const rows = useMemo(
     () => (sections != null ? rowsFromSections(sections) : rowsFromPhotos(photos)),
     [photos, sections],
@@ -174,6 +191,11 @@ export function PhotoSelectGrid({
       ListHeaderComponent={header}
       ListFooterComponent={ListFooterComponent}
       contentContainerStyle={contentContainerStyle}
+      initialNumToRender={8}
+      maxToRenderPerBatch={4}
+      windowSize={5}
+      updateCellsBatchingPeriod={50}
+      removeClippedSubviews
       renderItem={({ item }) => {
         if (item.kind === 'header') {
           return (

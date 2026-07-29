@@ -33,15 +33,22 @@ function CollageCell({
   useEffect(() => {
     let cancelled = false;
     settled.current = false;
-    void resolveAssetUri(assetId).then((next) => {
-      if (cancelled) {
-        return;
-      }
-      setUri(next);
-      if (!next) {
-        settle();
-      }
-    });
+    void resolveAssetUri(assetId)
+      .then((next) => {
+        if (cancelled) {
+          return;
+        }
+        setUri(next);
+        if (!next) {
+          settle();
+        }
+      })
+      .catch((error) => {
+        console.warn('CollageCell uri failed', assetId, error);
+        if (!cancelled) {
+          settle();
+        }
+      });
     return () => {
       cancelled = true;
     };
@@ -67,6 +74,8 @@ function CollageCell({
           source={{ uri }}
           style={styles.image}
           contentFit="cover"
+          recyclingKey={assetId}
+          cachePolicy="memory-disk"
           onLoad={settle}
           onError={settle}
         />

@@ -54,18 +54,26 @@ export function usePinCovers(month: MonthKey): {
 
   const setCover = useCallback(
     (placeKey: string, assetId: string) => {
-      const next = writePinCover(month, placeKey, assetId);
-      cache.set(month, next);
-      emit(month);
+      try {
+        const next = writePinCover(month, placeKey, assetId);
+        cache.set(month, next);
+        emit(month);
+      } catch (error) {
+        console.error('setCover failed', month, placeKey, error);
+      }
     },
     [month],
   );
 
   const clearCover = useCallback(
     (placeKey: string) => {
-      const next = clearPinCover(month, placeKey);
-      cache.set(month, next);
-      emit(month);
+      try {
+        const next = clearPinCover(month, placeKey);
+        cache.set(month, next);
+        emit(month);
+      } catch (error) {
+        console.error('clearCover failed', month, placeKey, error);
+      }
     },
     [month],
   );

@@ -18,12 +18,27 @@ type KvStore = {
 };
 
 export const storage: KvStore = {
-  getString: (key) => Storage.getItemSync(key) ?? undefined,
+  getString: (key) => {
+    try {
+      return Storage.getItemSync(key) ?? undefined;
+    } catch (error) {
+      console.error('storage.getString failed', key, error);
+      return undefined;
+    }
+  },
   set: (key, value) => {
-    Storage.setItemSync(key, String(value));
+    try {
+      Storage.setItemSync(key, String(value));
+    } catch (error) {
+      console.error('storage.set failed', key, error);
+    }
   },
   remove: (key) => {
-    Storage.removeItemSync(key);
+    try {
+      Storage.removeItemSync(key);
+    } catch (error) {
+      console.error('storage.remove failed', key, error);
+    }
   },
 };
 

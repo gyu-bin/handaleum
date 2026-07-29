@@ -23,11 +23,15 @@ function useUri(assetId: string): string | null {
   const [uri, setUri] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
-    void resolveAssetUri(assetId).then((next) => {
-      if (!cancelled) {
-        setUri(next);
-      }
-    });
+    void resolveAssetUri(assetId)
+      .then((next) => {
+        if (!cancelled) {
+          setUri(next);
+        }
+      })
+      .catch((error) => {
+        console.warn('CollageEditor uri failed', assetId, error);
+      });
     return () => {
       cancelled = true;
     };
@@ -110,7 +114,13 @@ function EditableCell({
         ]}
       >
         {uri ? (
-          <Image source={{ uri }} style={styles.image} contentFit="cover" />
+          <Image
+            source={{ uri }}
+            style={styles.image}
+            contentFit="cover"
+            recyclingKey={assetId}
+            cachePolicy="memory-disk"
+          />
         ) : (
           <View style={[styles.image, styles.placeholder]} />
         )}

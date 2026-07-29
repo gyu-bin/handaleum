@@ -20,6 +20,23 @@ const queue: Pending[] = [];
 let active: Pending | null = null;
 const listeners = new Set<() => void>();
 
+/** Bound baked PNG path cache — month switches used to retain every pin forever. */
+const BAKE_CACHE_MAX = 96;
+
+function cacheBake(key: string, uri: string) {
+  if (cache.has(key)) {
+    cache.delete(key);
+  }
+  cache.set(key, uri);
+  while (cache.size > BAKE_CACHE_MAX) {
+    const oldest = cache.keys().next().value;
+    if (oldest === undefined) {
+      break;
+    }
+    cache.delete(oldest);
+  }
+}
+
 function emit() {
   listeners.forEach((l) => l());
 }
@@ -54,7 +71,7 @@ export function completePinBake(uri: string | null) {
   active = null;
   if (job) {
     if (uri) {
-      cache.set(job.key, uri);
+      cacheBake(job.key, uri);
     }
     job.resolve(uri);
   }

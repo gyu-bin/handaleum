@@ -37,11 +37,15 @@ export function CardTemplateFeed({ card, width = BASE_WIDTH }: CardTemplateFeedP
   useEffect(() => {
     let cancelled = false;
     const ids = photoIds.length > 0 ? photoIds.split('|') : [];
-    void Promise.all(ids.map((id) => resolveAssetUri(id))).then((next) => {
-      if (!cancelled) {
-        setUris(next);
-      }
-    });
+    void Promise.all(ids.map((id) => resolveAssetUri(id)))
+      .then((next) => {
+        if (!cancelled) {
+          setUris(next);
+        }
+      })
+      .catch((error) => {
+        console.warn('CardTemplateFeed uris failed', error);
+      });
     return () => {
       cancelled = true;
     };
@@ -49,11 +53,15 @@ export function CardTemplateFeed({ card, width = BASE_WIDTH }: CardTemplateFeedP
 
   useEffect(() => {
     let cancelled = false;
-    void resolveCardPinPlaces(card.photoRefs).then((next) => {
-      if (!cancelled) {
-        setPlaces(next);
-      }
-    });
+    void resolveCardPinPlaces(card.photoRefs)
+      .then((next) => {
+        if (!cancelled) {
+          setPlaces(next);
+        }
+      })
+      .catch((error) => {
+        console.warn('CardTemplateFeed places failed', error);
+      });
     return () => {
       cancelled = true;
     };

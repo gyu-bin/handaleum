@@ -41,11 +41,15 @@ function ClusterSlide({
       return;
     }
     let cancelled = false;
-    void resolveAssetUri(first.assetId).then((next) => {
-      if (!cancelled) {
-        setUri(next);
-      }
-    });
+    void resolveAssetUri(first.assetId)
+      .then((next) => {
+        if (!cancelled) {
+          setUri(next);
+        }
+      })
+      .catch((error) => {
+        console.warn('ClusterSlide uri failed', first.assetId, error);
+      });
     return () => {
       cancelled = true;
     };
@@ -54,13 +58,15 @@ function ClusterSlide({
   useEffect(() => {
     let cancelled = false;
     setPlaceLabel(null);
-    void resolveClusterDetailLabel(cluster.centerLat, cluster.centerLng).then(
-      (label) => {
+    void resolveClusterDetailLabel(cluster.centerLat, cluster.centerLng)
+      .then((label) => {
         if (!cancelled) {
           setPlaceLabel(label);
         }
-      },
-    );
+      })
+      .catch((error) => {
+        console.warn('ClusterSlide label failed', error);
+      });
     return () => {
       cancelled = true;
     };
@@ -131,8 +137,13 @@ export function PlaybackScreen() {
         setPlaying(false); // stop at the end of the recap
         return;
       }
-      listRef.current?.scrollToIndex({ index: next, animated: true });
-      setIndex(next);
+      try {
+        listRef.current?.scrollToIndex({ index: next, animated: true });
+        setIndex(next);
+      } catch (error) {
+        console.warn('playback scrollToIndex failed', next, error);
+        setPlaying(false);
+      }
     }, AUTOPLAY_MS);
     return () => clearInterval(timer);
   }, [playing, clusters.length]);
@@ -141,7 +152,12 @@ export function PlaybackScreen() {
     setPlaying((prev) => {
       if (!prev && index >= clusters.length - 1) {
         // Restart from the beginning when replaying from the end.
-        listRef.current?.scrollToIndex({ index: 0, animated: false });
+        try {
+          listRef.current?.scrollToIndex({ index: 0, animated: false });
+        } catch (error) {
+          console.warn('playback restart scrollToIndex failed', error);
+          listRef.current?.scrollToOffset({ offset: 0, animated: false });
+        }
         setIndex(0);
       }
       return !prev;
@@ -211,6 +227,16 @@ export function PlaybackScreen() {
         onMomentumScrollEnd={onScrollEnd}
         onScrollBeginDrag={() => setPlaying(false)}
         getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
+        onScrollToIndexFailed={({ index: failedIndex }) => {
+          // Layout not ready yet — fall back to offset so autoplay doesn't throw.
+          requestAnimationFrame(() => {
+            listRef.current?.scrollToOffset({
+              offset: Math.max(0, failedIndex) * width,
+              animated: false,
+            });
+            setIndex(Math.max(0, Math.min(failedIndex, clusters.length - 1)));
+          });
+        }}
         renderItem={({ item }) => <ClusterSlide cluster={item} width={width} />}
       />
     </SafeAreaView>

@@ -37,12 +37,20 @@ export function useMonthJourney(photos: PhotoRef[]): {
     // Settle before geocoding: dragging the time slider changes the photo set
     // on every frame, and each resolve awaits a permission check per call.
     const timer = setTimeout(() => {
-      void resolveVisitPlaces(photos).then((next) => {
-        if (!cancelled) {
-          setVisitPlaces(next);
-          setIsResolving(false);
-        }
-      });
+      void resolveVisitPlaces(photos)
+        .then((next) => {
+          if (!cancelled) {
+            setVisitPlaces(next);
+            setIsResolving(false);
+          }
+        })
+        .catch((error) => {
+          console.warn('resolveVisitPlaces failed', error);
+          if (!cancelled) {
+            setVisitPlaces([]);
+            setIsResolving(false);
+          }
+        });
     }, RESOLVE_DEBOUNCE_MS);
 
     return () => {
