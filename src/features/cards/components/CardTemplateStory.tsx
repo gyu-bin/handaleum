@@ -3,11 +3,6 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { theme } from '@/shared/constants/theme';
 
-import { PaperMap } from '../../photos/components/PaperMap';
-import {
-  resolveCardPinPlaces,
-  type CardPinPlace,
-} from '../../photos/utils/placeJourney';
 import type { RecapCardDraft } from '../types';
 import { cardCoordinate, formatMonthDot } from '../utils/cardMeta';
 import { CardCollage } from './CardCollage';
@@ -16,13 +11,10 @@ import { CardCollage } from './CardCollage';
 const BASE_WIDTH = 270;
 const OUTER_PAD = 8;
 const FRAME_PAD = 9;
-/** Map strip height as a fraction of content width — a thin, quiet locator band. */
-const MAP_HEIGHT_RATIO = 0.26;
 
 /**
- * Story card (1080×1920, 9:16) in the Dawn Survey language: cream paper with a
- * registration frame, a framed hero photo, the paper map, and instrument-style
- * annotations. Same family as the feed card, taller composition.
+ * Story card (1080×1920, 9:16): cream paper, photo collage hero (up to 5),
+ * title/footer. Map strip removed — photos are the product; Instagram can't tap.
  */
 export function CardTemplateStory({
   card,
@@ -31,35 +23,13 @@ export function CardTemplateStory({
 }: CardTemplateStoryProps) {
   const s = width / BASE_WIDTH;
   const styles = useMemo(() => makeStyles(width), [width]);
-  const [places, setPlaces] = useState<CardPinPlace[]>([]);
-  // The collage fills the leftover vertical space (measured) so the card has no
-  // dead space under the footer and the photos stay as large as the frame allows.
   const [heroBox, setHeroBox] = useState<{ w: number; h: number } | null>(null);
   const [collageReady, setCollageReady] = useState(false);
-  const pinsKey = card.photoRefs
-    .map((p) => `${p.assetId}:${p.lat.toFixed(3)},${p.lng.toFixed(3)}`)
-    .join('|');
+  const pinsKey = card.photoRefs.map((p) => p.assetId).join('|');
 
   useEffect(() => {
     setCollageReady(false);
   }, [pinsKey, width]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void resolveCardPinPlaces(card.photoRefs)
-      .then((next) => {
-        if (!cancelled) {
-          setPlaces(next);
-        }
-      })
-      .catch((error) => {
-        console.warn('resolveCardPinPlaces failed', error);
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- pinsKey captures photo set
-  }, [pinsKey]);
 
   useEffect(() => {
     if (heroBox && collageReady) {
@@ -67,17 +37,6 @@ export function CardTemplateStory({
     }
   }, [heroBox, collageReady, onReady]);
 
-  const pins = useMemo(
-    () =>
-      card.photoRefs.map((photo) => ({
-        id: photo.assetId,
-        lat: photo.lat,
-        lng: photo.lng,
-      })),
-    [card.photoRefs],
-  );
-
-  const mapW = width - 2 * (OUTER_PAD + FRAME_PAD) * s;
   const coord = cardCoordinate(card.photoRefs);
   const monthLabel = formatMonthDot(card.month);
 
@@ -111,15 +70,6 @@ export function CardTemplateStory({
               onReady={() => setCollageReady(true)}
             />
           ) : null}
-        </View>
-
-        <View style={styles.mapWrap}>
-          <PaperMap
-            pins={pins}
-            width={mapW}
-            height={mapW * MAP_HEIGHT_RATIO}
-            places={places}
-          />
         </View>
 
         <View style={styles.titleBlock}>
@@ -168,7 +118,7 @@ function makeStyles(width: number) {
       borderWidth: 1,
       borderColor: theme.tint.mid,
       padding: FRAME_PAD * s,
-      gap: 6 * s,
+      gap: 4 * s,
     },
     header: {
       flexDirection: 'row',
@@ -200,27 +150,20 @@ function makeStyles(width: number) {
       flex: 1,
       overflow: 'hidden',
     },
-    mapWrap: {
-      borderRadius: 3 * s,
-      overflow: 'hidden',
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: theme.tint.soft,
-      opacity: 0.88,
-    },
     titleBlock: {
       gap: 3 * s,
     },
     title: {
       fontFamily: theme.fonts.serif,
       color: theme.colors.ink,
-      fontSize: 20 * s,
+      fontSize: 17 * s,
       fontWeight: '700',
       letterSpacing: -0.4 * s,
     },
     comment: {
       color: theme.colors.inkSoft,
-      fontSize: 11 * s,
-      lineHeight: 15 * s,
+      fontSize: 10 * s,
+      lineHeight: 14 * s,
     },
     footer: {
       flexDirection: 'row',

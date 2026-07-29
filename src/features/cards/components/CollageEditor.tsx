@@ -12,7 +12,7 @@ import Animated, {
 import { theme } from '@/shared/constants/theme';
 
 import { resolveAssetUri } from '../../photos/services/mediaLibrary';
-import { collageRects, type CollageRect } from '../utils/collageLayout';
+import { collageRects, COLLAGE_MAX, type CollageRect } from '../utils/collageLayout';
 
 const GUTTER = 6;
 const RADIUS = 6;
@@ -141,7 +141,7 @@ export interface CollageEditorProps {
 }
 
 /**
- * Interactive 인생네컷 collage: long-press then drag a photo onto another cell to
+ * Interactive collage: long-press then drag a photo onto another cell to
  * swap their positions. The order it produces is what CardTemplateStory renders.
  */
 export function CollageEditor({
@@ -150,7 +150,7 @@ export function CollageEditor({
   onSwap,
   onDraggingChange,
 }: CollageEditorProps) {
-  const shown = assetIds.slice(0, 4);
+  const shown = assetIds.slice(0, COLLAGE_MAX);
   const rects = useMemo(
     () => collageRects(shown.length, size, size, GUTTER),
     [shown.length, size],

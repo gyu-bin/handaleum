@@ -18,7 +18,7 @@ export const recapCardSchema = z.object({
   title: z.string().min(1).max(40),
   comment: z.string().max(300),
   /** Selected photos only; originals stay in the camera roll */
-  photoRefs: z.array(photoRefSchema).min(1),
+  photoRefs: z.array(photoRefSchema).min(1).max(5),
   template: cardTemplateSchema,
   mapSnapshot: mapSnapshotSchema,
   createdAt: z.iso.datetime(),

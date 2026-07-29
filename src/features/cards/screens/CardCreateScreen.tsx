@@ -27,8 +27,8 @@ import {
 } from '../hooks/usePhotoPlaceSections';
 import type { CardTemplate, MapSnapshot } from '../types';
 
-/** How many photos each template can place on the card (4 = 인생네컷). */
-const TEMPLATE_MAX: Record<CardTemplate, number> = { feed: 3, story: 4 };
+/** How many photos each template can place on the card. */
+const TEMPLATE_MAX: Record<CardTemplate, number> = { feed: 5, story: 5 };
 /** Cap the drag-to-arrange collage so it never dominates the picker. */
 const EDITOR_MAX = 300;
 
@@ -112,7 +112,7 @@ export function CardCreateScreen() {
   }, [selectedPhotos]);
 
   // Selection is capped at what the template can show; picking past the cap
-  // swaps out the oldest pick (so on story, tapping a photo replaces the hero).
+  // swaps out the oldest pick.
   const onToggle = (assetId: string) => {
     setSelectedAssetIds((prev) => {
       if (prev.includes(assetId)) {

@@ -6,7 +6,7 @@ import { theme } from '@/shared/constants/theme';
 
 import { resolveAssetUri } from '../../photos/services/mediaLibrary';
 import type { PhotoRef } from '../../photos/types';
-import { collageRects, type CollageRect } from '../utils/collageLayout';
+import { collageRects, COLLAGE_MAX, type CollageRect } from '../utils/collageLayout';
 
 function CollageCell({
   assetId,
@@ -96,7 +96,7 @@ export interface CardCollageProps {
   onReady?: () => void;
 }
 
-/** Static 1–4 photo 인생네컷 collage. Rendered in the card template (and export). */
+/** Static 1–5 photo collage. Rendered in the card template (and export). */
 export function CardCollage({
   photos,
   width,
@@ -105,7 +105,7 @@ export function CardCollage({
   radius = 4,
   onReady,
 }: CardCollageProps) {
-  const shown = photos.slice(0, 4);
+  const shown = photos.slice(0, COLLAGE_MAX);
   const rects = collageRects(shown.length, width, height, gutter);
   const done = useRef(0);
   const reported = useRef(false);

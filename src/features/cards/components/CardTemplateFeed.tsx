@@ -1,17 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Image } from 'expo-image';
 
 import { theme } from '@/shared/constants/theme';
 
-import { PaperMap } from '../../photos/components/PaperMap';
-import { resolveAssetUri } from '../../photos/services/mediaLibrary';
-import {
-  resolveCardPinPlaces,
-  type CardPinPlace,
-} from '../../photos/utils/placeJourney';
 import type { RecapCardDraft } from '../types';
 import { cardCoordinate, formatMonthDot } from '../utils/cardMeta';
+import { CardCollage } from './CardCollage';
 
 /** Design width the fixed sizes below are authored against. */
 const BASE_WIDTH = 360;
@@ -19,66 +13,13 @@ const OUTER_PAD = 18;
 const FRAME_PAD = 18;
 
 /**
- * Feed card (1080×1350, 4:5) in the Dawn Survey language: cream paper, a thin
- * registration frame, the paper map as the hero, a filmstrip of up to three
- * photos, and instrument-style annotations (coordinate, month, sand tick).
+ * Feed card (1080×1350, 4:5): cream paper, photo collage (up to 5), title.
+ * Map removed — same photo-first language as the story card.
  */
 export function CardTemplateFeed({ card, width = BASE_WIDTH }: CardTemplateFeedProps) {
   const s = width / BASE_WIDTH;
   const styles = useMemo(() => makeStyles(width), [width]);
-  const photos = card.photoRefs.slice(0, 3);
-  const photoIds = photos.map((p) => p.assetId).join('|');
-  const [uris, setUris] = useState<(string | null)[]>([]);
-  const [places, setPlaces] = useState<CardPinPlace[]>([]);
-  const pinsKey = card.photoRefs
-    .map((p) => `${p.assetId}:${p.lat.toFixed(3)},${p.lng.toFixed(3)}`)
-    .join('|');
-
-  useEffect(() => {
-    let cancelled = false;
-    const ids = photoIds.length > 0 ? photoIds.split('|') : [];
-    void Promise.all(ids.map((id) => resolveAssetUri(id)))
-      .then((next) => {
-        if (!cancelled) {
-          setUris(next);
-        }
-      })
-      .catch((error) => {
-        console.warn('CardTemplateFeed uris failed', error);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [photoIds]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void resolveCardPinPlaces(card.photoRefs)
-      .then((next) => {
-        if (!cancelled) {
-          setPlaces(next);
-        }
-      })
-      .catch((error) => {
-        console.warn('CardTemplateFeed places failed', error);
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- pinsKey captures photo set
-  }, [pinsKey]);
-
-  const pins = useMemo(
-    () =>
-      card.photoRefs.map((photo) => ({
-        id: photo.assetId,
-        lat: photo.lat,
-        lng: photo.lng,
-      })),
-    [card.photoRefs],
-  );
-
-  const mapW = width - 2 * (OUTER_PAD + FRAME_PAD) * s;
+  const [heroBox, setHeroBox] = useState<{ w: number; h: number } | null>(null);
   const coord = cardCoordinate(card.photoRefs);
   const monthLabel = formatMonthDot(card.month);
 
@@ -87,28 +28,28 @@ export function CardTemplateFeed({ card, width = BASE_WIDTH }: CardTemplateFeedP
       <View style={styles.frame}>
         <View style={styles.header}>
           <Text style={styles.brand}>한달음</Text>
-          <Text style={styles.coord}>{coord}</Text>
+          {coord ? <Text style={styles.coord}>{coord}</Text> : null}
         </View>
         <View style={styles.rule} />
 
-        <View style={styles.mapWrap}>
-          <PaperMap pins={pins} width={mapW} height={mapW * 0.62} places={places} />
-        </View>
-
-        <View style={styles.strip}>
-          {photos.map((photo, index) => (
-            <View key={photo.assetId} style={styles.cell}>
-              {uris[index] ? (
-                <Image
-                  source={{ uri: uris[index]! }}
-                  style={styles.image}
-                  contentFit="cover"
-                />
-              ) : (
-                <View style={[styles.image, styles.placeholder]} />
-              )}
-            </View>
-          ))}
+        <View
+          style={styles.hero}
+          onLayout={(e) => {
+            const { width: w, height: h } = e.nativeEvent.layout;
+            setHeroBox((prev) =>
+              prev && prev.w === w && prev.h === h ? prev : { w, h },
+            );
+          }}
+        >
+          {heroBox ? (
+            <CardCollage
+              photos={card.photoRefs}
+              width={heroBox.w}
+              height={heroBox.h}
+              gutter={6 * s}
+              radius={2 * s}
+            />
+          ) : null}
         </View>
 
         <View style={styles.titleBlock}>
@@ -177,31 +118,9 @@ function makeStyles(width: number) {
       height: 1,
       backgroundColor: theme.tint.soft,
     },
-    mapWrap: {
-      borderRadius: 3 * s,
-      overflow: 'hidden',
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    strip: {
-      flexDirection: 'row',
-      gap: 6 * s,
-    },
-    cell: {
+    hero: {
       flex: 1,
-      aspectRatio: 1,
-      borderRadius: 2 * s,
       overflow: 'hidden',
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    image: {
-      width: '100%',
-      height: '100%',
-      backgroundColor: theme.colors.surfaceAlt,
-    },
-    placeholder: {
-      opacity: 0.5,
     },
     titleBlock: {
       marginTop: 2 * s,
