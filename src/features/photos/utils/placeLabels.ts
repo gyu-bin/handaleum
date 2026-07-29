@@ -23,6 +23,9 @@ const DONG_GU = dongGu as Record<string, Record<string, string>>;
  * are themselves the well-known name (성수동 → 성수). Anything not listed falls
  * back to the 구. Keyed by dong; a "구 동" key disambiguates repeated dongs.
  * Extend freely.
+ *
+ * Do NOT map whole 법정동 to a street nickname (e.g. 신사동→가로수길): 한남대교
+ * GPS often reverse-geocodes to 신사동 and was mislabeled. Garosu-gil is bbox-only.
  */
 const AREA_ALIAS: Record<string, string> = {
   삼평동: '판교',
@@ -39,8 +42,26 @@ const AREA_ALIAS: Record<string, string> = {
   잠실동: '잠실',
   압구정동: '압구정',
   청담동: '청담',
-  '강남구 신사동': '가로수길',
 };
+
+/** Core 가로수길 corridor (압구정로 일대) — not all of 신사동 / 한남대교. */
+const GAROSU_GIL = {
+  minLat: 37.5198,
+  maxLat: 37.5248,
+  minLng: 127.0205,
+  maxLng: 127.0258,
+};
+
+export type PlaceCoords = { lat: number; lng: number };
+
+function inGarosuGil(lat: number, lng: number): boolean {
+  return (
+    lat >= GAROSU_GIL.minLat &&
+    lat <= GAROSU_GIL.maxLat &&
+    lng >= GAROSU_GIL.minLng &&
+    lng <= GAROSU_GIL.maxLng
+  );
+}
 
 /** Recover the 구 for a 법정동 when iOS returns the dong but not the 구. */
 export function guForDong(cityShort: string, dong: string | null): string | null {
@@ -51,9 +72,20 @@ export function guForDong(cityShort: string, dong: string | null): string | null
 }
 
 /** Colloquial alias for a dong, if we have one. */
-function areaAlias(gu: string | null, dong: string | null): string | null {
+function areaAlias(
+  gu: string | null,
+  dong: string | null,
+  coords?: PlaceCoords | null,
+): string | null {
   if (!dong) {
     return null;
+  }
+  // 신사동 is huge; only the shopping street itself is "가로수길".
+  if (gu === '강남구' && dong === '신사동') {
+    if (coords && inGarosuGil(coords.lat, coords.lng)) {
+      return '가로수길';
+    }
+    return '신사동';
   }
   if (gu && AREA_ALIAS[`${gu} ${dong}`]) {
     return AREA_ALIAS[`${gu} ${dong}`]!;
@@ -64,13 +96,15 @@ function areaAlias(gu: string | null, dong: string | null): string | null {
 /**
  * Finest-grain label people recognize: a famous-area alias if known (판교), else
  * the 구 (서울 마포구), else the dong (강릉시 홍제동), else the city.
+ * Pass coords when available so street-level aliases (가로수길) stay accurate.
  */
 export function composeFineLabel(
   city: string | null,
   gu: string | null,
   dong: string | null,
+  coords?: PlaceCoords | null,
 ): string | null {
-  const alias = areaAlias(gu, dong);
+  const alias = areaAlias(gu, dong, coords);
   if (alias) {
     return alias;
   }
@@ -84,6 +118,17 @@ export function composeFineLabel(
     return `${city} ${dong}`;
   }
   return city;
+}
+
+/** Parse `placeBucketKey` ("37.517,127.028") back to coords for alias bbox checks. */
+export function coordsFromBucketKey(key: string): PlaceCoords | null {
+  const [latRaw, lngRaw] = key.split(',');
+  const lat = Number(latRaw);
+  const lng = Number(lngRaw);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return null;
+  }
+  return { lat, lng };
 }
 
 /** City name in its "…시" form: 서울 → 서울시, 부산 → 부산시, 수원시 → 수원시. */
@@ -112,6 +157,7 @@ export function labelsForVisitLevel(
           place.city ?? null,
           place.gu ?? null,
           place.dong ?? null,
+          coordsFromBucketKey(place.key),
         ) ??
         place.label;
     }

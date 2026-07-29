@@ -58,7 +58,10 @@ function ClusterSlide({
   useEffect(() => {
     let cancelled = false;
     setPlaceLabel(null);
-    void resolveClusterDetailLabel(cluster.centerLat, cluster.centerLng)
+    const pin = cluster.photos[0];
+    const lat = pin?.lat ?? cluster.centerLat;
+    const lng = pin?.lng ?? cluster.centerLng;
+    void resolveClusterDetailLabel(lat, lng)
       .then((label) => {
         if (!cancelled) {
           setPlaceLabel(label);
@@ -70,7 +73,7 @@ function ClusterSlide({
     return () => {
       cancelled = true;
     };
-  }, [cluster.centerLat, cluster.centerLng]);
+  }, [cluster]);
 
   return (
     <View style={[styles.slide, { width }]}>

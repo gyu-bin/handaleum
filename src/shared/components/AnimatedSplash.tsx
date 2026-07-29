@@ -45,9 +45,9 @@ const MAP_IN_MS = 520;
 const FIRST_STAMP_MS = 180;
 const STAMP_EVERY_MS = 150;
 const STAMP_FALL_MS = 560;
-/** Hold the fully-stamped frame so the brand can be read before exit. */
-const HOLD_MS = 1500;
-const EXIT_FADE_MS = 380;
+/** Brief hold so the stamped frame reads, then fade — keep short to avoid hitch. */
+const HOLD_MS = 520;
+const EXIT_FADE_MS = 280;
 
 const PIN_COUNT = KOREA_SILHOUETTE.pins.length;
 /** Shared 0→1 covers first stamp start through last stamp land. */

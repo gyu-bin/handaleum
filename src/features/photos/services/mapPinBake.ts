@@ -79,6 +79,23 @@ export function completePinBake(uri: string | null) {
 }
 
 /**
+ * Host cancelled mid-capture (React effect teardown). Put the job back on the
+ * queue instead of resolving null — that was leaving gray placeholder pins.
+ */
+export function deferActivePinBake() {
+  const job = active;
+  active = null;
+  if (job && !queue.includes(job)) {
+    queue.unshift(job);
+  }
+  // Don't pump synchronously — let the next tick / new Image onLoad drive it
+  // so we don't immediately re-enter the same cancelled effect.
+  setTimeout(() => {
+    pump();
+  }, 0);
+}
+
+/**
  * Returns a file:// PNG of the framed pin, or null on failure.
  * Dedupes concurrent requests for the same photo/selection size.
  */

@@ -114,7 +114,15 @@ export function PhotoPreviewSheet({
     }
     let cancelled = false;
     setPlaceLabel(null);
-    void resolveClusterDetailLabel(cluster.centerLat, cluster.centerLng)
+    // Prefer a real photo coordinate over the cluster centroid (centroids can
+    // sit on bridges / water between buckets and mis-alias neighborhoods).
+    const pin =
+      (coverAssetId
+        ? cluster.photos.find((p) => p.assetId === coverAssetId)
+        : undefined) ?? cluster.photos[0];
+    const lat = pin?.lat ?? cluster.centerLat;
+    const lng = pin?.lng ?? cluster.centerLng;
+    void resolveClusterDetailLabel(lat, lng)
       .then((label) => {
         if (!cancelled) {
           setPlaceLabel(label);
@@ -126,7 +134,7 @@ export function PhotoPreviewSheet({
     return () => {
       cancelled = true;
     };
-  }, [cluster]);
+  }, [cluster, coverAssetId]);
 
   return (
     <Modal

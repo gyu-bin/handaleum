@@ -27,28 +27,17 @@ export default function RootLayout() {
   const [otaToastPersistent, setOtaToastPersistent] = useState(false);
   const [otaDoneToast, setOtaDoneToast] = useState(false);
 
-  const animDoneRef = useRef(false);
-  const otaGateRef = useRef(false);
   const justUpdatedRef = useRef(false);
   const finishingRef = useRef(false);
 
-  const tryFinishSplash = useCallback(() => {
-    if (finishingRef.current) {
-      return;
-    }
-    if (!animDoneRef.current || !otaGateRef.current) {
-      return;
-    }
-    finishingRef.current = true;
-    setSplashDone(true);
+  useEffect(() => {
+    justUpdatedRef.current = consumeOtaJustApplied();
     if (justUpdatedRef.current) {
       setOtaDoneToast(true);
     }
-  }, []);
 
-  useEffect(() => {
-    justUpdatedRef.current = consumeOtaJustApplied();
-
+    // OTA runs in the background — never hold the splash on the network check
+    // (that was the "stuck then snap" handoff on TestFlight).
     let cancelled = false;
     void (async () => {
       const result = await applyOtaUpdateIfAvailable((phase) => {
@@ -69,23 +58,24 @@ export default function RootLayout() {
       }
       setOtaToastMessage(null);
       setOtaToastPersistent(false);
-      otaGateRef.current = true;
-      tryFinishSplash();
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [tryFinishSplash]);
+  }, []);
 
   const onSplashReady = useCallback(() => {
     void SplashScreen.hideAsync().catch(() => {});
   }, []);
 
   const onSplashFinish = useCallback(() => {
-    animDoneRef.current = true;
-    tryFinishSplash();
-  }, [tryFinishSplash]);
+    if (finishingRef.current) {
+      return;
+    }
+    finishingRef.current = true;
+    setSplashDone(true);
+  }, []);
 
   const hideOtaDoneToast = useCallback(() => setOtaDoneToast(false), []);
 

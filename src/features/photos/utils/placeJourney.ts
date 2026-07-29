@@ -132,20 +132,27 @@ export function parseGeocodedPlace(
  * Detail-sheet location label. Shown to 구 grain where the city has one
  * (서울시 서대문구, 수원시 영통구), to dong grain elsewhere (강릉시 홍제동), and
  * falling back to the city alone (파주시) when no finer part is found.
+ * Pass lat/lng so street-level aliases (가로수길) are not applied to the whole 동.
  */
 export function formatDetailPlaceLabel(
   addr: Location.LocationGeocodedAddress,
+  lat?: number,
+  lng?: number,
 ): string | null {
   const parsed = parseGeocodedPlace(addr);
   if (!parsed?.city) {
     return null;
   }
-  return composeFineLabel(toSiForm(parsed.city), parsed.gu, parsed.dong);
+  const coords =
+    lat != null && lng != null && Number.isFinite(lat) && Number.isFinite(lng)
+      ? { lat, lng }
+      : null;
+  return composeFineLabel(toSiForm(parsed.city), parsed.gu, parsed.dong, coords);
 }
 
 const detailLabelCache = new Map<string, string | null>();
 
-/** Reverse-geocode a cluster center to its detail-sheet label. Cached per bucket. */
+/** Reverse-geocode a point to its detail-sheet label. Cached per bucket. */
 export async function resolveClusterDetailLabel(
   lat: number,
   lng: number,
@@ -165,7 +172,9 @@ export async function resolveClusterDetailLabel(
       latitude: lat,
       longitude: lng,
     });
-    const label = results[0] ? formatDetailPlaceLabel(results[0]) : null;
+    const label = results[0]
+      ? formatDetailPlaceLabel(results[0], lat, lng)
+      : null;
     detailLabelCache.set(key, label);
     return label;
   } catch {

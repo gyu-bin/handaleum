@@ -13,9 +13,7 @@ const CARD_SELECTED = 44;
 const BORDER = 2.5;
 const CARET_H = 8;
 
-type MarkerImage =
-  | { httpUri: string; reuseIdentifier: string }
-  | { symbol: 'gray' };
+type MarkerImage = { httpUri: string; reuseIdentifier: string };
 
 export interface MapClusterMarkerProps {
   cluster: PlaceCluster;
@@ -27,6 +25,7 @@ export interface MapClusterMarkerProps {
 /**
  * Photo map pin: paper frame + caret, delivered as a pre-baked PNG via Naver
  * `image.httpUri` (custom React children don't paint RN Image on device).
+ * Renders nothing until the framed photo is ready — no gray placeholder dots.
  */
 export function MapClusterMarker({
   cluster,
@@ -47,10 +46,8 @@ export function MapClusterMarker({
 
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [pinUri, setPinUri] = useState<string | null>(null);
-  /** Keep last httpUri so we don't thrash Naver with symbol↔httpUri flips. */
-  const lastHttpRef = useRef<Extract<MarkerImage, { httpUri: string }> | null>(
-    null,
-  );
+  /** Keep last httpUri so we don't thrash Naver on select / rebake. */
+  const lastHttpRef = useRef<MarkerImage | null>(null);
 
   useEffect(() => {
     if (!displayAssetId) {
@@ -61,7 +58,7 @@ export function MapClusterMarker({
     }
     let cancelled = false;
     // Keep previous pinUri until the next bake finishes — clearing both
-    // forces symbol↔httpUri thrash on Naver markers (cover change / select).
+    // forces the pin to disappear mid-interaction (cover change / select).
     setPhotoUri(null);
 
     const load = async () => {
@@ -110,7 +107,7 @@ export function MapClusterMarker({
     };
   }, [photoUri, selected, cardSize]);
 
-  const image = useMemo((): MarkerImage => {
+  const image = useMemo((): MarkerImage | null => {
     if (pinUri) {
       const next = {
         httpUri: pinUri,
@@ -119,13 +116,15 @@ export function MapClusterMarker({
       lastHttpRef.current = next;
       return next;
     }
-    if (lastHttpRef.current) {
-      return lastHttpRef.current;
-    }
-    return { symbol: 'gray' as const };
+    return lastHttpRef.current;
   }, [pinUri, displayAssetId, selected, cardSize]);
 
   const count = cluster.photos.length;
+
+  // No gray symbol fallback — only show pins once the photo frame is baked.
+  if (!image) {
+    return null;
+  }
 
   return (
     <NaverMapMarkerOverlay

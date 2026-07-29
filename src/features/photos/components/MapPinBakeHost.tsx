@@ -6,6 +6,7 @@ import { theme } from '@/shared/constants/theme';
 
 import {
   completePinBake,
+  deferActivePinBake,
   getActivePinBakeJob,
   subscribePinBake,
 } from '../services/mapPinBake';
@@ -24,12 +25,10 @@ const CAPTURE_SETTLE_MS = 80;
 export function MapPinBakeHost() {
   const job = useSyncExternalStore(subscribePinBake, getActivePinBakeJob, () => null);
   const ref = useRef<View>(null);
-  const [photoReady, setPhotoReady] = useState(false);
+  /** Only true when Image finished loading *this* job's photoUri. */
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const jobKey = job?.key ?? '';
-
-  useEffect(() => {
-    setPhotoReady(false);
-  }, [jobKey]);
+  const photoReady = job != null && loadedKey === job.key;
 
   useEffect(() => {
     if (!job || !photoReady) {
@@ -37,7 +36,6 @@ export function MapPinBakeHost() {
     }
     let cancelled = false;
     let completed = false;
-    // Always release the module queue — cancelled captures must not leave `active` stuck.
     const finish = (uri: string | null) => {
       if (completed) {
         return;
@@ -73,7 +71,10 @@ export function MapPinBakeHost() {
     return () => {
       cancelled = true;
       clearTimeout(timer);
-      finish(null);
+      // Never resolve null on teardown — that painted gray pins. Re-queue.
+      if (!completed) {
+        deferActivePinBake();
+      }
     };
   }, [job, photoReady]);
 
@@ -107,13 +108,14 @@ export function MapPinBakeHost() {
           ]}
         >
           <Image
+            key={jobKey}
             source={{ uri: job.photoUri }}
             style={{ width: cardSize, height: cardSize }}
             resizeMode="cover"
-            onLoad={() => setPhotoReady(true)}
+            onLoad={() => setLoadedKey(job.key)}
             onError={() => {
               // Still try capture (placeholder bg) so the queue doesn't stall.
-              setPhotoReady(true);
+              setLoadedKey(job.key);
             }}
           />
         </View>
