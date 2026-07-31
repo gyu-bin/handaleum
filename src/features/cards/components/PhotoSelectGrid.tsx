@@ -37,7 +37,7 @@ export interface PhotoSelectGridProps {
 }
 
 type ListRow =
-  | { kind: 'header'; key: string; title: string }
+  | { kind: 'header'; key: string; title: string; count: number }
   | { kind: 'photos'; key: string; photos: PhotoRef[] };
 
 const COLS = 3;
@@ -65,6 +65,7 @@ function rowsFromSections(sections: PlacePhotoSection[]): ListRow[] {
       kind: 'header',
       key: `header-${section.title}`,
       title: section.title,
+      count: section.data.length,
     });
     for (const [index, chunk] of chunkPhotos(section.data).entries()) {
       rows.push({
@@ -113,22 +114,28 @@ const Cell = memo(function Cell({
       accessibilityRole="checkbox"
       accessibilityState={{ checked: selected }}
     >
-      {uri ? (
-        <Image
-          source={{ uri }}
-          style={styles.image}
-          contentFit="cover"
-          recyclingKey={photo.assetId}
-          cachePolicy="memory-disk"
-        />
-      ) : (
-        <View style={[styles.image, styles.placeholder]} />
-      )}
-      {selected ? (
-        <View style={styles.check}>
-          <Text style={styles.checkText}>✓</Text>
-        </View>
-      ) : null}
+      <View style={styles.tile}>
+        {uri ? (
+          <Image
+            source={{ uri }}
+            style={styles.image}
+            contentFit="cover"
+            recyclingKey={photo.assetId}
+            cachePolicy="memory-disk"
+          />
+        ) : (
+          <View style={[styles.image, styles.placeholder]} />
+        )}
+        {selected ? (
+          <>
+            <View style={styles.tileRing} pointerEvents="none" />
+            <View style={styles.tileRingInner} pointerEvents="none" />
+            <View style={styles.checkBadge}>
+              <Text style={styles.checkText}>✓</Text>
+            </View>
+          </>
+        ) : null}
+      </View>
     </Pressable>
   );
 });
@@ -200,7 +207,11 @@ export function PhotoSelectGrid({
         if (item.kind === 'header') {
           return (
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{item.title}</Text>
+              <View style={styles.sectionHead}>
+                <Text style={styles.sectionPlace}>{item.title}</Text>
+                <View style={styles.sectionRule} />
+                <Text style={styles.sectionCount}>{item.count}장</Text>
+              </View>
             </View>
           );
         }
@@ -223,28 +234,54 @@ export function PhotoSelectGrid({
 }
 
 const styles = StyleSheet.create({
+  tile: {
+    position: 'relative',
+    aspectRatio: 1,
+    borderRadius: theme.radius.sm,
+    overflow: 'hidden',
+    backgroundColor: theme.colors.surfaceAlt,
+  },
   image: {
     width: '100%',
     height: '100%',
-    borderRadius: 4,
-    backgroundColor: theme.colors.ink,
+    backgroundColor: theme.colors.surfaceAlt,
   },
   placeholder: {
-    opacity: 0.12,
+    opacity: 0.5,
   },
-  check: {
+  tileRing: {
     position: 'absolute',
-    top: 6,
-    right: 6,
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    borderWidth: 2,
+    borderColor: theme.colors.accent,
+    borderRadius: theme.radius.sm,
+  },
+  tileRingInner: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    bottom: 2,
+    left: 2,
+    borderWidth: 2,
+    borderColor: theme.colors.labelBg,
+    borderRadius: theme.radius.sm - 2,
+  },
+  checkBadge: {
+    position: 'absolute',
+    top: 7,
+    right: 7,
     width: 22,
     height: 22,
-    borderRadius: 11,
+    borderRadius: theme.radius.pill,
     backgroundColor: theme.colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkText: {
-    color: theme.colors.background,
+    color: theme.colors.white,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -256,10 +293,25 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing.md,
     paddingBottom: theme.spacing.xs,
   },
-  sectionTitle: {
+  sectionHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  sectionPlace: {
     ...theme.type.label,
     color: theme.colors.ink,
     fontWeight: '700',
+  },
+  sectionRule: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.hairline,
+  },
+  sectionCount: {
+    ...theme.type.micro,
+    color: theme.colors.subtle,
+    fontVariant: ['tabular-nums'],
   },
   photoRow: {
     flexDirection: 'row',

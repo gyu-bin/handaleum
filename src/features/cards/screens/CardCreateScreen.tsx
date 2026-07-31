@@ -3,7 +3,6 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -25,34 +24,106 @@ import {
   usePhotoPlaceSections,
   type PickerSortMode,
 } from '../hooks/usePhotoPlaceSections';
-import type { CardTemplate, MapSnapshot } from '../types';
+import { cardCoordinate, formatMonthDot } from '../utils/cardMeta';
+import type { MapSnapshot } from '../types';
 
-/** How many photos each template can place on the card. */
-const TEMPLATE_MAX: Record<CardTemplate, number> = { feed: 5, story: 5 };
-/** Cap the drag-to-arrange collage so it never dominates the picker. */
-const EDITOR_MAX = 300;
+/** The card holds up to five photos (cover + grid). */
+const MAX_PHOTOS = 5;
+/** Card preview width; inner content strips paper 6·frame 1·frame 7 pads ×2 = 26. */
+const CARD_W = 200;
+const CARD_INNER = CARD_W - 26;
 
 /**
- * Photo selection + template choice. Title/comment inputs were removed
- * (2026-07-22): the title defaults to the month name and both stay editable on
- * the preview screen, so creation is just "pick photos, pick a format".
- * Editing state is screen-local useState (spec A-4); persisted only on save.
+ * Owns hero height locally so FlatList header memo identity stays stable
+ * while CollageEditor measures — avoids remount mid-drag.
+ */
+function CreateCardPreview({
+  assetIds,
+  photos,
+  month,
+  onSwap,
+  onDraggingChange,
+  onDeselect,
+}: {
+  assetIds: string[];
+  photos: PhotoRef[];
+  month: string;
+  onSwap: (a: number, b: number) => void;
+  onDraggingChange: (dragging: boolean) => void;
+  onDeselect: (assetId: string) => void;
+}) {
+  const [heroH, setHeroH] = useState<number | null>(null);
+  const monthNumber = Number(month.split('-')[1]);
+  const coord = cardCoordinate(photos);
+
+  return (
+    <View style={styles.previewStage}>
+      <View style={[styles.regMark, styles.regTL]} />
+      <View style={[styles.regMark, styles.regTR]} />
+      <View style={[styles.regMark, styles.regBL]} />
+      <View style={[styles.regMark, styles.regBR]} />
+
+      <View style={styles.cardPaper}>
+        <View style={styles.cardFrame}>
+          <View style={styles.cardHead}>
+            <Text style={styles.cardBrand}>한달음</Text>
+            {coord ? <Text style={styles.cardCoord}>{coord}</Text> : null}
+          </View>
+          <View style={styles.cardRule} />
+
+          <View
+            style={styles.cardHero}
+            onLayout={(e) => {
+              const next = e.nativeEvent.layout.height;
+              setHeroH((prev) =>
+                prev != null && Math.abs(prev - next) < 0.5 ? prev : next,
+              );
+            }}
+          >
+            {heroH != null && heroH > 0 ? (
+              <CollageEditor
+                assetIds={assetIds}
+                width={CARD_INNER}
+                height={heroH}
+                onSwap={onSwap}
+                onDraggingChange={onDraggingChange}
+                onPressCell={onDeselect}
+              />
+            ) : null}
+          </View>
+
+          <Text style={styles.cardTitle} numberOfLines={1}>
+            {strings.map.monthTitle(monthNumber)}
+          </Text>
+          <View style={styles.cardFoot}>
+            <View style={styles.cardTickRow}>
+              <View style={styles.cardTick} />
+              <Text style={styles.cardMonth}>{formatMonthDot(month)}</Text>
+            </View>
+            <Text style={styles.cardUnit}>MONTHLY RECAP</Text>
+          </View>
+        </View>
+      </View>
+
+      <Text style={styles.hint}>{strings.cards.arrangeHint}</Text>
+    </View>
+  );
+}
+
+/**
+ * Photo selection + arrange. Title defaults to the month name (editable on
+ * preview). Editing state is screen-local; persisted only on save.
  */
 export function CardCreateScreen() {
   const router = useRouter();
-  const { width } = useWindowDimensions();
   const { month } = useCurrentMonth();
   const { data, isPending, isError, refetch } = useMonthlyPhotos(month);
   const saveCard = useSaveCard();
 
-  const [template, setTemplate] = useState<CardTemplate>('story');
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [collageDragging, setCollageDragging] = useState(false);
   const [sortMode, setSortMode] = useState<PickerSortMode>('newest');
-
-  const maxPhotos = TEMPLATE_MAX[template];
-  const editorSize = Math.min(width - theme.spacing.lg * 2, EDITOR_MAX);
 
   // Newest first in the picker — monthly load is chronological (oldest→newest).
   const pickerPhotos = useMemo(() => {
@@ -111,23 +182,18 @@ export function CardCreateScreen() {
     };
   }, [selectedPhotos]);
 
-  // Selection is capped at what the template can show; picking past the cap
-  // swaps out the oldest pick.
+  // Selection is capped; picking past the cap swaps out the oldest pick.
   const onToggle = (assetId: string) => {
     setSelectedAssetIds((prev) => {
       if (prev.includes(assetId)) {
         return prev.filter((id) => id !== assetId);
       }
       const next = [...prev, assetId];
-      return next.length > maxPhotos ? next.slice(next.length - maxPhotos) : next;
+      return next.length > MAX_PHOTOS
+        ? next.slice(next.length - MAX_PHOTOS)
+        : next;
     });
   };
-
-  // Switching to a smaller template keeps the earliest picks.
-  const onSelectTemplate = useCallback((next: CardTemplate) => {
-    setTemplate(next);
-    setSelectedAssetIds((prev) => prev.slice(0, TEMPLATE_MAX[next]));
-  }, []);
 
   const onSave = async () => {
     setFormError(null);
@@ -159,53 +225,43 @@ export function CardCreateScreen() {
 
   // Must stay above early returns — loading→ready would otherwise change hook count.
   const selectedCount = selectedAssetIds.length;
+
   const listHeader = useMemo(
     () => (
       <View style={styles.headerBox}>
-        <View style={styles.section}>
-          <Text style={styles.label}>{strings.cards.templateLabel}</Text>
-          <View style={styles.templateRow}>
-            <Pressable
-              onPress={() => onSelectTemplate('story')}
-              style={[
-                styles.templateChip,
-                template === 'story' && styles.templateChipOn,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.templateText,
-                  template === 'story' && styles.templateTextOn,
-                ]}
-              >
-                {strings.cards.templateStory}
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-
         {selectedCount > 0 ? (
           <View style={styles.section}>
-            <View style={styles.labelRow}>
-              <Text style={styles.label}>{strings.cards.arrangeLabel}</Text>
-              <Text style={styles.hint}>{strings.cards.arrangeHint}</Text>
-            </View>
-            <View style={styles.editorWrap}>
-              <CollageEditor
-                assetIds={selectedAssetIds}
-                size={editorSize}
-                onSwap={onSwap}
-                onDraggingChange={setCollageDragging}
-              />
-            </View>
+            <Text style={styles.label}>{strings.cards.arrangeLabel}</Text>
+            <CreateCardPreview
+              assetIds={selectedAssetIds}
+              photos={selectedPhotos}
+              month={month}
+              onSwap={onSwap}
+              onDraggingChange={setCollageDragging}
+              onDeselect={onToggle}
+            />
           </View>
         ) : null}
 
-        <View style={styles.labelRow}>
-          <Text style={styles.label}>{strings.cards.photoLabel}</Text>
-          <Text style={styles.selectedCount}>
-            {strings.cards.selectedCount(selectedCount, maxPhotos)}
-          </Text>
+        <View style={styles.meterBlock}>
+          <View style={styles.labelRow}>
+            <Text style={styles.label}>{strings.cards.photoLabel}</Text>
+            <View style={styles.meterCount}>
+              <Text style={styles.meterNum}>{selectedCount}</Text>
+              <Text style={styles.meterDen}>/ {MAX_PHOTOS}장</Text>
+            </View>
+          </View>
+          <View style={styles.meterTrack}>
+            {Array.from({ length: MAX_PHOTOS }, (_, i) => (
+              <View
+                key={i}
+                style={[
+                  styles.meterTick,
+                  i < selectedCount && styles.meterTickOn,
+                ]}
+              />
+            ))}
+          </View>
         </View>
         <View style={styles.sortRow}>
           <Pressable
@@ -242,14 +298,12 @@ export function CardCreateScreen() {
       </View>
     ),
     [
-      editorSize,
-      maxPhotos,
-      onSelectTemplate,
+      month,
       onSwap,
       selectedAssetIds,
       selectedCount,
+      selectedPhotos,
       sortMode,
-      template,
     ],
   );
 
@@ -301,11 +355,9 @@ export function CardCreateScreen() {
         }
       />
       {formError ? <Text style={styles.error}>{formError}</Text> : null}
-      {/* The grid owns the scroll (virtualized); the template picker rides
-          along as its header — nesting the FlatList in a ScrollView breaks
-          windowing and warns. Save lives in the screen header.
-          Header is memoized so toggling scrollEnabled during collage drag
-          does not remount CollageEditor mid-gesture. */}
+      {/* The grid owns the scroll (virtualized). Header is memoized so
+          toggling scrollEnabled during collage drag does not remount
+          CollageEditor mid-gesture. */}
       <PhotoSelectGrid
         key={sortMode}
         photos={pickerPhotos}
@@ -340,17 +392,17 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.sm,
   },
   saveAction: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.accent,
+    backgroundColor: theme.colors.sand,
   },
   saveActionDim: {
     opacity: 0.55,
   },
   saveActionText: {
     ...theme.type.label,
-    color: theme.colors.white,
+    color: theme.colors.ink,
     fontWeight: '700',
   },
   section: {
@@ -392,42 +444,114 @@ const styles = StyleSheet.create({
     color: theme.colors.accent,
     fontWeight: '700',
   },
-  selectedCount: {
-    ...theme.type.label,
-    color: theme.colors.accent,
-    fontWeight: '700',
-  },
   hint: {
     ...theme.type.micro,
     color: theme.colors.subtle,
   },
-  editorWrap: {
+  previewStage: {
+    backgroundColor: theme.colors.surfaceAlt,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.hairline,
+    paddingVertical: theme.spacing.lg,
+    alignItems: 'center',
+    gap: 12,
+    marginHorizontal: -theme.spacing.lg,
+  },
+  regMark: {
+    position: 'absolute',
+    width: 12,
+    height: 12,
+    borderColor: theme.tint.mid,
+  },
+  regTL: { top: 10, left: 14, borderLeftWidth: 1, borderTopWidth: 1 },
+  regTR: { top: 10, right: 14, borderRightWidth: 1, borderTopWidth: 1 },
+  regBL: { bottom: 10, left: 14, borderLeftWidth: 1, borderBottomWidth: 1 },
+  regBR: { bottom: 10, right: 14, borderRightWidth: 1, borderBottomWidth: 1 },
+
+  cardPaper: {
+    width: CARD_W,
+    aspectRatio: 1080 / 1920,
+    backgroundColor: theme.colors.background,
+    padding: 6,
+    ...theme.shadows.card,
+  },
+  cardFrame: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: theme.tint.mid,
+    padding: 7,
+    gap: 3,
+  },
+  cardHead: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  templateRow: {
-    flexDirection: 'row',
-    gap: theme.spacing.sm,
-  },
-  templateChip: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: 10,
-    borderRadius: theme.radius.pill,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface,
-  },
-  templateChipOn: {
-    backgroundColor: theme.colors.accent,
-    borderColor: theme.colors.accent,
-  },
-  templateText: {
-    ...theme.type.label,
+  cardBrand: {
     color: theme.colors.inkSoft,
+    fontSize: 7.4,
     fontWeight: '700',
+    letterSpacing: 1.85,
   },
-  templateTextOn: {
-    color: theme.colors.surface,
+  cardCoord: {
+    color: theme.colors.subtle,
+    fontSize: 5.6,
+    letterSpacing: 0.4,
   },
+  cardRule: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.tint.soft,
+  },
+  cardHero: { flex: 1, overflow: 'hidden' },
+  cardTitle: {
+    fontFamily: theme.fonts.serif,
+    color: theme.colors.ink,
+    fontSize: 12.6,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+    paddingTop: 2,
+  },
+  cardFoot: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  cardTickRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  cardTick: {
+    width: 5.2,
+    height: 5.2,
+    backgroundColor: theme.colors.sand,
+  },
+  cardMonth: {
+    color: theme.colors.ink,
+    fontSize: 8.2,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  cardUnit: {
+    color: theme.colors.subtle,
+    fontSize: 5.9,
+    letterSpacing: 1.2,
+  },
+
+  meterBlock: { gap: 10 },
+  meterCount: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
+  meterNum: {
+    ...theme.type.title,
+    color: theme.colors.accent,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  meterDen: {
+    ...theme.type.micro,
+    color: theme.colors.subtle,
+    fontVariant: ['tabular-nums'],
+  },
+  meterTrack: { flexDirection: 'row', gap: 4, height: 3 },
+  meterTick: { flex: 1, backgroundColor: theme.tint.soft },
+  meterTickOn: { backgroundColor: theme.colors.accent },
+
   /** Fixed under the header (not in the scroll) so it's visible next to save. */
   error: {
     ...theme.type.label,

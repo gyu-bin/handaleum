@@ -220,7 +220,7 @@ export const strings = {
     sortByPlace: '위치별',
     placeUnknown: '위치 미확인',
     arrangeLabel: '배치',
-    arrangeHint: '길게 눌러 드래그해 위치 바꾸기',
+    arrangeHint: '탭하면 선택 해제 · 길게 눌러 드래그해 위치 바꾸기',
     templateFeed: '피드 4:5',
     templateStory: '스토리 9:16',
     shareFormatLabel: '공유 형식',
@@ -245,8 +245,6 @@ export const strings = {
     notFound: '카드를 찾을 수 없습니다',
     errorTitleRequired: '제목을 입력해 주세요',
     errorPhotoRequired: '사진을 한 장 이상 선택해 주세요',
-    /** e.g. "2/3장" — how many photos are picked out of the template's cap. */
-    selectedCount: (count: number, max: number) => `${count}/${max}장`,
   },
   insights: {
     title: '인사이트',
