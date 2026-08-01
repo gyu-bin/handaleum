@@ -8,11 +8,11 @@ import {
   type PlacePhotoSection,
 } from '../../photos/utils/placeJourney';
 
-export type PickerSortMode = 'newest' | 'place';
+export type PickerSortMode = 'newest' | 'oldest' | 'place';
 
 /**
  * Resolve journey-place sections for the card photo picker.
- * Idle when sort mode is newest — callers use a flat newest-first list instead.
+ * Idle when sort mode is time-based — callers use a flat list instead.
  */
 export function usePhotoPlaceSections(
   photos: PhotoRef[],

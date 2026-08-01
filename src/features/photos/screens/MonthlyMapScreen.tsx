@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Redirect, useRouter } from 'expo-router';
+import { Redirect, useRouter, type Href } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/shared/components/Button';
@@ -10,6 +10,8 @@ import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
 import { useOnboarding } from '@/features/onboarding/hooks/useOnboarding';
+import { useStamps } from '@/features/stamps/hooks/useStamps';
+import { useStampSync } from '@/features/stamps/hooks/useStampSync';
 
 import { DEFAULT_MAP_ZOOM, MapCanvas } from '../components/MapCanvas';
 import { HomeNavBar } from '../components/HomeNavBar';
@@ -83,7 +85,9 @@ export function MonthlyMapScreen() {
     [filteredPhotos, zoom],
   );
 
-  const { places: journeyPlaces } = useMonthJourney(filteredPhotos);
+  const { places: journeyPlaces, visitPlaces } = useMonthJourney(filteredPhotos);
+  useStampSync(month, visitPlaces);
+  const { unseenCount } = useStamps();
 
   const onSelectCluster = useCallback((cluster: PlaceCluster) => {
     setSelected((prev) => (prev?.id === cluster.id ? null : cluster));
@@ -135,7 +139,12 @@ export function MonthlyMapScreen() {
     { href: '/months' as const, label: strings.months.title, icon: 'calendar' as const },
     { href: '/playback' as const, label: strings.playback.title, icon: 'play' as const },
     { href: '/cards' as const, label: strings.cards.listTitle, icon: 'card' as const },
-    { href: '/insights' as const, label: strings.insights.title, icon: 'chart' as const },
+    {
+      href: '/stamps' as Href,
+      label: strings.stamps.title,
+      icon: 'stamp' as const,
+      badge: unseenCount > 0,
+    },
   ];
 
   return (

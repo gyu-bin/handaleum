@@ -20,60 +20,165 @@ import { theme } from '@/shared/constants/theme';
 
 import { useCurrentMonth } from '../hooks/useCurrentMonth';
 import { useMonthlyPhotos } from '../hooks/useMonthlyPhotos';
+import { usePinCovers } from '../hooks/usePinCovers';
 import { clusterPhotos } from '../services/cluster';
 import { resolveAssetUri } from '../services/mediaLibrary';
-import type { PlaceCluster } from '../types';
-import { resolveClusterDetailLabel } from '../utils/placeJourney';
+import type { PhotoRef, PlaceCluster } from '../types';
+import {
+  placeBucketKey,
+  resolveClusterDetailLabel,
+} from '../utils/placeJourney';
 
-function ClusterSlide({
-  cluster,
-  width,
+const STRIP_SIZE = 64;
+
+function StripThumb({
+  photo,
+  selected,
+  isCover,
+  onPress,
 }: {
-  cluster: PlaceCluster;
-  width: number;
+  photo: PhotoRef;
+  selected: boolean;
+  isCover: boolean;
+  onPress: () => void;
 }) {
   const [uri, setUri] = useState<string | null>(null);
-  const [placeLabel, setPlaceLabel] = useState<string | null>(null);
-  const first = cluster.photos[0];
-
   useEffect(() => {
-    if (!first) {
-      return;
-    }
     let cancelled = false;
-    void resolveAssetUri(first.assetId)
+    void resolveAssetUri(photo.assetId)
       .then((next) => {
         if (!cancelled) {
           setUri(next);
         }
       })
       .catch((error) => {
-        console.warn('ClusterSlide uri failed', first.assetId, error);
+        console.warn('StripThumb uri failed', photo.assetId, error);
       });
     return () => {
       cancelled = true;
     };
-  }, [first]);
+  }, [photo.assetId]);
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={
+        isCover ? strings.map.coverSelected : strings.map.setAsCover
+      }
+      style={[
+        styles.stripThumb,
+        selected && styles.stripThumbSelected,
+        isCover && styles.stripThumbCover,
+      ]}
+    >
+      {uri ? (
+        <Image
+          source={{ uri }}
+          style={styles.stripImage}
+          contentFit="cover"
+          recyclingKey={photo.assetId}
+          cachePolicy="memory-disk"
+        />
+      ) : (
+        <View style={[styles.stripImage, styles.placeholder]} />
+      )}
+      {isCover ? (
+        <View style={styles.stripBadge}>
+          <Text style={styles.stripBadgeText}>{strings.map.coverBadge}</Text>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
+
+function ClusterSlide({
+  cluster,
+  width,
+  coverAssetId,
+  onSetCover,
+}: {
+  cluster: PlaceCluster;
+  width: number;
+  coverAssetId?: string | null;
+  onSetCover: (placeKey: string, assetId: string) => void;
+}) {
+  const placeKey = placeBucketKey(cluster.centerLat, cluster.centerLng);
+  const [activeId, setActiveId] = useState(
+    () => coverAssetId ?? cluster.photos[0]?.assetId ?? '',
+  );
+  const [uri, setUri] = useState<string | null>(null);
+  const [placeLabel, setPlaceLabel] = useState<string | null>(null);
+  const [labelLoading, setLabelLoading] = useState(true);
+
+  // Prefer cover when cluster or cover changes.
+  useEffect(() => {
+    const next =
+      (coverAssetId &&
+      cluster.photos.some((p) => p.assetId === coverAssetId)
+        ? coverAssetId
+        : null) ??
+      cluster.photos[0]?.assetId ??
+      '';
+    setActiveId(next);
+  }, [cluster, coverAssetId]);
+
+  const activePhoto =
+    cluster.photos.find((p) => p.assetId === activeId) ?? cluster.photos[0];
+
+  useEffect(() => {
+    if (!activePhoto) {
+      return;
+    }
+    let cancelled = false;
+    void resolveAssetUri(activePhoto.assetId)
+      .then((next) => {
+        if (!cancelled) {
+          setUri(next);
+        }
+      })
+      .catch((error) => {
+        console.warn('ClusterSlide uri failed', activePhoto.assetId, error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activePhoto]);
 
   useEffect(() => {
     let cancelled = false;
     setPlaceLabel(null);
-    const pin = cluster.photos[0];
+    setLabelLoading(true);
+    const pin = activePhoto ?? cluster.photos[0];
     const lat = pin?.lat ?? cluster.centerLat;
     const lng = pin?.lng ?? cluster.centerLng;
     void resolveClusterDetailLabel(lat, lng)
       .then((label) => {
         if (!cancelled) {
           setPlaceLabel(label);
+          setLabelLoading(false);
         }
       })
       .catch((error) => {
         console.warn('ClusterSlide label failed', error);
+        if (!cancelled) {
+          setPlaceLabel(null);
+          setLabelLoading(false);
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [cluster]);
+  }, [activePhoto, cluster]);
+
+  const onSelectPhoto = (assetId: string) => {
+    setActiveId(assetId);
+    onSetCover(placeKey, assetId);
+  };
+
+  const placeText = labelLoading
+    ? strings.playback.placeLoading
+    : (placeLabel ?? strings.playback.placeUnknown);
 
   return (
     <View style={[styles.slide, { width }]}>
@@ -85,14 +190,35 @@ function ClusterSlide({
         )}
       </View>
       <Text style={styles.place} numberOfLines={2}>
-        {placeLabel ?? strings.playback.placeLoading}
+        {placeText}
       </Text>
       <Text style={styles.meta}>
         {strings.map.clusterCount(cluster.photos.length)}
       </Text>
       <Text style={styles.date}>
-        {new Date(first?.takenAt ?? '').toLocaleString('ko-KR')}
+        {new Date(activePhoto?.takenAt ?? '').toLocaleString('ko-KR')}
       </Text>
+
+      {cluster.photos.length > 1 ? (
+        <View style={styles.stripBlock}>
+          <Text style={styles.stripHint}>{strings.playback.stripHint}</Text>
+          <FlatList
+            horizontal
+            data={cluster.photos}
+            keyExtractor={(item) => item.assetId}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.stripList}
+            renderItem={({ item }) => (
+              <StripThumb
+                photo={item}
+                selected={item.assetId === activeId}
+                isCover={item.assetId === coverAssetId}
+                onPress={() => onSelectPhoto(item.assetId)}
+              />
+            )}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -103,15 +229,16 @@ const AUTOPLAY_MS = 2800;
 /**
  * Storytelling view: steps through clusters in chronological order, by manual
  * swipe or auto-play. A drag pauses auto-play so the user is never fought.
+ * Same-place strip sets the pin cover (shared with the map).
  */
 export function PlaybackScreen() {
   const { width } = useWindowDimensions();
   const { month } = useCurrentMonth();
   const { data, isPending, isError, refetch } = useMonthlyPhotos(month);
+  const { covers, setCover } = usePinCovers(month);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const listRef = useRef<FlatList<PlaceCluster>>(null);
-  // Read the live index inside the interval without re-arming it every step.
   const indexRef = useRef(0);
   indexRef.current = index;
 
@@ -120,7 +247,8 @@ export function PlaybackScreen() {
       return [];
     }
     return clusterPhotos(data.photos, 14).sort(
-      (a, b) => Date.parse(a.photos[0]!.takenAt) - Date.parse(b.photos[0]!.takenAt),
+      (a, b) =>
+        Date.parse(a.photos[0]!.takenAt) - Date.parse(b.photos[0]!.takenAt),
     );
   }, [data]);
 
@@ -137,7 +265,7 @@ export function PlaybackScreen() {
     const timer = setInterval(() => {
       const next = indexRef.current + 1;
       if (next >= clusters.length) {
-        setPlaying(false); // stop at the end of the recap
+        setPlaying(false);
         return;
       }
       try {
@@ -154,7 +282,6 @@ export function PlaybackScreen() {
   const togglePlay = () => {
     setPlaying((prev) => {
       if (!prev && index >= clusters.length - 1) {
-        // Restart from the beginning when replaying from the end.
         try {
           listRef.current?.scrollToIndex({ index: 0, animated: false });
         } catch (error) {
@@ -209,8 +336,13 @@ export function PlaybackScreen() {
               onPress={togglePlay}
               hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel={playing ? strings.playback.pause : strings.playback.play}
-              style={({ pressed }) => [styles.playBtn, pressed && styles.playBtnPressed]}
+              accessibilityLabel={
+                playing ? strings.playback.pause : strings.playback.play
+              }
+              style={({ pressed }) => [
+                styles.playBtn,
+                pressed && styles.playBtnPressed,
+              ]}
             >
               <Text style={styles.playIcon}>{playing ? '❚❚' : '▶'}</Text>
             </Pressable>
@@ -229,9 +361,12 @@ export function PlaybackScreen() {
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={onScrollEnd}
         onScrollBeginDrag={() => setPlaying(false)}
-        getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
+        getItemLayout={(_, i) => ({
+          length: width,
+          offset: width * i,
+          index: i,
+        })}
         onScrollToIndexFailed={({ index: failedIndex }) => {
-          // Layout not ready yet — fall back to offset so autoplay doesn't throw.
           requestAnimationFrame(() => {
             listRef.current?.scrollToOffset({
               offset: Math.max(0, failedIndex) * width,
@@ -240,7 +375,17 @@ export function PlaybackScreen() {
             setIndex(Math.max(0, Math.min(failedIndex, clusters.length - 1)));
           });
         }}
-        renderItem={({ item }) => <ClusterSlide cluster={item} width={width} />}
+        renderItem={({ item }) => {
+          const key = placeBucketKey(item.centerLat, item.centerLng);
+          return (
+            <ClusterSlide
+              cluster={item}
+              width={width}
+              coverAssetId={covers[key] ?? null}
+              onSetCover={setCover}
+            />
+          );
+        }}
       />
     </SafeAreaView>
   );
@@ -280,6 +425,7 @@ const styles = StyleSheet.create({
   slide: {
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.md,
   },
   imageWrap: {
     borderRadius: theme.radius.card,
@@ -311,5 +457,50 @@ const styles = StyleSheet.create({
     ...theme.type.label,
     marginTop: 2,
     color: theme.colors.subtle,
+  },
+  stripBlock: {
+    marginTop: theme.spacing.md,
+    gap: theme.spacing.sm,
+  },
+  stripHint: {
+    ...theme.type.micro,
+    color: theme.colors.subtle,
+  },
+  stripList: {
+    gap: theme.spacing.sm,
+    paddingVertical: 2,
+  },
+  stripThumb: {
+    width: STRIP_SIZE,
+    height: STRIP_SIZE,
+    borderRadius: theme.radius.sm,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: theme.colors.line,
+  },
+  stripThumbSelected: {
+    borderColor: theme.colors.accent,
+  },
+  stripThumbCover: {
+    borderColor: theme.colors.sand,
+  },
+  stripImage: {
+    width: '100%',
+    height: '100%',
+  },
+  stripBadge: {
+    position: 'absolute',
+    left: 4,
+    bottom: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: theme.radius.sm,
+    backgroundColor: theme.colors.sand,
+  },
+  stripBadgeText: {
+    ...theme.type.micro,
+    color: theme.colors.white,
+    fontWeight: '700',
+    fontSize: 9,
   },
 });

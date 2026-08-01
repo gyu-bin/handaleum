@@ -14,7 +14,10 @@ const RESOLVE_DEBOUNCE_MS = 250;
  * header chips.
  */
 export function useMonthJourney(photos: PhotoRef[]): {
+  /** Familiar labels for header chips. */
   places: string[];
+  /** Raw visit places for stamp sync / insights grain. */
+  visitPlaces: VisitPlace[];
   isResolving: boolean;
 } {
   const [visitPlaces, setVisitPlaces] = useState<VisitPlace[]>([]);
@@ -66,5 +69,5 @@ export function useMonthJourney(photos: PhotoRef[]): {
     [visitPlaces],
   );
 
-  return { places, isResolving };
+  return { places, visitPlaces, isResolving };
 }

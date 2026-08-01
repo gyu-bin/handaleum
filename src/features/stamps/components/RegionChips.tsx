@@ -1,0 +1,93 @@
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+
+import { theme } from '@/shared/constants/theme';
+
+export interface RegionChipsProps {
+  sidos: string[];
+  selected: string;
+  onSelect: (sido: string) => void;
+}
+
+const CHIP_H = 40;
+
+/**
+ * Horizontal 시·도 chip row. Selected chip fills with accent.
+ * Fixed chip height + generous scroll padding so Hangul is not clipped.
+ */
+export function RegionChips({ sidos, selected, onSelect }: RegionChipsProps) {
+  return (
+    <View style={styles.wrap}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.scroll}
+        contentContainerStyle={styles.row}
+      >
+        {sidos.map((sido) => {
+          const active = sido === selected;
+          return (
+            <Pressable
+              key={sido}
+              onPress={() => onSelect(sido)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              style={[styles.chip, active && styles.chipActive]}
+            >
+              <Text
+                style={[styles.label, active && styles.labelActive]}
+                numberOfLines={1}
+                allowFontScaling={false}
+              >
+                {sido}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: {
+    // Isolate scroll clipping from neighbors.
+    height: CHIP_H + 16,
+    justifyContent: 'center',
+  },
+  scroll: {
+    flexGrow: 0,
+  },
+  row: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: 8,
+    alignItems: 'center',
+    flexDirection: 'row',
+  },
+  chip: {
+    height: CHIP_H,
+    paddingHorizontal: 16,
+    marginRight: theme.spacing.sm,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.surfaceAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.panelBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipActive: {
+    backgroundColor: theme.colors.accent,
+    borderColor: theme.colors.accent,
+  },
+  label: {
+    fontSize: 14,
+    // Match chip inner box — avoid theme.label lineHeight which clips Hangul.
+    lineHeight: 20,
+    includeFontPadding: false,
+    color: theme.colors.inkSoft,
+    fontWeight: '600',
+    textAlignVertical: 'center',
+  },
+  labelActive: {
+    color: theme.colors.white,
+  },
+});

@@ -34,6 +34,9 @@ export interface PhotoSelectGridProps {
   keyboardShouldPersistTaps?: 'always' | 'never' | 'handled';
   /** Lock scrolling while the collage drag-to-swap gesture is active. */
   scrollEnabled?: boolean;
+  /** Forwarded to FlatList for sticky-preview collapse, etc. */
+  onScroll?: FlatList['props']['onScroll'];
+  scrollEventThrottle?: number;
 }
 
 type ListRow =
@@ -159,6 +162,8 @@ export function PhotoSelectGrid({
   contentContainerStyle,
   keyboardShouldPersistTaps,
   scrollEnabled = true,
+  onScroll,
+  scrollEventThrottle = 16,
 }: PhotoSelectGridProps) {
   const { width } = useWindowDimensions();
   const size = (width - theme.spacing.lg * 2) / COLS;
@@ -189,10 +194,13 @@ export function PhotoSelectGrid({
 
   return (
     <FlatList
+      style={styles.list}
       data={rows}
       keyExtractor={(item) => item.key}
       extraData={selectedAssetIds}
       scrollEnabled={scrollEnabled}
+      onScroll={onScroll}
+      scrollEventThrottle={scrollEventThrottle}
       keyboardShouldPersistTaps={keyboardShouldPersistTaps}
       showsVerticalScrollIndicator={false}
       ListHeaderComponent={header}
@@ -234,6 +242,9 @@ export function PhotoSelectGrid({
 }
 
 const styles = StyleSheet.create({
+  list: {
+    flex: 1,
+  },
   tile: {
     position: 'relative',
     aspectRatio: 1,

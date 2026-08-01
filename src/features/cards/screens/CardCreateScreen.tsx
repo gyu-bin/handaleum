@@ -1,11 +1,19 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import Animated, {
+  Extrapolation,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LoadingView } from '@/shared/components/LoadingView';
@@ -32,6 +40,8 @@ const MAX_PHOTOS = 5;
 /** Card preview width; inner content strips paper 6·frame 1·frame 7 pads ×2 = 26. */
 const CARD_W = 200;
 const CARD_INNER = CARD_W - 26;
+/** Scroll distance (px) to fully shrink the sticky card preview. */
+const PREVIEW_COLLAPSE_Y = 160;
 
 /**
  * Owns hero height locally so FlatList header memo identity stays stable
@@ -124,14 +134,43 @@ export function CardCreateScreen() {
   const [formError, setFormError] = useState<string | null>(null);
   const [collageDragging, setCollageDragging] = useState(false);
   const [sortMode, setSortMode] = useState<PickerSortMode>('newest');
+  const scrollY = useSharedValue(0);
 
-  // Newest first in the picker — monthly load is chronological (oldest→newest).
+  // RN FlatList needs a JS function — Reanimated's scroll handler is for Animated.FlatList.
+  const onGridScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      scrollY.value = e.nativeEvent.contentOffset.y;
+    },
+    [scrollY],
+  );
+
+  const stickyPreviewStyle = useAnimatedStyle(() => {
+    const t = interpolate(
+      scrollY.value,
+      [0, PREVIEW_COLLAPSE_Y],
+      [0, 1],
+      Extrapolation.CLAMP,
+    );
+    return {
+      maxHeight: interpolate(t, [0, 1], [440, 152]),
+      paddingBottom: interpolate(t, [0, 1], [theme.spacing.sm, 0]),
+      opacity: interpolate(t, [0, 1], [1, 0.96]),
+    };
+  });
+
+  // Newest / oldest for the flat picker; place mode still uses journey sections.
   const pickerPhotos = useMemo(() => {
     if (!data) {
       return [];
     }
-    return [...data.allPhotos].sort((a, b) => b.takenAt.localeCompare(a.takenAt));
-  }, [data]);
+    const next = [...data.allPhotos];
+    if (sortMode === 'oldest') {
+      next.sort((a, b) => a.takenAt.localeCompare(b.takenAt));
+    } else {
+      next.sort((a, b) => b.takenAt.localeCompare(a.takenAt));
+    }
+    return next;
+  }, [data, sortMode]);
 
   const { sections: placeSections, isLoading: placeLoading } = usePhotoPlaceSections(
     pickerPhotos,
@@ -229,20 +268,6 @@ export function CardCreateScreen() {
   const listHeader = useMemo(
     () => (
       <View style={styles.headerBox}>
-        {selectedCount > 0 ? (
-          <View style={styles.section}>
-            <Text style={styles.label}>{strings.cards.arrangeLabel}</Text>
-            <CreateCardPreview
-              assetIds={selectedAssetIds}
-              photos={selectedPhotos}
-              month={month}
-              onSwap={onSwap}
-              onDraggingChange={setCollageDragging}
-              onDeselect={onToggle}
-            />
-          </View>
-        ) : null}
-
         <View style={styles.meterBlock}>
           <View style={styles.labelRow}>
             <Text style={styles.label}>{strings.cards.photoLabel}</Text>
@@ -280,6 +305,21 @@ export function CardCreateScreen() {
             </Text>
           </Pressable>
           <Pressable
+            onPress={() => setSortMode('oldest')}
+            accessibilityRole="button"
+            accessibilityState={{ selected: sortMode === 'oldest' }}
+            style={[styles.sortChip, sortMode === 'oldest' && styles.sortChipOn]}
+          >
+            <Text
+              style={[
+                styles.sortChipText,
+                sortMode === 'oldest' && styles.sortChipTextOn,
+              ]}
+            >
+              {strings.cards.sortOldest}
+            </Text>
+          </Pressable>
+          <Pressable
             onPress={() => setSortMode('place')}
             accessibilityRole="button"
             accessibilityState={{ selected: sortMode === 'place' }}
@@ -297,14 +337,7 @@ export function CardCreateScreen() {
         </View>
       </View>
     ),
-    [
-      month,
-      onSwap,
-      selectedAssetIds,
-      selectedCount,
-      selectedPhotos,
-      sortMode,
-    ],
+    [selectedCount, sortMode],
   );
 
   if (isPending) {
@@ -355,22 +388,36 @@ export function CardCreateScreen() {
         }
       />
       {formError ? <Text style={styles.error}>{formError}</Text> : null}
-      {/* The grid owns the scroll (virtualized). Header is memoized so
-          toggling scrollEnabled during collage drag does not remount
-          CollageEditor mid-gesture. */}
-      <PhotoSelectGrid
-        key={sortMode}
-        photos={pickerPhotos}
-        sections={
-          sortMode === 'place' ? (placeLoading ? [] : placeSections) : null
-        }
-        sectionsLoading={sortMode === 'place' && placeLoading}
-        selectedAssetIds={selectedAssetIds}
-        onToggle={onToggle}
-        scrollEnabled={!collageDragging}
-        contentContainerStyle={styles.scroll}
-        ListHeaderComponent={listHeader}
-      />
+      {/* Sticky card preview: shrinks as the photo grid scrolls down. */}
+      {selectedCount > 0 ? (
+        <Animated.View style={[styles.stickyPreview, stickyPreviewStyle]}>
+          <CreateCardPreview
+            assetIds={selectedAssetIds}
+            photos={selectedPhotos}
+            month={month}
+            onSwap={onSwap}
+            onDraggingChange={setCollageDragging}
+            onDeselect={onToggle}
+          />
+        </Animated.View>
+      ) : null}
+      <View style={styles.gridFlex}>
+        <PhotoSelectGrid
+          key={sortMode}
+          photos={pickerPhotos}
+          sections={
+            sortMode === 'place' ? (placeLoading ? [] : placeSections) : null
+          }
+          sectionsLoading={sortMode === 'place' && placeLoading}
+          selectedAssetIds={selectedAssetIds}
+          onToggle={onToggle}
+          scrollEnabled={!collageDragging}
+          contentContainerStyle={styles.scroll}
+          ListHeaderComponent={listHeader}
+          onScroll={onGridScroll}
+          scrollEventThrottle={16}
+        />
+      </View>
     </SafeAreaView>
   );
 }
@@ -379,6 +426,19 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: theme.colors.background,
+  },
+  stickyPreview: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.hairline,
+    backgroundColor: theme.colors.background,
+    overflow: 'hidden',
+    alignItems: 'center',
+  },
+  gridFlex: {
+    flex: 1,
   },
   // No gap here: it would also space out the grid's photo rows. Section
   // spacing lives inside headerBox instead.

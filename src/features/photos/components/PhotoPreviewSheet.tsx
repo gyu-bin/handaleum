@@ -105,15 +105,18 @@ export function PhotoPreviewSheet({
     ? placeBucketKey(cluster.centerLat, cluster.centerLng)
     : null;
   const [placeLabel, setPlaceLabel] = useState<string | null>(null);
+  const [labelLoading, setLabelLoading] = useState(false);
 
   useEffect(() => {
     if (!cluster) {
       setPlaceLabel(null);
+      setLabelLoading(false);
       void Image.clearMemoryCache();
       return;
     }
     let cancelled = false;
     setPlaceLabel(null);
+    setLabelLoading(true);
     // Prefer a real photo coordinate over the cluster centroid (centroids can
     // sit on bridges / water between buckets and mis-alias neighborhoods).
     const pin =
@@ -126,15 +129,25 @@ export function PhotoPreviewSheet({
       .then((label) => {
         if (!cancelled) {
           setPlaceLabel(label);
+          setLabelLoading(false);
         }
       })
       .catch((error) => {
         console.warn('resolveClusterDetailLabel failed', error);
+        if (!cancelled) {
+          setPlaceLabel(null);
+          setLabelLoading(false);
+        }
       });
     return () => {
       cancelled = true;
     };
   }, [cluster, coverAssetId]);
+
+  const titleText = labelLoading
+    ? strings.map.placeLoading
+    : (placeLabel ??
+      (cluster ? strings.map.clusterCount(cluster.photos.length) : ''));
 
   return (
     <Modal
@@ -147,12 +160,13 @@ export function PhotoPreviewSheet({
         <View style={styles.header}>
           <View style={styles.titleBlock}>
             <Text style={styles.title} numberOfLines={1}>
-              {placeLabel ??
-                (cluster ? strings.map.clusterCount(cluster.photos.length) : '')}
+              {titleText}
             </Text>
-            {cluster && placeLabel ? (
+            {cluster && !labelLoading ? (
               <Text style={styles.meta} numberOfLines={1}>
-                {strings.map.clusterCount(cluster.photos.length)}
+                {placeLabel
+                  ? strings.map.clusterCount(cluster.photos.length)
+                  : strings.map.placeUnknown}
               </Text>
             ) : null}
             {onSetCover ? (

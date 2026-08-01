@@ -49,6 +49,13 @@ export const theme = {
      * two is not the most important thing on the screen.
      */
     sand: '#C9A961',
+    /**
+     * Tab badge only (발도장 unseen). Warm red that sits with sand/ink —
+     * do not use elsewhere on the same screen as sand.
+     */
+    notify: '#CB5A47',
+    /** Progress track / empty stamp outline. */
+    line: '#E8E4DC',
     overlay: 'rgba(251,249,244,0.88)',
     overlayDark: 'rgba(44,62,80,0.45)',
     labelBg: 'rgba(251,249,244,0.9)',

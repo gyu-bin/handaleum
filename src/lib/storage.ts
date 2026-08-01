@@ -106,6 +106,8 @@ export function setAssetLocationRaw(assetId: string, value: string): void {
 
 const PLACE_FIRST_SEEN_KEY = 'placeFirstSeen';
 const IS_PRO_KEY = 'isPro';
+const STAMPS_COLLECTED_KEY = 'stampsCollected';
+const STAMPS_UNSEEN_KEY = 'stampsUnseen';
 
 /** JSON map of familiar place label → earliest YYYY-MM visited. */
 export function getPlaceFirstSeenRaw(): string | null {
@@ -141,4 +143,22 @@ export function getDevDummyPhotosRaw(): string | null {
 
 export function setDevDummyPhotosRaw(enabled: boolean): void {
   storage.set(DEV_DUMMY_PHOTOS_KEY, enabled ? '1' : '0');
+}
+
+/** JSON map of stampId → { name, sido, firstMonth }. */
+export function getStampsRaw(): string | null {
+  return storage.getString(STAMPS_COLLECTED_KEY) ?? null;
+}
+
+export function setStampsRaw(json: string): void {
+  storage.set(STAMPS_COLLECTED_KEY, json);
+}
+
+/** JSON string[] of stampIds not yet viewed on the 발도장 screen. */
+export function getStampsUnseenRaw(): string | null {
+  return storage.getString(STAMPS_UNSEEN_KEY) ?? null;
+}
+
+export function setStampsUnseenRaw(json: string): void {
+  storage.set(STAMPS_UNSEEN_KEY, json);
 }
