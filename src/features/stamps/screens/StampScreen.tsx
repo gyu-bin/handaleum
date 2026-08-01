@@ -1,11 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  FlatList,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LoadingView } from '@/shared/components/LoadingView';
@@ -20,29 +14,28 @@ import { useMonthlyPhotos } from '@/features/photos/hooks/useMonthlyPhotos';
 import { usePhotoPermission } from '@/features/photos/hooks/usePhotoPermission';
 import { isDevDummyPhotosEnabled } from '@/features/photos/services/dummyPhotos';
 
+import {
+  CityStampSections,
+  type CityStampSection,
+} from '../components/CityStampSections';
 import { MascotPin } from '../components/MascotPin';
 import { RegionChips } from '../components/RegionChips';
-import { StampBadge } from '../components/StampBadge';
 import { StampEarnOverlay } from '../components/StampEarnOverlay';
+import { useStampBackfill } from '../hooks/useStampBackfill';
 import { useStampSync } from '../hooks/useStampSync';
 import { useStamps } from '../hooks/useStamps';
 import {
   SIDO_ORDER,
-  sigunguListForSido,
+  cityListForSido,
+  isGeneralGuParentCity,
   stampId,
+  unitsForCity,
 } from '../services/sigunguIndex';
 import {
+  countCollectedInCity,
   countCollectedInSido,
   firstsInMonth,
 } from '../services/stampsStorage';
-
-type GridItem = {
-  name: string;
-  collected: boolean;
-  animateIn: boolean;
-  tiltDeg: number;
-  id: string;
-};
 
 function tiltForName(name: string): number {
   let h = 0;
@@ -53,10 +46,9 @@ function tiltForName(name: string): number {
 }
 
 /**
- * 발도장 — collected 시군구 seals, sido progress, earn overlay.
+ * 발도장 — 시·도 칩 + 한 페이지에서 시별 구역(일반구 시는 그룹).
  */
 export function StampScreen() {
-  const { width } = useWindowDimensions();
   const { month } = useCurrentMonth();
   const { status, isReady } = usePhotoPermission();
   const hasAccess =
@@ -67,33 +59,24 @@ export function StampScreen() {
   const photos = photosQuery.data?.photos ?? [];
   const { visitPlaces } = useMonthJourney(photos);
   useStampSync(month, visitPlaces);
+  const { backfilling } = useStampBackfill(month);
 
   const { collected, unseen, collectedCount, markAllSeen } = useStamps();
   const [sido, setSido] = useState(SIDO_ORDER[0] ?? '서울');
   const [celebrate, setCelebrate] = useState<string[] | null>(null);
   const [animateIds, setAnimateIds] = useState<Set<string>>(() => new Set());
-  /** Bump to remount a badge and replay the slam (tap collected stamp). */
   const [replayNonce, setReplayNonce] = useState<Record<string, number>>({});
   const entryHandled = useRef(false);
 
-  // On entry: play slam for unseen, or (if already seen) this month's firsts.
   useEffect(() => {
-    if (entryHandled.current) {
+    if (entryHandled.current || unseen.length === 0) {
       return;
     }
     entryHandled.current = true;
 
     const ids = new Set<string>();
     const names: string[] = [];
-
-    const sourceIds =
-      unseen.length > 0
-        ? unseen
-        : Object.entries(collected)
-            .filter(([, e]) => e.firstMonth === month)
-            .map(([id]) => id);
-
-    for (const id of sourceIds) {
+    for (const id of unseen) {
       const entry = collected[id];
       if (!entry) {
         continue;
@@ -106,16 +89,15 @@ export function StampScreen() {
 
     if (ids.size > 0) {
       setAnimateIds(ids);
-      // Overlay: a few "쾅"s — full list would take too long for 19+.
       setCelebrate(names.slice(0, 5));
-      const firstId = sourceIds[0];
+      const firstId = unseen[0];
       const first = firstId ? collected[firstId] : undefined;
       if (first?.sido) {
         setSido(first.sido);
       }
     }
     markAllSeen();
-  }, [collected, markAllSeen, month, unseen]);
+  }, [collected, markAllSeen, unseen]);
 
   const onOverlayDone = useCallback(() => {
     setCelebrate(null);
@@ -125,47 +107,79 @@ export function StampScreen() {
     setReplayNonce((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
   }, []);
 
-  const list = sigunguListForSido(sido);
+  const cities = useMemo(() => cityListForSido(sido), [sido]);
   const collectedInSido = countCollectedInSido(collected, sido);
   const monthFirsts = firstsInMonth(collected, month);
 
-  const data: GridItem[] = useMemo(() => {
-    const inList = new Set(list);
-    const rows: GridItem[] = list.map((name) => {
-      const id = stampId(sido, name);
-      return {
-        id,
-        name,
-        collected: Boolean(collected[id]),
-        animateIn: animateIds.has(id),
-        tiltDeg: tiltForName(name),
-      };
-    });
-    for (const [id, entry] of Object.entries(collected)) {
-      if (entry.sido !== sido || inList.has(entry.name)) {
-        continue;
+  const sections: CityStampSection[] = useMemo(() => {
+    // Only 일반구 시 (창원·용인…) get a labeled block. Metro 구 + 군 + plain
+    // 시·군 share one continuous 3-col grid — avoids 기장군 alone above 부산 구.
+    const groups: CityStampSection[] = [];
+    let leafUnits: CityStampSection['units'] = [];
+    let leafCollected = 0;
+    let leafTotal = 0;
+
+    for (const city of cities) {
+      const units = unitsForCity(sido, city);
+      const collectedCountInCity = countCollectedInCity(
+        collected,
+        sido,
+        city,
+        units,
+      );
+      const mapped = units.map((name) => {
+        const id = stampId(sido, name);
+        return {
+          id,
+          name,
+          collected: Boolean(collected[id]),
+          animateIn: animateIds.has(id),
+          tiltDeg: tiltForName(name),
+        };
+      });
+
+      if (isGeneralGuParentCity(city) && units.length > 1) {
+        groups.push({
+          city,
+          grouped: true,
+          showHeader: true,
+          collected: collectedCountInCity,
+          total: units.length,
+          units: mapped,
+        });
+      } else {
+        leafUnits = leafUnits.concat(mapped);
+        leafCollected += collectedCountInCity;
+        leafTotal += units.length;
       }
-      rows.push({
-        id,
-        name: entry.name,
-        collected: true,
-        animateIn: animateIds.has(id),
-        tiltDeg: tiltForName(entry.name),
+    }
+
+    leafUnits.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+
+    const out = [...groups];
+    if (leafUnits.length > 0) {
+      out.push({
+        city: '__leaves__',
+        grouped: false,
+        showHeader: false,
+        collected: leafCollected,
+        total: leafTotal,
+        units: leafUnits,
       });
     }
-    return rows;
-  }, [animateIds, collected, list, sido]);
+    return out;
+  }, [animateIds, cities, collected, sido]);
 
-  const gap = theme.spacing.sm;
-  const pad = theme.spacing.lg;
-  const colW = (width - pad * 2 - gap * 2) / 3;
-  const progressDenom = Math.max(list.length, collectedInSido);
+  const progressTotal = useMemo(
+    () => cities.reduce((n, c) => n + unitsForCity(sido, c).length, 0),
+    [cities, sido],
+  );
   const progressPct =
-    progressDenom === 0
+    progressTotal === 0
       ? 0
-      : Math.min(100, (collectedInSido / progressDenom) * 100);
+      : Math.min(100, (collectedInSido / progressTotal) * 100);
 
-  if (!isReady || (photosQuery.isPending && hasAccess)) {
+  if (!isReady || (photosQuery.isPending && hasAccess && !backfilling)) {
     return (
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
         <LoadingView message={strings.stamps.loading} />
@@ -173,7 +187,7 @@ export function StampScreen() {
     );
   }
 
-  if (photosQuery.isError) {
+  if (photosQuery.isError && !backfilling) {
     return (
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
         <StateView
@@ -190,7 +204,7 @@ export function StampScreen() {
     );
   }
 
-  const empty = collectedCount === 0;
+  const empty = collectedCount === 0 && !backfilling;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
@@ -216,14 +230,16 @@ export function StampScreen() {
       <View style={styles.progressBlock}>
         <Text style={styles.progressLabel}>
           {strings.stamps.progressLabel(sido)}
-          {strings.stamps.progress(collectedInSido, progressDenom)}
+          {strings.stamps.progress(collectedInSido, progressTotal)}
         </Text>
         <View style={styles.track}>
           <View style={[styles.fill, { width: `${progressPct}%` }]} />
         </View>
       </View>
 
-      {empty ? (
+      {backfilling && collectedCount === 0 ? (
+        <LoadingView message={strings.stamps.backfilling} />
+      ) : empty ? (
         <View style={styles.emptyWrap}>
           <MascotPin size={48} />
           <StateView
@@ -232,29 +248,10 @@ export function StampScreen() {
           />
         </View>
       ) : (
-        <FlatList
-          data={data}
-          keyExtractor={(item) => item.id}
-          numColumns={3}
-          contentContainerStyle={styles.grid}
-          columnWrapperStyle={styles.gridRow}
-          renderItem={({ item }) => {
-            const nonce = replayNonce[item.id] ?? 0;
-            return (
-              <View style={{ width: colW }}>
-                <StampBadge
-                  key={`${item.id}-${nonce}`}
-                  name={item.name}
-                  collected={item.collected}
-                  animateIn={item.animateIn || nonce > 0}
-                  tiltDeg={item.tiltDeg}
-                  onPress={
-                    item.collected ? () => onReplayStamp(item.id) : undefined
-                  }
-                />
-              </View>
-            );
-          }}
+        <CityStampSections
+          sections={sections}
+          replayNonce={replayNonce}
+          onReplay={onReplayStamp}
         />
       )}
     </SafeAreaView>
@@ -297,14 +294,6 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: theme.colors.accent,
     borderRadius: 2,
-  },
-  grid: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingBottom: theme.spacing.xl,
-  },
-  gridRow: {
-    gap: theme.spacing.sm,
-    marginBottom: theme.spacing.sm,
   },
   emptyWrap: {
     flex: 1,

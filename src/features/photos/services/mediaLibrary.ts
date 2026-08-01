@@ -240,6 +240,67 @@ export async function loadMonthSummaries(): Promise<MonthSummary[]> {
     .sort((a, b) => b.month.localeCompare(a.month));
 }
 
+export type LoadAllLocatedPhotosOptions = {
+  /** Called as GPS cache + native batches fill in (for progressive stamp sync). */
+  onPartial?: (photos: PhotoRef[]) => void;
+  shouldContinue?: () => boolean;
+};
+
+/**
+ * All library photos that have GPS — cache hits first, then uncached batches.
+ * Used once for 발도장 historical backfill.
+ */
+export async function loadAllLocatedPhotos(
+  options?: LoadAllLocatedPhotosOptions,
+): Promise<PhotoRef[]> {
+  if (isDevDummyPhotosEnabled()) {
+    const summaries = buildDummyMonthSummaries();
+    const photos: PhotoRef[] = [];
+    for (const { month } of summaries) {
+      const monthPhotos = await buildDummyMonthlyPhotos(month);
+      photos.push(...monthPhotos.photos);
+    }
+    options?.onPartial?.(photos);
+    return photos;
+  }
+
+  const { onPartial, shouldContinue } = options ?? {};
+  const assets = await collectAssets({});
+  const photos: PhotoRef[] = [];
+  const uncached: Asset[] = [];
+
+  for (const asset of assets) {
+    const hit = fromCache(asset);
+    if (hit === 'miss') {
+      uncached.push(asset);
+    } else if (hit !== 'no-location') {
+      photos.push(hit);
+    }
+  }
+
+  if (photos.length > 0) {
+    onPartial?.(photos.slice());
+  }
+
+  for (let i = 0; i < uncached.length; i += LOCATION_BATCH) {
+    await pauseWhileBackgrounded(shouldContinue);
+    const chunk = uncached.slice(i, i + LOCATION_BATCH);
+    const results = await Promise.all(chunk.map(fetchLocation));
+    let grew = false;
+    for (const result of results) {
+      if (result != null && result !== 'no-location') {
+        photos.push(result);
+        grew = true;
+      }
+    }
+    if (grew) {
+      onPartial?.(photos.slice());
+    }
+  }
+
+  return photos;
+}
+
 const uriCache = new Map<string, string | null>();
 const fileUriCache = new Map<string, string | null>();
 const fileUriInflight = new Map<string, Promise<string | null>>();

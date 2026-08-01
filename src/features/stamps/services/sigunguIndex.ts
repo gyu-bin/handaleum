@@ -1,7 +1,8 @@
-import sigunguBySido from '@/assets/geo/sigungu-by-sido.json';
+import citiesBySido from '@/assets/geo/cities-by-sido.json';
+import dongGu from '@/assets/geo/dong-gu.json';
 
 /**
- * Short sido keys as in provinces.json / sigungu-by-sido.json.
+ * Short sido keys as in provinces.json / cities-by-sido.json.
  * VisitPlace.province may be full forms (경기도, 서울특별시) — normalize here.
  */
 const PROVINCE_TO_SIDO: Record<string, string> = {
@@ -52,10 +53,18 @@ const PROVINCE_TO_SIDO: Record<string, string> = {
   제주특별자치도: '제주',
 };
 
-const INDEX = sigunguBySido as Record<string, string[]>;
+/** sido → city → stamp units (구 list, or [] if city itself is the stamp). */
+type CitiesIndex = Record<string, Record<string, string[]>>;
 
-/** Sido order for chips — provinces.json order. */
-export const SIDO_ORDER: string[] = Object.keys(INDEX);
+const CITIES = citiesBySido as CitiesIndex;
+
+/** 일반구 모시 — stamp grain is 구 only; city name alone must not collect. */
+export const GENERAL_GU_CITIES: ReadonlySet<string> = new Set(
+  Object.keys(dongGu as Record<string, unknown>).filter((k) => k !== '서울'),
+);
+
+/** Sido order for chips — provinces.json / cities-by-sido order. */
+export const SIDO_ORDER: string[] = Object.keys(CITIES);
 
 export function normalizeSido(province: string | null | undefined): string | null {
   if (!province) {
@@ -68,10 +77,9 @@ export function normalizeSido(province: string | null | undefined): string | nul
   if (PROVINCE_TO_SIDO[trimmed]) {
     return PROVINCE_TO_SIDO[trimmed]!;
   }
-  if (INDEX[trimmed]) {
+  if (CITIES[trimmed]) {
     return trimmed;
   }
-  // Strip trailing 도/시 noise once.
   const stripped = trimmed
     .replace(/특별자치도$/, '')
     .replace(/광역시$/, '')
@@ -81,7 +89,7 @@ export function normalizeSido(province: string | null | undefined): string | nul
   if (PROVINCE_TO_SIDO[stripped]) {
     return PROVINCE_TO_SIDO[stripped]!;
   }
-  if (INDEX[stripped]) {
+  if (CITIES[stripped]) {
     return stripped;
   }
   return null;
@@ -100,26 +108,78 @@ export function parseStampId(id: string): { sido: string; name: string } | null 
   return { sido: id.slice(0, i), name: id.slice(i + 1) };
 }
 
-export function sigunguListForSido(sido: string): string[] {
-  return INDEX[sido] ?? [];
-}
-
-export function totalSigunguCount(): number {
-  return SIDO_ORDER.reduce((n, s) => n + (INDEX[s]?.length ?? 0), 0);
+export function cityListForSido(sido: string): string[] {
+  const cities = CITIES[sido];
+  if (!cities) {
+    return [];
+  }
+  return Object.keys(cities);
 }
 
 /**
- * Whether `name` (gu ?? city) is in the index for `sido`.
- * Logs once per miss for later correction (군 등).
+ * Stamp units under a city. Empty array means the city name itself is the unit.
+ */
+export function unitsForCity(sido: string, city: string): string[] {
+  const units = CITIES[sido]?.[city];
+  if (!units) {
+    return [];
+  }
+  if (units.length === 0) {
+    return [city];
+  }
+  return units;
+}
+
+/** Flat stamp-unit list for a sido (구 + leaf 시/군). */
+export function sigunguListForSido(sido: string): string[] {
+  const cities = CITIES[sido];
+  if (!cities) {
+    return [];
+  }
+  const out: string[] = [];
+  for (const [city, gus] of Object.entries(cities)) {
+    if (gus.length === 0) {
+      out.push(city);
+    } else {
+      out.push(...gus);
+    }
+  }
+  return out;
+}
+
+/** Parent city for a stamp unit name within sido, or null. */
+export function cityForUnit(sido: string, unit: string): string | null {
+  const cities = CITIES[sido];
+  if (!cities) {
+    return null;
+  }
+  if (cities[unit] && cities[unit]!.length === 0) {
+    return unit;
+  }
+  for (const [city, gus] of Object.entries(cities)) {
+    if (gus.includes(unit)) {
+      return city;
+    }
+  }
+  return null;
+}
+
+export function totalSigunguCount(): number {
+  return SIDO_ORDER.reduce((n, s) => n + sigunguListForSido(s).length, 0);
+}
+
+/**
+ * Whether `name` (gu ?? city) is a valid stamp unit for `sido`.
  */
 const warnedMiss = new Set<string>();
 
 export function isKnownSigungu(sido: string, name: string): boolean {
-  const list = INDEX[sido];
-  if (!list) {
-    return false;
-  }
-  return list.includes(name);
+  return sigunguListForSido(sido).includes(name);
+}
+
+/** Parent 시 names that must never be collected as stamps. */
+export function isGeneralGuParentCity(name: string): boolean {
+  return GENERAL_GU_CITIES.has(name);
 }
 
 export function warnUnknownSigungu(sido: string, name: string): void {

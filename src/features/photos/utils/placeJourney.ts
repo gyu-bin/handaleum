@@ -1,5 +1,7 @@
 import * as Location from 'expo-location';
 
+import { createConcurrencyLimiter } from '@/shared/utils/concurrency';
+
 import type { PhotoRef, VisitAdminLevel, VisitPlace } from '../types';
 import {
   cleanPart,
@@ -428,9 +430,14 @@ export async function groupPhotosByJourneyPlace(
     }));
 }
 
+/** Cap parallel reverse-geocode (stamp backfill + month journey). */
+const GEOCODE_CONCURRENCY = 6;
+const limitGeocode = createConcurrencyLimiter(GEOCODE_CONCURRENCY);
+
 /**
  * Full visit places with admin fields for zoom-scoped bottom bar.
  * Labels use journey style at city grain; province/dong from geocode when available.
+ * Buckets are reverse-geocoded in parallel (capped) for speed.
  */
 export async function resolveVisitPlaces(photos: PhotoRef[]): Promise<VisitPlace[]> {
   if (photos.length === 0) {
@@ -451,11 +458,18 @@ export async function resolveVisitPlaces(photos: PhotoRef[]): Promise<VisitPlace
   }
 
   const buckets = collectBuckets(photos);
+  const parsedList = await Promise.all(
+    buckets.map((bucket) =>
+      limitGeocode(() => reverseParsed(bucket.lat, bucket.lng)),
+    ),
+  );
+
   const out: VisitPlace[] = [];
   const seen = new Set<string>();
 
-  for (const bucket of buckets) {
-    const parsed = await reverseParsed(bucket.lat, bucket.lng);
+  for (let i = 0; i < buckets.length; i++) {
+    const bucket = buckets[i]!;
+    const parsed = parsedList[i];
     if (!parsed?.journeyLabel) {
       continue;
     }

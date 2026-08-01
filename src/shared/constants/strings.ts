@@ -283,5 +283,6 @@ export const strings = {
     errorTitle: '도장을 불러오지 못했어요',
     errorRetry: '다시 시도',
     loading: '도장 준비 중…',
+    backfilling: '지금까지 간 곳 도장 찍는 중…',
   },
 } as const;
