@@ -242,30 +242,46 @@ export async function loadMonthSummaries(): Promise<MonthSummary[]> {
 }
 
 export type LoadAllLocatedPhotosOptions = {
-  /** Called as GPS cache + native batches fill in (for progressive stamp sync). */
-  onPartial?: (photos: PhotoRef[]) => void;
+  /**
+   * Called as GPS cache + native batches fill in (for progressive stamp sync).
+   * Awaited so consumers can geocode/ingest before the next GPS batch.
+   */
+  onPartial?: (photos: PhotoRef[]) => void | Promise<void>;
   shouldContinue?: () => boolean;
+  /**
+   * Skip __DEV__ dummy set — always scan the real MediaLibrary.
+   * Required for 발도장 lifetime accumulate from the user's album.
+   */
+  forceRealLibrary?: boolean;
+  /** Override LOCATION_BATCH for long full-library scans (default 8). */
+  locationBatchSize?: number;
 };
 
 /**
  * All library photos that have GPS — cache hits first, then uncached batches.
- * Used once for 발도장 historical backfill.
+ * Used for 발도장 historical backfill (pass forceRealLibrary).
  */
 export async function loadAllLocatedPhotos(
   options?: LoadAllLocatedPhotosOptions,
 ): Promise<PhotoRef[]> {
-  if (isDevDummyPhotosEnabled()) {
+  const { onPartial, shouldContinue, forceRealLibrary, locationBatchSize } =
+    options ?? {};
+  const batchSize =
+    locationBatchSize != null && locationBatchSize > 0
+      ? locationBatchSize
+      : LOCATION_BATCH;
+
+  if (!forceRealLibrary && isDevDummyPhotosEnabled()) {
     const summaries = buildDummyMonthSummaries();
     const photos: PhotoRef[] = [];
     for (const { month } of summaries) {
       const monthPhotos = await buildDummyMonthlyPhotos(month);
       photos.push(...monthPhotos.photos);
     }
-    options?.onPartial?.(photos);
+    await onPartial?.(photos);
     return photos;
   }
 
-  const { onPartial, shouldContinue } = options ?? {};
   const assets = await collectAssets({});
   const photos: PhotoRef[] = [];
   const uncached: Asset[] = [];
@@ -280,12 +296,12 @@ export async function loadAllLocatedPhotos(
   }
 
   if (photos.length > 0) {
-    onPartial?.(photos.slice());
+    await onPartial?.(photos.slice());
   }
 
-  for (let i = 0; i < uncached.length; i += LOCATION_BATCH) {
+  for (let i = 0; i < uncached.length; i += batchSize) {
     await pauseWhileBackgrounded(shouldContinue);
-    const chunk = uncached.slice(i, i + LOCATION_BATCH);
+    const chunk = uncached.slice(i, i + batchSize);
     const results = await Promise.all(chunk.map(fetchLocation));
     let grew = false;
     for (const result of results) {
@@ -295,7 +311,7 @@ export async function loadAllLocatedPhotos(
       }
     }
     if (grew) {
-      onPartial?.(photos.slice());
+      await onPartial?.(photos.slice());
     }
   }
 

@@ -46,8 +46,11 @@ function tiltForName(name: string): number {
  */
 export function StampScreen() {
   const { month } = useCurrentMonth();
-  const { isReady } = usePhotoPermission();
-  const { syncing } = useStampLibrarySync();
+  const { isReady, status: permissionStatus } = usePhotoPermission();
+  const { syncing } = useStampLibrarySync({
+    isReady,
+    status: permissionStatus,
+  });
 
   const { collected, unseen, collectedCount, markAllSeen } = useStamps();
   const [sido, setSido] = useState(SIDO_ORDER[0] ?? '서울');
@@ -220,6 +223,9 @@ export function StampScreen() {
         <View style={styles.track}>
           <View style={[styles.fill, { width: `${progressPct}%` }]} />
         </View>
+        {syncing && collectedCount > 0 ? (
+          <Text style={styles.syncHint}>{strings.stamps.backfilling}</Text>
+        ) : null}
       </View>
 
       {syncing && collectedCount === 0 ? (
@@ -267,6 +273,10 @@ const styles = StyleSheet.create({
     ...theme.type.label,
     color: theme.colors.inkSoft,
     fontWeight: '600',
+  },
+  syncHint: {
+    ...theme.type.micro,
+    color: theme.colors.inkSoft,
   },
   track: {
     height: 4,
