@@ -87,7 +87,7 @@ export function MonthlyMapScreen() {
     [filteredPhotos, zoom],
   );
 
-  const { places: journeyPlaces } = useMonthJourney(filteredPhotos, {
+  const { places: journeyPlaces, isResolving } = useMonthJourney(filteredPhotos, {
     // Geocode as soon as GPS photos exist. resolvePlace hits disk/memory first,
     // so progressive batches mostly warm new buckets instead of re-hitting CLGeocoder.
     // Waiting for !isFetching left cold start stuck on "사진 n장" until the whole month finished.
@@ -224,7 +224,7 @@ export function MonthlyMapScreen() {
               {strings.tagline}
             </Text>
             <Text style={styles.monthMeta} numberOfLines={1}>
-              {isFetching && data
+              {(isFetching || isResolving) && data
                 ? strings.map.resolvingLocations
                 : strings.map.monthMeta(monthLabel, clusters.length)}
               {journeyPlaces.length === 1 ? ` · ${journeyPlaces[0]}` : ''}

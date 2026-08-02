@@ -153,6 +153,10 @@ export const strings = {
     locationDenied: '위치 권한이 없어 집 위치를 지정할 수 없습니다',
     locationFailed: '위치를 확인하지 못했습니다. 다시 시도해 주세요',
     viewOnboarding: '앱 소개 다시 보기',
+    buildSection: '실행 중인 버전',
+    buildEmbedded: '내장 번들 (OTA 미적용)',
+    buildOta: (publishedAt: string, shortId: string) =>
+      `OTA ${publishedAt} · ${shortId}`,
     proSection: '프로',
     proDescription: (priceLabel: string) =>
       `최근 3개월보다 지난 달을 열고, 인사이트 일부 지표를 잠금 해제합니다. ${priceLabel} · 일회 구매.`,

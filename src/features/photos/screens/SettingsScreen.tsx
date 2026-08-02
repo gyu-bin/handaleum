@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Location from 'expo-location';
+import * as Updates from 'expo-updates';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -22,6 +23,18 @@ const RADIUS_CHOICES = [100, 300, 500, 1000] as const;
 
 function radiusLabel(radiusM: number): string {
   return radiusM >= 1000 ? `${radiusM / 1000}km` : `${radiusM}m`;
+}
+
+/** Which JS bundle is actually running — settles "did the OTA apply?" on device. */
+function runningBundleLabel(): string {
+  if (Updates.isEmbeddedLaunch || !Updates.updateId) {
+    return strings.settings.buildEmbedded;
+  }
+  const at = Updates.createdAt;
+  const publishedAt = at
+    ? `${at.getMonth() + 1}/${at.getDate()} ${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`
+    : '?';
+  return strings.settings.buildOta(publishedAt, Updates.updateId.slice(0, 8));
 }
 
 export function SettingsScreen() {
@@ -182,6 +195,11 @@ export function SettingsScreen() {
             size="md"
             onPress={() => router.push('/onboarding?replay=1')}
           />
+        </View>
+
+        <View style={[styles.card, styles.cardSpaced]}>
+          <Text style={styles.sectionTitle}>{strings.settings.buildSection}</Text>
+          <Text style={styles.status}>{runningBundleLabel()}</Text>
         </View>
 
         {__DEV__ ? (
