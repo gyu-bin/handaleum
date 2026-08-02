@@ -156,9 +156,11 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     ...theme.type.body,
+    fontFamily: theme.fonts.serif,
     color: theme.colors.inkSoft,
     textAlign: 'center',
   },
+
   benefits: {
     marginTop: theme.spacing.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -180,7 +182,7 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     marginTop: 6,
-    backgroundColor: theme.colors.accent,
+    backgroundColor: theme.colors.terracotta,
   },
   benefitCopy: {
     flex: 1,
@@ -188,13 +190,16 @@ const styles = StyleSheet.create({
   },
   benefitTitle: {
     ...theme.type.label,
+    fontFamily: theme.fonts.serif,
     fontWeight: '700',
     color: theme.colors.ink,
   },
   benefitBody: {
     ...theme.type.body,
+    fontFamily: theme.fonts.serif,
     color: theme.colors.inkSoft,
   },
+
   oneTime: {
     ...theme.type.micro,
     color: theme.colors.subtle,

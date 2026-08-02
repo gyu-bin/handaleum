@@ -152,6 +152,7 @@ const styles = StyleSheet.create({
   flash: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.sand,
+    backgroundColor: theme.colors.terracottaSoft,
   },
 });
+

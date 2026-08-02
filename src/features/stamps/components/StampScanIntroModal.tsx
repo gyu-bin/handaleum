@@ -43,7 +43,7 @@ export function StampScanIntroModal({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(28, 36, 44, 0.45)',
+    backgroundColor: theme.colors.overlayDark,
     justifyContent: 'center',
     paddingHorizontal: theme.spacing.lg,
   },
@@ -56,12 +56,15 @@ const styles = StyleSheet.create({
   },
   title: {
     ...theme.type.title,
+    fontFamily: theme.fonts.serif,
     color: theme.colors.ink,
     fontWeight: '800',
   },
   body: {
     ...theme.type.body,
+    fontFamily: theme.fonts.serif,
     color: theme.colors.inkSoft,
     lineHeight: 22,
   },
 });
+

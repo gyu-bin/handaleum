@@ -11,7 +11,7 @@ export interface RegionChipsProps {
 const CHIP_H = 40;
 
 /**
- * Horizontal 시·도 chip row. Selected chip fills with accent.
+ * Horizontal 시·도 chip row. Selected chip fills with terracotta.
  * Fixed chip height + generous scroll padding so Hangul is not clipped.
  */
 export function RegionChips({ sidos, selected, onSelect }: RegionChipsProps) {
@@ -75,10 +75,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chipActive: {
-    backgroundColor: theme.colors.accent,
-    borderColor: theme.colors.accent,
+    backgroundColor: theme.colors.terracotta,
+    borderColor: theme.colors.terracotta,
   },
   label: {
+    fontFamily: theme.fonts.serif,
     fontSize: 14,
     // Match chip inner box — avoid theme.label lineHeight which clips Hangul.
     lineHeight: 20,
@@ -88,6 +89,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'center',
   },
   labelActive: {
-    color: theme.colors.white,
+    color: theme.colors.surface,
   },
 });
+

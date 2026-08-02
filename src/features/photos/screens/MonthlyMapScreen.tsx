@@ -271,7 +271,7 @@ export function MonthlyMapScreen() {
           ) : null}
           <Button
             title={strings.cards.createTitle}
-            variant="sand"
+            variant="accent"
             style={styles.createBtn}
             onPress={() => router.push('/cards/create')}
           />
@@ -322,7 +322,8 @@ const styles = StyleSheet.create({
   },
   actionLabel: {
     ...theme.type.micro,
-    color: theme.colors.subtle,
+    fontFamily: theme.fonts.serif,
+    color: theme.colors.inkSoft,
     fontWeight: '600',
   },
   hero: {
@@ -334,13 +335,14 @@ const styles = StyleSheet.create({
   wordmark: {
     fontFamily: theme.fonts.serif,
     color: theme.colors.ink,
-    fontSize: 24,
-    lineHeight: 28,
+    fontSize: 26,
+    lineHeight: 30,
     letterSpacing: -0.5,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   tagline: {
     ...theme.type.micro,
+    fontFamily: theme.fonts.serif,
     color: theme.colors.inkSoft,
     letterSpacing: -0.2,
     fontSize: 11,
@@ -348,6 +350,7 @@ const styles = StyleSheet.create({
   },
   monthMeta: {
     ...theme.type.micro,
+    fontFamily: theme.fonts.serif,
     color: theme.colors.subtle,
     marginTop: 1,
   },
@@ -362,8 +365,8 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.hairline,
   },
   infoDotActive: {
-    backgroundColor: theme.colors.accent,
-    borderColor: theme.colors.accent,
+    backgroundColor: theme.colors.terracotta,
+    borderColor: theme.colors.terracotta,
   },
   infoDotText: {
     ...theme.type.micro,
@@ -372,8 +375,9 @@ const styles = StyleSheet.create({
     lineHeight: 14,
   },
   infoDotTextActive: {
-    color: theme.colors.white,
+    color: theme.colors.surface,
   },
+
   journeyChips: {
     paddingBottom: theme.spacing.sm,
   },
@@ -385,7 +389,7 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing.sm,
   },
   noticeChipPressed: {
-    backgroundColor: theme.colors.accentSoft,
+    backgroundColor: theme.colors.terracottaSoft,
   },
   noticeChip: {
     alignSelf: 'flex-start',

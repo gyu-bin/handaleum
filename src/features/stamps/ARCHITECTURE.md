@@ -30,6 +30,7 @@ Grain = **시군구** (서울·광역 구, 도 시·군, 일반구 시 → 구�
 
 | 결정 | 대안 | 선택 이유 | 날짜 |
 |---|---|---|---|
+| 발도장 화면 UI = **journal** (크림·그레인·terracotta 진행/도장). 지도 dawn-blue와 분리 — 마스코트/맵 핀 글리프는 dawn accent 유지 가능 | 발도장도 dawn accent | photos 1-B와 동일. 시안 샘플 발도장 | 2026-08-02 |
 | 총량 = districts + dong-gu 일반구 + municipalities 시 + KOSTAT 군 | 전체 행정구역 재수집 | 시군구 grain | 2026-08-01 |
 | 저장 키 = `sido/name` | 시군구명만 | 중구 등 동명 구 충돌 | 2026-08-01 |
 | 인사이트 탭 → 발도장 교체 | 새 탭 | 프롬프트. useIsPro 등은 유지 | 2026-08-01 |

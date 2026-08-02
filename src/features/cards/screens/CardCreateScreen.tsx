@@ -455,14 +455,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.sand,
+    backgroundColor: theme.colors.terracotta,
   },
   saveActionDim: {
     opacity: 0.55,
   },
   saveActionText: {
     ...theme.type.label,
-    color: theme.colors.ink,
+    fontFamily: theme.fonts.serif,
+    color: theme.colors.surface,
     fontWeight: '700',
   },
   section: {
@@ -470,6 +471,7 @@ const styles = StyleSheet.create({
   },
   label: {
     ...theme.type.label,
+    fontFamily: theme.fonts.serif,
     color: theme.colors.inkSoft,
     fontWeight: '700',
   },
@@ -492,16 +494,17 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
   },
   sortChipOn: {
-    backgroundColor: theme.colors.accentSoft,
-    borderColor: theme.colors.accent,
+    backgroundColor: theme.colors.terracottaSoft,
+    borderColor: theme.colors.terracotta,
   },
   sortChipText: {
     ...theme.type.micro,
+    fontFamily: theme.fonts.serif,
     color: theme.colors.inkSoft,
     fontWeight: '600',
   },
   sortChipTextOn: {
-    color: theme.colors.accent,
+    color: theme.colors.terracotta,
     fontWeight: '700',
   },
   hint: {
@@ -599,7 +602,8 @@ const styles = StyleSheet.create({
   meterCount: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
   meterNum: {
     ...theme.type.title,
-    color: theme.colors.accent,
+    fontFamily: theme.fonts.serif,
+    color: theme.colors.terracotta,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
@@ -610,12 +614,13 @@ const styles = StyleSheet.create({
   },
   meterTrack: { flexDirection: 'row', gap: 4, height: 3 },
   meterTick: { flex: 1, backgroundColor: theme.tint.soft },
-  meterTickOn: { backgroundColor: theme.colors.accent },
+  meterTickOn: { backgroundColor: theme.colors.terracotta },
 
   /** Fixed under the header (not in the scroll) so it's visible next to save. */
   error: {
     ...theme.type.label,
-    color: theme.colors.accent,
+    fontFamily: theme.fonts.serif,
+    color: theme.colors.terracotta,
     fontWeight: '600',
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.sm,

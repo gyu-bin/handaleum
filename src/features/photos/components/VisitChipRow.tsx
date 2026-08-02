@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.accentSoft,
+    backgroundColor: theme.colors.terracottaSoft,
   },
   chipQuiet: {
     backgroundColor: theme.colors.surface,
@@ -61,10 +61,12 @@ const styles = StyleSheet.create({
   },
   chipText: {
     ...theme.type.label,
+    fontFamily: theme.fonts.serif,
     fontWeight: '600',
-    color: theme.colors.accent,
+    color: theme.colors.terracotta,
   },
   chipTextQuiet: {
+    fontFamily: theme.fonts.serif,
     fontWeight: '500',
     color: theme.colors.ink,
   },

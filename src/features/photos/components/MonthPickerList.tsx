@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import {
@@ -11,10 +11,7 @@ import { theme } from '@/shared/constants/theme';
 
 import { prefetchMonthlyPhotos } from '../hooks/useMonthlyPhotos';
 import type { MonthKey, MonthSummary } from '../types';
-import {
-  JournalCoastSketch,
-  JournalTravelStamp,
-} from './MonthPickerJournalDecor';
+import { JournalDottedRule } from './MonthPickerJournalDecor';
 
 export interface MonthPickerListProps {
   summaries: MonthSummary[];
@@ -38,8 +35,8 @@ type MonthCell = {
 };
 
 /**
- * Journal-style picker: year stepper + two-column 1–12 month rows.
- * Empty months (0 photos) are muted and not selectable.
+ * Journal month picker matching the approved sample:
+ * hero art + year stepper + two-column 1–12 list (0장 muted).
  */
 export function MonthPickerList({
   summaries,
@@ -98,7 +95,6 @@ export function MonthPickerList({
     if (idx < 0) {
       return;
     }
-    // years sorted newest → oldest; dir -1 = older, +1 = newer
     const next = years[idx - dir];
     if (next) {
       setYear(next);
@@ -125,7 +121,6 @@ export function MonthPickerList({
         disabled={disabled}
         style={({ pressed }) => [
           styles.monthRow,
-          isSelected && !disabled && styles.monthRowSelected,
           pressed && !disabled && styles.monthRowPressed,
         ]}
         accessibilityRole="button"
@@ -137,38 +132,34 @@ export function MonthPickerList({
         }
       >
         <Text
-          style={[
-            styles.monthLabel,
-            empty && styles.monthMuted,
-            locked && styles.monthMuted,
-            isSelected && !disabled && styles.monthLabelSelected,
-          ]}
+          style={[styles.monthName, empty && styles.muted, locked && styles.muted]}
         >
           {strings.months.monthOnly(cell.monthNum)}
-          <Text style={styles.dot}> · </Text>
-          {locked ? (
-            <Text style={styles.proInline}>{strings.months.proOnly}</Text>
-          ) : (
-            <Text style={[styles.count, empty && styles.countMuted]}>
-              {strings.months.photoCount(cell.count)}
-            </Text>
-          )}
         </Text>
+        <Text style={[styles.sepDot, empty && styles.muted]}> · </Text>
+        {locked ? (
+          <Text style={styles.proInline}>{strings.months.proOnly}</Text>
+        ) : (
+          <Text style={[styles.count, empty && styles.muted]}>
+            {strings.months.photoCount(cell.count)}
+          </Text>
+        )}
+        {isSelected && !disabled ? <View style={styles.selectedMark} /> : null}
       </Pressable>
     );
   };
 
   return (
-    <View style={styles.root}>
+    <ScrollView
+      style={styles.root}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.hero}>
-        <JournalCoastSketch size={78} />
-        <View style={styles.heroCenter}>
-          <Text style={styles.heroTitle}>{strings.months.journalTitle}</Text>
-          <Text style={styles.heroSubtitle}>
-            {strings.months.journalSubtitle}
-          </Text>
-        </View>
-        <JournalTravelStamp size={68} />
+        <Text style={styles.heroTitle}>{strings.months.journalTitle}</Text>
+        <Text style={styles.heroSubtitle}>
+          {strings.months.journalSubtitle}
+        </Text>
       </View>
 
       {IS_MONETIZATION_LIVE ? (
@@ -181,7 +172,7 @@ export function MonthPickerList({
         <Pressable
           onPress={() => goYear(-1)}
           disabled={!canPrev}
-          hitSlop={12}
+          hitSlop={14}
           style={({ pressed }) => [
             styles.yearChevronBtn,
             (!canPrev || pressed) && styles.yearChevronDim,
@@ -195,7 +186,7 @@ export function MonthPickerList({
         <Pressable
           onPress={() => goYear(1)}
           disabled={!canNext}
-          hitSlop={12}
+          hitSlop={14}
           style={({ pressed }) => [
             styles.yearChevronBtn,
             (!canNext || pressed) && styles.yearChevronDim,
@@ -207,50 +198,48 @@ export function MonthPickerList({
         </Pressable>
       </View>
 
-      <View style={styles.dottedRule} />
+      <JournalDottedRule />
 
       <View style={styles.grid}>
         <View style={styles.col}>{leftCol.map(renderCell)}</View>
+        <View style={styles.colGap} />
         <View style={styles.col}>{rightCol.map(renderCell)}</View>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  content: {
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: theme.spacing.xl,
   },
   hero: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: theme.spacing.sm,
-    paddingBottom: theme.spacing.lg,
-    gap: theme.spacing.sm,
-  },
-  heroCenter: {
-    flex: 1,
-    alignItems: 'center',
-    paddingHorizontal: theme.spacing.xs,
+    paddingTop: theme.spacing.xs,
+    paddingBottom: theme.spacing.md,
   },
   heroTitle: {
     fontFamily: theme.fonts.serif,
-    fontSize: 28,
-    lineHeight: 34,
-    letterSpacing: -0.5,
+    fontSize: 32,
+    lineHeight: 38,
+    letterSpacing: -0.6,
     color: theme.colors.ink,
     fontWeight: '700',
     textAlign: 'center',
   },
   heroSubtitle: {
-    ...theme.type.micro,
+    fontFamily: theme.fonts.serif,
+    fontSize: 12,
+    lineHeight: 18,
     color: theme.colors.inkSoft,
-    marginTop: theme.spacing.xs,
+    marginTop: 6,
     textAlign: 'center',
   },
+
   hint: {
     ...theme.type.micro,
     color: theme.colors.inkSoft,
@@ -262,91 +251,92 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
+    gap: theme.spacing.lg,
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.md,
   },
   yearChevronBtn: {
-    minWidth: 36,
-    minHeight: 36,
+    minWidth: 40,
+    minHeight: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
   yearChevronDim: {
-    opacity: 0.28,
+    opacity: 0.25,
   },
   yearChevron: {
-    fontSize: 28,
-    lineHeight: 32,
-    color: theme.colors.sand,
-    fontWeight: '300',
+    fontFamily: theme.fonts.serif,
+    fontSize: 30,
+    lineHeight: 34,
+    color: theme.colors.terracotta,
+    fontWeight: '400',
   },
   yearLabel: {
     fontFamily: theme.fonts.serif,
-    fontSize: 22,
-    lineHeight: 28,
+    fontSize: 24,
+    lineHeight: 30,
     color: theme.colors.ink,
     fontWeight: '700',
-    minWidth: 100,
+    minWidth: 110,
     textAlign: 'center',
-  },
-  dottedRule: {
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-    borderStyle: 'dashed',
-    marginBottom: theme.spacing.md,
-    marginTop: theme.spacing.xs,
   },
   grid: {
     flexDirection: 'row',
-    gap: theme.spacing.lg,
+    marginTop: theme.spacing.md,
   },
   col: {
     flex: 1,
   },
+  colGap: {
+    width: theme.spacing.lg,
+  },
   monthRow: {
-    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    paddingVertical: 15,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.colors.hairline,
   },
-  monthRowSelected: {
-    backgroundColor: theme.colors.accentSoft,
-    marginHorizontal: -theme.spacing.sm,
-    paddingHorizontal: theme.spacing.sm,
-    borderRadius: theme.radius.sm,
-  },
   monthRowPressed: {
-    opacity: 0.75,
+    opacity: 0.65,
   },
-  monthLabel: {
+  monthName: {
     fontFamily: theme.fonts.serif,
-    fontSize: 17,
+    fontSize: 18,
     lineHeight: 24,
     color: theme.colors.ink,
     fontWeight: '600',
   },
-  monthLabelSelected: {
-    color: theme.colors.accent,
-  },
-  monthMuted: {
-    color: theme.colors.subtle,
-    fontWeight: '500',
-  },
-  dot: {
-    color: theme.colors.subtle,
-    fontWeight: '400',
+  sepDot: {
+    fontFamily: theme.fonts.serif,
+    fontSize: 18,
+    lineHeight: 24,
+    color: theme.colors.inkSoft,
   },
   count: {
     fontFamily: theme.fonts.serif,
-    color: theme.colors.sand,
+    fontSize: 18,
+    lineHeight: 24,
+    color: theme.colors.terracotta,
     fontWeight: '700',
   },
-  countMuted: {
+  muted: {
     color: theme.colors.subtle,
     fontWeight: '500',
   },
   proInline: {
     fontFamily: theme.fonts.serif,
-    color: theme.colors.accent,
+    fontSize: 16,
+    lineHeight: 24,
+    color: theme.colors.terracotta,
     fontWeight: '700',
+  },
+
+  selectedMark: {
+    marginLeft: 'auto',
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: theme.colors.terracotta,
   },
 });

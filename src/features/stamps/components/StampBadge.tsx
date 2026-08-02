@@ -176,12 +176,12 @@ function SealFace({ name, hero }: { name: string; hero: boolean }) {
   return (
     <View style={{ width: dim, height: dim, alignItems: 'center', justifyContent: 'center' }}>
       <Svg width={dim} height={dim} viewBox="0 0 100 100">
-        <Circle cx={50} cy={50} r={46} fill={theme.colors.accentSoft} />
+        <Circle cx={50} cy={50} r={46} fill={theme.colors.terracottaSoft} />
         <Circle
           cx={50}
           cy={50}
           r={44}
-          stroke={theme.colors.accent}
+          stroke={theme.colors.terracotta}
           strokeWidth={3.2}
           fill="none"
         />
@@ -189,7 +189,7 @@ function SealFace({ name, hero }: { name: string; hero: boolean }) {
           cx={50}
           cy={50}
           r={37}
-          stroke={theme.colors.accent}
+          stroke={theme.colors.terracotta}
           strokeWidth={1.4}
           fill="none"
           strokeDasharray="2.5 3.5"
@@ -206,7 +206,7 @@ function SealFace({ name, hero }: { name: string; hero: boolean }) {
             <Path
               key={deg}
               d={`M ${x1} ${y1} L ${x2} ${y2}`}
-              stroke={theme.colors.accent}
+              stroke={theme.colors.terracotta}
               strokeWidth={1.6}
               strokeLinecap="round"
               opacity={0.7}
@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderColor: theme.colors.line,
     borderRadius: theme.radius.lg,
-    backgroundColor: theme.colors.landLight,
+    backgroundColor: theme.colors.surfaceAlt,
   },
   sealWrap: {
     alignItems: 'center',
@@ -266,7 +266,7 @@ const styles = StyleSheet.create({
     height: '78%',
     borderRadius: theme.radius.pill,
     borderWidth: 2,
-    borderColor: theme.colors.accent,
+    borderColor: theme.colors.terracotta,
   },
   nameOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -278,10 +278,11 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.serif,
     fontSize: 13,
     lineHeight: 16,
-    color: theme.colors.accent,
+    color: theme.colors.terracotta,
     fontWeight: '700',
     textAlign: 'center',
   },
+
   sealTextHero: {
     fontSize: 18,
     lineHeight: 22,

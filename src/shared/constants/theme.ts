@@ -1,14 +1,15 @@
 /**
- * Design tokens — dawn-blue paper map (확정 2026-07-18).
- * Infographic paper feel: cream paper, deep blue ink, soft border strokes.
+ * Design tokens — dual system (2026-08-02):
+ * - UI chrome / list screens: travel journal (cream paper, terracotta, serif titles)
+ * - Map canvas / pins: dawn-blue paper map (land / water / accent) — do not retint for UI
  * All colors in the app must come from this file. No hardcoded colors elsewhere.
  */
 export const theme = {
   colors: {
-    // Paper surfaces
-    background: '#FBF9F4',
-    surface: '#FBF9F4',
-    surfaceAlt: '#F2EDE4',
+    // Journal paper surfaces (UI screens + chrome)
+    background: '#F7F1E8',
+    surface: '#FFFBF5',
+    surfaceAlt: '#EFE6DA',
     canvas: '#EFEAE2',
 
     // Ink / type
@@ -22,17 +23,18 @@ export const theme = {
      */
     splashMark: '#33475B',
 
-    // Dawn blue accent
+    /**
+     * Map / dawn-blue accent (pins, map chrome CTAs that sit on the map).
+     * UI journal accents use `terracotta` instead.
+     */
     accent: '#3A5A78',
     accentSoft: 'rgba(58,90,120,0.12)',
 
-    // Paper map
+    // Paper map (dawn-blue system — leave alone when restyling UI)
     land: '#F2EDE4',
     landLight: '#F7F3EC',
     landDeep: '#EBE4D8',
     landEdge: '#D5DCE2',
-    // Sea reads as sky, not as paper — the cream is kept for land so the
-    // coastline separates on hue as well as on value.
     water: '#CBE0EF',
     waterLight: '#DCEAF4',
     waterDeep: '#B5D2E6',
@@ -45,13 +47,16 @@ export const theme = {
 
     white: '#FFFFFF',
     /**
-     * Warm accent. Budget: once per screen. If it appears twice, one of the
-     * two is not the most important thing on the screen.
+     * Warm gold — map / splash budget. Do not mix with terracotta on one view.
      */
     sand: '#C9A961',
     /**
-     * Tab badge only (발도장 unseen). Warm red that sits with sand/ink —
-     * do not use elsewhere on the same screen as sand.
+     * Journal UI accent: chips, progress, nav active, links, month counts.
+     */
+    terracotta: '#D4784A',
+    terracottaSoft: 'rgba(212,120,74,0.14)',
+    /**
+     * Tab badge only (발도장 unseen).
      */
     notify: '#CB5A47',
     /** Progress track / empty stamp outline. */
@@ -76,6 +81,7 @@ export const theme = {
   },
   fonts: {
     // Pretendard / MaruBuri 도입 전까지 시스템 대체 (폰트 파일 추가 시 교체)
+    // Hero titles on journal UI screens use `serif`.
     serif: 'Georgia',
     sans: 'System',
   },
@@ -90,6 +96,9 @@ export const theme = {
    *    buttons, thumbnail badges — are graphics sized to their container.
    * 3. TextInput takes `type.<step>.fontSize` only. Spreading the whole token
    *    adds lineHeight, which mis-centers input text vertically on Android.
+   *
+   * Journal heroes: spread `type.display` / `type.title` and set
+   * `fontFamily: theme.fonts.serif`.
    */
   type: {
     /** The single loud thing on a screen. */

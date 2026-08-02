@@ -117,14 +117,17 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...theme.type.label,
+    fontFamily: theme.fonts.serif,
     color: theme.colors.ink,
     fontWeight: '700',
   },
   headerCount: {
     ...theme.type.micro,
+    fontFamily: theme.fonts.serif,
     color: theme.colors.subtle,
     fontWeight: '600',
   },
+
   row: {
     flexDirection: 'row',
     marginBottom: theme.spacing.sm,

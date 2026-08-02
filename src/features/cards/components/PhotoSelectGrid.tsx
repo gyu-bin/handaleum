@@ -186,7 +186,7 @@ export function PhotoSelectGrid({
       {ListHeaderComponent}
       {sectionsLoading ? (
         <View style={styles.loadingRow}>
-          <ActivityIndicator color={theme.colors.accent} />
+          <ActivityIndicator color={theme.colors.terracotta} />
         </View>
       ) : null}
     </View>
@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     borderWidth: 2,
-    borderColor: theme.colors.accent,
+    borderColor: theme.colors.terracotta,
     borderRadius: theme.radius.sm,
   },
   tileRingInner: {
@@ -287,15 +287,16 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.accent,
+    backgroundColor: theme.colors.terracotta,
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkText: {
-    color: theme.colors.white,
+    color: theme.colors.surface,
     fontSize: 12,
     fontWeight: '700',
   },
+
   loadingRow: {
     alignItems: 'center',
     paddingVertical: theme.spacing.sm,

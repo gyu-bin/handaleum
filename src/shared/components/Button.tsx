@@ -22,9 +22,9 @@ export interface ButtonProps extends Omit<PressableProps, 'style' | 'children'> 
 }
 
 /**
- * Shared button for the soft-minimal UI. Primary = solid ink, accent = brand
- * orange, secondary = outlined surface, ghost = text-only. Keeps every CTA in
- * the app on one visual system.
+ * Shared button. Primary = ink, accent = journal terracotta, sand = warm gold,
+ * secondary = outlined, ghost = text terracotta. Map-on-canvas CTAs may still
+ * pass variant="accent" sparingly; prefer terracotta for journal UI.
  */
 export function Button({
   title,
@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.ink,
   },
   accent: {
-    backgroundColor: theme.colors.accent,
+    backgroundColor: theme.colors.terracotta,
   },
   sand: {
     backgroundColor: theme.colors.sand,
@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
   secondary: {
     backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: theme.colors.hairline,
   },
   ghost: {
     backgroundColor: 'transparent',
@@ -120,6 +120,7 @@ const styles = StyleSheet.create({
   },
   label: {
     ...theme.type.body,
+    fontFamily: theme.fonts.serif,
     fontWeight: '700',
   },
   labelOnSolid: {
@@ -129,6 +130,7 @@ const styles = StyleSheet.create({
     color: theme.colors.ink,
   },
   labelAccent: {
-    color: theme.colors.accent,
+    color: theme.colors.terracotta,
   },
 });
+

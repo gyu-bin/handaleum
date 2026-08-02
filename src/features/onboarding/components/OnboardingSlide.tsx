@@ -88,14 +88,17 @@ const styles = StyleSheet.create({
   },
   title: {
     ...theme.type.title,
+    fontFamily: theme.fonts.serif,
     color: theme.colors.ink,
     fontWeight: '800',
     textAlign: 'center',
   },
   body: {
     ...theme.type.body,
+    fontFamily: theme.fonts.serif,
     color: theme.colors.inkSoft,
     textAlign: 'center',
     lineHeight: 24,
   },
 });
+

@@ -33,7 +33,7 @@ export function MonthPickerScreen() {
   if (isPending) {
     return (
       <View style={styles.safe}>
-        <PaperGrain />
+        <PaperGrain style={styles.grain} />
         <LoadingView />
       </View>
     );
@@ -42,15 +42,8 @@ export function MonthPickerScreen() {
   if (isError || !data) {
     return (
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-        <PaperGrain />
-        <Pressable
-          onPress={() => router.back()}
-          style={styles.backOnly}
-          accessibilityRole="button"
-          accessibilityLabel={strings.common.back}
-        >
-          <Text style={styles.backText}>‹ {strings.common.back}</Text>
-        </Pressable>
+        <PaperGrain style={styles.grain} />
+        <BackLink onPress={() => router.back()} />
         <StateView
           title={strings.common.error}
           actionLabel={
@@ -65,15 +58,8 @@ export function MonthPickerScreen() {
   if (data.length === 0) {
     return (
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-        <PaperGrain />
-        <Pressable
-          onPress={() => router.back()}
-          style={styles.backOnly}
-          accessibilityRole="button"
-          accessibilityLabel={strings.common.back}
-        >
-          <Text style={styles.backText}>‹ {strings.common.back}</Text>
-        </Pressable>
+        <PaperGrain style={styles.grain} />
+        <BackLink onPress={() => router.back()} />
         <StateView title={strings.months.empty} />
       </SafeAreaView>
     );
@@ -81,15 +67,8 @@ export function MonthPickerScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-      <PaperGrain />
-      <Pressable
-        onPress={() => router.back()}
-        style={styles.backOnly}
-        accessibilityRole="button"
-        accessibilityLabel={strings.common.back}
-      >
-        <Text style={styles.backText}>‹ {strings.common.back}</Text>
-      </Pressable>
+      <PaperGrain style={styles.grain} />
+      <BackLink onPress={() => router.back()} />
       <MonthPickerList
         summaries={data}
         selected={month}
@@ -100,20 +79,43 @@ export function MonthPickerScreen() {
   );
 }
 
+function BackLink({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.backOnly, pressed && styles.backPressed]}
+      accessibilityRole="button"
+      accessibilityLabel={strings.common.back}
+      hitSlop={8}
+    >
+      <Text style={styles.backText}>‹  {strings.common.back}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: theme.colors.canvas,
+    backgroundColor: theme.colors.background,
+  },
+  grain: {
+    opacity: 0.35,
   },
   backOnly: {
     alignSelf: 'flex-start',
     paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
+    paddingTop: 0,
+    paddingBottom: 2,
     zIndex: 1,
   },
+
+  backPressed: {
+    opacity: 0.55,
+  },
   backText: {
-    ...theme.type.label,
+    fontFamily: theme.fonts.serif,
+    fontSize: 14,
     color: theme.colors.inkSoft,
-    fontWeight: '600',
+    fontWeight: '500',
   },
 });

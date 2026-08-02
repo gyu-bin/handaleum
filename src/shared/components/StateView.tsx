@@ -59,12 +59,14 @@ const styles = StyleSheet.create({
   },
   title: {
     ...theme.type.title,
+    fontFamily: theme.fonts.serif,
     color: theme.colors.ink,
     fontWeight: '700',
     textAlign: 'center',
   },
   description: {
     ...theme.type.body,
+    fontFamily: theme.fonts.serif,
     color: theme.colors.inkSoft,
     textAlign: 'center',
   },

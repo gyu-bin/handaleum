@@ -84,12 +84,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.accentSoft,
+    backgroundColor: theme.colors.terracottaSoft,
   },
   proText: {
     ...theme.type.label,
-    color: theme.colors.accent,
+    fontFamily: theme.fonts.serif,
+    color: theme.colors.terracotta,
     fontWeight: '800',
     fontSize: 11,
   },
 });
+

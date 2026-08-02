@@ -321,7 +321,8 @@ const styles = StyleSheet.create({
   },
   error: {
     ...theme.type.label,
-    color: theme.colors.accent,
+    fontFamily: theme.fonts.serif,
+    color: theme.colors.terracotta,
     fontWeight: '600',
     textAlign: 'center',
   },

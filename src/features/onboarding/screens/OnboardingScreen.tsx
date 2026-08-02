@@ -20,6 +20,7 @@ import Animated, {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/shared/components/Button';
+import { PaperGrain } from '@/shared/components/PaperGrain';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
@@ -51,7 +52,7 @@ function PagerDot({
       backgroundColor: interpolateColor(
         pos,
         [index - 1, index, index + 1],
-        [theme.colors.border, theme.colors.accent, theme.colors.border],
+        [theme.colors.border, theme.colors.terracotta, theme.colors.border],
       ),
     };
   });
@@ -143,6 +144,7 @@ export function OnboardingScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
+      <PaperGrain style={styles.grain} />
       <View style={styles.topRow}>
         {isReplay ? (
           <Pressable
@@ -206,11 +208,15 @@ export function OnboardingScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: theme.colors.canvas,
+    backgroundColor: theme.colors.background,
+  },
+  grain: {
+    opacity: 0.3,
   },
   list: {
     flex: 1,
   },
+
   topRow: {
     height: 44,
     flexDirection: 'row',
@@ -227,9 +233,11 @@ const styles = StyleSheet.create({
   },
   skipText: {
     ...theme.type.label,
-    color: theme.colors.subtle,
+    fontFamily: theme.fonts.serif,
+    color: theme.colors.terracotta,
     fontWeight: '600',
   },
+
   footer: {
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: theme.spacing.md,

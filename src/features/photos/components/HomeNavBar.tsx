@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useRouter, type Href } from 'expo-router';
+import { usePathname, useRouter, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
@@ -17,15 +17,42 @@ export interface HomeNavBarProps {
   items: HomeNavItem[];
 }
 
-function NavIcon({ name, active }: { name: HomeNavItem['icon']; active: boolean }) {
-  const color = active ? theme.colors.ink : theme.colors.inkSoft;
+function pathMatches(pathname: string, href: Href): boolean {
+  const target = String(href);
+  if (target === '/') {
+    return pathname === '/' || pathname === '';
+  }
+  return pathname === target || pathname.startsWith(`${target}/`);
+}
+
+function NavIcon({
+  name,
+  active,
+}: {
+  name: HomeNavItem['icon'];
+  active: boolean;
+}) {
+  const color = active ? theme.colors.terracotta : theme.colors.inkSoft;
   const stroke = 1.6;
   if (name === 'calendar') {
     return (
       <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-        <Rect x={3.5} y={5} width={17} height={15} rx={2.5} stroke={color} strokeWidth={stroke} />
+        <Rect
+          x={3.5}
+          y={5}
+          width={17}
+          height={15}
+          rx={2.5}
+          stroke={color}
+          strokeWidth={stroke}
+        />
         <Path d="M3.5 10h17" stroke={color} strokeWidth={stroke} />
-        <Path d="M8 3.5v3M16 3.5v3" stroke={color} strokeWidth={stroke} strokeLinecap="round" />
+        <Path
+          d="M8 3.5v3M16 3.5v3"
+          stroke={color}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+        />
       </Svg>
     );
   }
@@ -40,13 +67,25 @@ function NavIcon({ name, active }: { name: HomeNavItem['icon']; active: boolean 
   if (name === 'card') {
     return (
       <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-        <Rect x={4} y={5} width={16} height={14} rx={2} stroke={color} strokeWidth={stroke} />
-        <Path d="M4 9.5h16M8 13.5h5" stroke={color} strokeWidth={stroke} strokeLinecap="round" />
+        <Rect
+          x={4}
+          y={5}
+          width={16}
+          height={14}
+          rx={2}
+          stroke={color}
+          strokeWidth={stroke}
+        />
+        <Path
+          d="M4 9.5h16M8 13.5h5"
+          stroke={color}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+        />
       </Svg>
     );
   }
   if (name === 'stamp') {
-    // Tabler Icons "shoe" (MIT) — reads clearly at tab size.
     return (
       <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
         <Path
@@ -86,10 +125,11 @@ function NavIcon({ name, active }: { name: HomeNavItem['icon']; active: boolean 
 }
 
 /**
- * Floating paper dock with icon + label (home concept B chrome).
+ * Floating journal dock — cream paper, terracotta active tab.
  */
 export function HomeNavBar({ items }: HomeNavBarProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const insets = useSafeAreaInsets();
 
   return (
@@ -100,30 +140,35 @@ export function HomeNavBar({ items }: HomeNavBarProps) {
       ]}
     >
       <View style={styles.bar}>
-        {items.map((item) => (
-          <Pressable
-            key={String(item.href)}
-            onPress={() => router.push(item.href)}
-            accessibilityRole="button"
-            accessibilityLabel={item.label}
-            style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
-          >
-            {({ pressed }) => (
-              <View style={[styles.itemInner, pressed && styles.itemInnerPressed]}>
+        {items.map((item) => {
+          const active = pathMatches(pathname, item.href);
+          return (
+            <Pressable
+              key={String(item.href)}
+              onPress={() => router.push(item.href)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={item.label}
+              style={({ pressed }) => [
+                styles.item,
+                pressed && styles.itemPressed,
+              ]}
+            >
+              <View style={[styles.itemInner, active && styles.itemInnerActive]}>
                 <View style={styles.iconWrap}>
-                  <NavIcon name={item.icon} active={pressed} />
+                  <NavIcon name={item.icon} active={active} />
                   {item.badge ? <View style={styles.badge} /> : null}
                 </View>
                 <Text
-                  style={[styles.label, pressed && styles.labelPressed]}
+                  style={[styles.label, active && styles.labelActive]}
                   numberOfLines={1}
                 >
                   {item.label}
                 </Text>
               </View>
-            )}
-          </Pressable>
-        ))}
+            </Pressable>
+          );
+        })}
       </View>
     </View>
   );
@@ -138,9 +183,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'stretch',
     borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.panelBorder,
+    borderColor: theme.colors.hairline,
     paddingVertical: 6,
     paddingHorizontal: 6,
     ...theme.shadows.raised,
@@ -150,7 +195,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.lg,
   },
   itemPressed: {
-    // highlight lives on the inner chip
+    opacity: 0.85,
   },
   itemInner: {
     alignItems: 'center',
@@ -160,8 +205,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
     borderRadius: theme.radius.md,
   },
-  itemInnerPressed: {
-    backgroundColor: theme.colors.landLight,
+  itemInnerActive: {
+    backgroundColor: theme.colors.terracottaSoft,
   },
   iconWrap: {
     width: 22,
@@ -176,16 +221,17 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: theme.colors.notify,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.white,
+    borderColor: theme.colors.surface,
   },
   label: {
     ...theme.type.micro,
+    fontFamily: theme.fonts.serif,
     color: theme.colors.inkSoft,
     fontWeight: '600',
     letterSpacing: -0.2,
   },
-  labelPressed: {
-    color: theme.colors.ink,
+  labelActive: {
+    color: theme.colors.terracotta,
     fontWeight: '700',
   },
 });

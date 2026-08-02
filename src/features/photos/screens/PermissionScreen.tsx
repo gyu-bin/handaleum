@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/shared/components/Button';
+import { PaperGrain } from '@/shared/components/PaperGrain';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
@@ -31,6 +32,7 @@ export function PermissionScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
+      <PaperGrain style={styles.grain} />
       <View style={styles.body}>
         <View style={styles.hero}>
           <View style={styles.iconCircle}>
@@ -62,11 +64,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background,
   },
+  grain: {
+    opacity: 0.3,
+  },
   body: {
     flex: 1,
     justifyContent: 'center',
     paddingHorizontal: theme.spacing.lg,
   },
+
   hero: {
     alignItems: 'center',
     gap: theme.spacing.md,
@@ -77,7 +83,7 @@ const styles = StyleSheet.create({
     borderRadius: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.colors.accentSoft,
+    backgroundColor: theme.colors.terracottaSoft,
     marginBottom: theme.spacing.sm,
   },
   icon: {
@@ -90,16 +96,19 @@ const styles = StyleSheet.create({
    */
   title: {
     ...theme.type.title,
+    fontFamily: theme.fonts.serif,
     color: theme.colors.ink,
     fontWeight: '800',
     textAlign: 'center',
   },
   bodyText: {
     ...theme.type.body,
+    fontFamily: theme.fonts.serif,
     color: theme.colors.inkSoft,
     textAlign: 'center',
     paddingHorizontal: theme.spacing.sm,
   },
+
   footer: {
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: theme.spacing.md,

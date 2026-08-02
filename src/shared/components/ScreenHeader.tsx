@@ -13,7 +13,7 @@ export interface ScreenHeaderProps {
 }
 
 /**
- * Shared top bar with a back affordance and title, for pushed routes.
+ * Journal top bar — serif title, soft back chip.
  */
 export function ScreenHeader({ title, trailing, onBack }: ScreenHeaderProps) {
   const router = useRouter();
@@ -52,6 +52,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.colors.hairline,
+    backgroundColor: theme.colors.background,
   },
   backBtn: {
     minWidth: HIT,
@@ -70,18 +71,21 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   chevron: {
-    color: theme.colors.ink,
+    fontFamily: theme.fonts.serif,
+    color: theme.colors.terracotta,
     fontSize: 22,
     lineHeight: 24,
     marginTop: -1,
   },
   backLabel: {
     ...theme.type.label,
+    fontFamily: theme.fonts.serif,
     color: theme.colors.inkSoft,
     fontWeight: '600',
   },
   title: {
     ...theme.type.title,
+    fontFamily: theme.fonts.serif,
     flex: 1,
     textAlign: 'center',
     color: theme.colors.ink,

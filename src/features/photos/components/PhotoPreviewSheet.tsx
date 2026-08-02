@@ -253,19 +253,23 @@ const styles = StyleSheet.create({
   },
   title: {
     ...theme.type.title,
+    fontFamily: theme.fonts.serif,
     color: theme.colors.ink,
     fontWeight: '600',
   },
   meta: {
     ...theme.type.micro,
+    fontFamily: theme.fonts.serif,
     color: theme.colors.inkSoft,
   },
   close: {
     ...theme.type.body,
-    color: theme.colors.accent,
+    fontFamily: theme.fonts.serif,
+    color: theme.colors.terracotta,
     fontWeight: '600',
     marginTop: 2,
   },
+
   list: {
     paddingHorizontal: theme.spacing.md - theme.spacing.sm / 2,
     paddingBottom: theme.spacing.xl,
@@ -286,13 +290,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
-    backgroundColor: theme.colors.accent,
+    backgroundColor: theme.colors.terracotta,
   },
   coverBadgeText: {
-    color: theme.colors.white,
+    color: theme.colors.surface,
     fontSize: 10,
     fontWeight: '700',
   },
+
   coverHint: {
     position: 'absolute',
     left: 4,
@@ -303,7 +308,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.overlayDark,
   },
   coverHintText: {
-    color: theme.colors.white,
+    color: theme.colors.surface,
     fontSize: 9,
     fontWeight: '600',
   },

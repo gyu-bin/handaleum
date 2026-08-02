@@ -7,6 +7,7 @@ import {
   setStampsScanIntroSeen,
 } from '@/lib/storage';
 import { LoadingView } from '@/shared/components/LoadingView';
+import { PaperGrain } from '@/shared/components/PaperGrain';
 import { ScreenHeader } from '@/shared/components/ScreenHeader';
 import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
@@ -209,6 +210,7 @@ export function StampScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <PaperGrain style={styles.grain} />
       <StampScanIntroModal
         visible={showScanIntro}
         onConfirm={onScanIntroConfirm}
@@ -274,15 +276,19 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background,
   },
+  grain: {
+    opacity: 0.3,
+  },
   pill: {
-    backgroundColor: theme.colors.sand,
+    backgroundColor: theme.colors.terracotta,
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: 4,
     borderRadius: theme.radius.pill,
   },
   pillText: {
     ...theme.type.micro,
-    color: theme.colors.white,
+    fontFamily: theme.fonts.serif,
+    color: theme.colors.surface,
     fontWeight: '700',
   },
   progressBlock: {
@@ -292,12 +298,14 @@ const styles = StyleSheet.create({
   },
   progressLabel: {
     ...theme.type.label,
+    fontFamily: theme.fonts.serif,
     color: theme.colors.inkSoft,
     fontWeight: '600',
   },
   syncHint: {
     ...theme.type.micro,
-    color: theme.colors.inkSoft,
+    fontFamily: theme.fonts.serif,
+    color: theme.colors.terracotta,
   },
   track: {
     height: 4,
@@ -307,7 +315,7 @@ const styles = StyleSheet.create({
   },
   fill: {
     height: '100%',
-    backgroundColor: theme.colors.accent,
+    backgroundColor: theme.colors.terracotta,
     borderRadius: 2,
   },
   emptyWrap: {
@@ -318,3 +326,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
   },
 });
+

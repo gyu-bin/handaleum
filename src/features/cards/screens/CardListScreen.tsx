@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/shared/components/Button';
 import { LoadingView } from '@/shared/components/LoadingView';
+import { PaperGrain } from '@/shared/components/PaperGrain';
 import { ScreenHeader } from '@/shared/components/ScreenHeader';
 import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
@@ -28,9 +29,13 @@ export function CardListScreen() {
   const [editing, setEditing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  /** Always home — never walk back into 카드 만들기 / preview leftovers. */
+  /**
+   * Pop back to home (native back animation). `replace('/')` slides home in
+   * from the right like a forward push — feels wrong for a back control.
+   * dismissTo clears create/preview leftovers still on the stack.
+   */
   const goHome = () => {
-    router.replace('/');
+    router.dismissTo('/');
   };
 
   const exitEdit = useCallback(() => {
@@ -142,6 +147,7 @@ export function CardListScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <PaperGrain style={styles.grain} />
       <ScreenHeader
         title={strings.cards.listTitle}
         onBack={goHome}
@@ -275,9 +281,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background,
   },
+  grain: {
+    opacity: 0.28,
+  },
   headerAction: {
     ...theme.type.label,
-    color: theme.colors.accent,
+    fontFamily: theme.fonts.serif,
+    color: theme.colors.terracotta,
     fontWeight: '700',
   },
   selectBar: {
@@ -314,8 +324,8 @@ const styles = StyleSheet.create({
     ...theme.shadows.card,
   },
   cardSelected: {
-    borderColor: theme.colors.accent,
-    backgroundColor: theme.colors.accentSoft,
+    borderColor: theme.colors.terracotta,
+    backgroundColor: theme.colors.terracottaSoft,
   },
   cardPressed: {
     opacity: 0.9,
@@ -332,11 +342,11 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
   },
   checkOn: {
-    borderColor: theme.colors.accent,
-    backgroundColor: theme.colors.accent,
+    borderColor: theme.colors.terracotta,
+    backgroundColor: theme.colors.terracotta,
   },
   checkMark: {
-    color: theme.colors.white,
+    color: theme.colors.surface,
     fontSize: 12,
     fontWeight: '800',
     lineHeight: 14,
@@ -347,6 +357,7 @@ const styles = StyleSheet.create({
   },
   title: {
     ...theme.type.title,
+    fontFamily: theme.fonts.serif,
     color: theme.colors.ink,
     fontWeight: '700',
   },

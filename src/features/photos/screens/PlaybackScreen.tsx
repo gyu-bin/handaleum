@@ -13,6 +13,7 @@ import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LoadingView } from '@/shared/components/LoadingView';
+import { PaperGrain } from '@/shared/components/PaperGrain';
 import { ScreenHeader } from '@/shared/components/ScreenHeader';
 import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
@@ -380,6 +381,7 @@ export function PlaybackScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <PaperGrain style={styles.grain} />
       <ScreenHeader
         title={strings.playback.title}
         trailing={
@@ -448,6 +450,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background,
   },
+  grain: {
+    opacity: 0.28,
+  },
   trailing: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -459,18 +464,19 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.colors.accentSoft,
+    backgroundColor: theme.colors.terracottaSoft,
   },
   playBtnPressed: {
     opacity: 0.6,
   },
   playIcon: {
     fontSize: 12,
-    color: theme.colors.accent,
+    color: theme.colors.terracotta,
     fontWeight: '700',
   },
   counter: {
     ...theme.type.body,
+    fontFamily: theme.fonts.serif,
     color: theme.colors.inkSoft,
     fontWeight: '700',
   },
@@ -499,12 +505,14 @@ const styles = StyleSheet.create({
   },
   place: {
     ...theme.type.title,
+    fontFamily: theme.fonts.serif,
     marginTop: theme.spacing.md,
     color: theme.colors.ink,
     fontWeight: '800',
   },
   meta: {
     ...theme.type.label,
+    fontFamily: theme.fonts.serif,
     marginTop: 4,
     color: theme.colors.inkSoft,
     fontWeight: '600',
@@ -530,10 +538,10 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.line,
   },
   gridThumbSelected: {
-    borderColor: theme.colors.accent,
+    borderColor: theme.colors.terracotta,
   },
   gridThumbCover: {
-    borderColor: theme.colors.sand,
+    borderColor: theme.colors.terracotta,
   },
   gridImage: {
     width: '100%',
@@ -546,12 +554,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingVertical: 1,
     borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.sand,
+    backgroundColor: theme.colors.terracotta,
   },
   gridBadgeText: {
     ...theme.type.micro,
-    color: theme.colors.white,
+    color: theme.colors.surface,
     fontWeight: '700',
     fontSize: 9,
   },
 });
+

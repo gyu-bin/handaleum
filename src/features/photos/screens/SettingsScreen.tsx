@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/shared/components/Button';
+import { PaperGrain } from '@/shared/components/PaperGrain';
 import { ScreenHeader } from '@/shared/components/ScreenHeader';
 import { strings } from '@/shared/constants/strings';
 import { formatProPriceKrw, IS_MONETIZATION_LIVE } from '@/shared/constants/pricing';
@@ -73,6 +74,7 @@ export function SettingsScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <PaperGrain style={styles.grain} />
       <ScreenHeader title={strings.settings.title} />
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -223,7 +225,10 @@ export function SettingsScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: theme.colors.canvas,
+    backgroundColor: theme.colors.background,
+  },
+  grain: {
+    opacity: 0.28,
   },
   content: {
     padding: theme.spacing.md,
@@ -242,21 +247,24 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...theme.type.title,
+    fontFamily: theme.fonts.serif,
     fontWeight: '700',
     color: theme.colors.ink,
   },
   description: {
     ...theme.type.label,
+    fontFamily: theme.fonts.serif,
     color: theme.colors.inkSoft,
   },
   status: {
     ...theme.type.label,
+    fontFamily: theme.fonts.serif,
     fontWeight: '600',
     color: theme.colors.subtle,
     paddingVertical: theme.spacing.xs,
   },
   statusSet: {
-    color: theme.colors.accent,
+    color: theme.colors.terracotta,
   },
   error: {
     ...theme.type.micro,
@@ -270,6 +278,7 @@ const styles = StyleSheet.create({
   },
   radiusLabel: {
     ...theme.type.micro,
+    fontFamily: theme.fonts.serif,
     fontWeight: '600',
     color: theme.colors.subtle,
   },
@@ -286,22 +295,24 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.hairline,
   },
   radiusChipActive: {
-    backgroundColor: theme.colors.accentSoft,
-    borderColor: theme.colors.accent,
+    backgroundColor: theme.colors.terracottaSoft,
+    borderColor: theme.colors.terracotta,
   },
   radiusChipPressed: {
     opacity: 0.7,
   },
   radiusChipText: {
     ...theme.type.label,
+    fontFamily: theme.fonts.serif,
     fontWeight: '600',
     color: theme.colors.inkSoft,
   },
   radiusChipTextActive: {
-    color: theme.colors.accent,
+    color: theme.colors.terracotta,
   },
   hint: {
     ...theme.type.micro,
+    fontFamily: theme.fonts.serif,
     color: theme.colors.subtle,
   },
 });

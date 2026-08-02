@@ -334,7 +334,7 @@ const styles = StyleSheet.create({
     height: CIRCLE,
     borderRadius: CIRCLE / 2,
     borderWidth: 2,
-    borderColor: theme.colors.accent,
+    borderColor: theme.colors.terracotta,
   },
   disc: {
     width: DISC,
@@ -342,6 +342,7 @@ const styles = StyleSheet.create({
     borderRadius: DISC / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.colors.accentSoft,
+    backgroundColor: theme.colors.terracottaSoft,
   },
 });
+
