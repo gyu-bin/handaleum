@@ -1,9 +1,8 @@
 import * as Location from 'expo-location';
 
 /**
- * Korean administrative-name normalization and address-field extraction. These
- * are pure string helpers over an iOS `LocationGeocodedAddress`; the meaning we
- * build on top of them (labels, journey) lives in placeLabels/placeJourney.
+ * Korean administrative-name helpers (metro tables, cleanPart, kind checks).
+ * Full address parsing lives in adminTokens + parseGeocodedPlace.
  */
 
 /** Normalize metro official names → short display names. */
@@ -31,17 +30,6 @@ export const METRO_SHORT: Record<string, string> = {
   울산: '울산',
   세종특별자치시: '세종',
   세종시: '세종',
-  세종: '세종',
-};
-
-const METRO_PROVINCE: Record<string, string> = {
-  서울: '서울',
-  부산: '부산',
-  대구: '대구',
-  인천: '인천',
-  광주: '광주',
-  대전: '대전',
-  울산: '울산',
   세종: '세종',
 };
 
@@ -81,67 +69,18 @@ export function endsWithGu(value: string): boolean {
   return /구$/.test(value.replace(/\s+/g, ''));
 }
 
-function endsWithDong(value: string): boolean {
-  return /[동리가]$/.test(value.replace(/\s+/g, ''));
+/** True for 경기도 / 제주특별자치도 — not a usable city grain by itself. */
+export function isProvinceName(name: string): boolean {
+  const compact = name.replace(/\s+/g, '');
+  if (METRO_SHORT[compact] || METRO_SHORT[name]) {
+    return false;
+  }
+  return /도$/.test(compact) && !/시$/.test(compact);
 }
 
-/** Pull the first "○○구" from any address field (iOS often buries it in formattedAddress). */
-export function extractGu(
-  ...parts: (string | null | undefined)[]
-): string | null {
-  for (const part of parts) {
-    if (part == null || !part.trim()) {
-      continue;
-    }
-    const compact = part.replace(/\s+/g, '');
-    if (endsWithGu(compact)) {
-      return compact;
-    }
-    const match = part.match(/([가-힣]{1,10}구)/);
-    if (match?.[1] && match[1] !== '특구') {
-      return match[1];
-    }
-  }
-  return null;
-}
-
-export function extractDong(
-  ...parts: (string | null | undefined)[]
-): string | null {
-  for (const part of parts) {
-    if (part == null || !part.trim()) {
-      continue;
-    }
-    const compact = part.replace(/\s+/g, '');
-    if (endsWithDong(compact) && compact.length <= 12) {
-      return compact;
-    }
-    const match = part.match(/([가-힣0-9]{1,12}[동리가])/);
-    if (match?.[1] && !endsWithGu(match[1])) {
-      return match[1];
-    }
-  }
-  return null;
-}
-
-/** Pull "○○군" (강화군, 기장군) — must not be treated as a 시. */
-export function extractGun(
-  ...parts: (string | null | undefined)[]
-): string | null {
-  for (const part of parts) {
-    if (part == null || !part.trim()) {
-      continue;
-    }
-    const compact = part.replace(/\s+/g, '');
-    if (/군$/.test(compact) && compact.length >= 2 && compact.length <= 12) {
-      return compact;
-    }
-    const match = part.match(/([가-힣]{1,10}군)/);
-    if (match?.[1]) {
-      return match[1];
-    }
-  }
-  return null;
+/** True for 주문진읍 / 손양면 — not a stamp unit; lift to parent 시/군. */
+export function isEupMyonName(name: string): boolean {
+  return /[읍면]$/.test(name.replace(/\s+/g, ''));
 }
 
 export function looksLikeSeoul(
@@ -155,24 +94,4 @@ export function looksLikeSeoul(
     .filter(Boolean)
     .join(' ');
   return /서울/.test(blob);
-}
-
-export function extractProvince(
-  addr: Location.LocationGeocodedAddress,
-  cityShort: string,
-  metro: boolean,
-): string | null {
-  if (metro && METRO_PROVINCE[cityShort]) {
-    return METRO_PROVINCE[cityShort]!;
-  }
-  const region = cleanPart(addr.region);
-  if (region) {
-    if (/도$/.test(region) || /특별자치도$/.test(region)) {
-      return region.replace(/특별자치도$/, '도');
-    }
-    if (METRO_SHORT[region]) {
-      return METRO_SHORT[region]!;
-    }
-  }
-  return cityShort || null;
 }

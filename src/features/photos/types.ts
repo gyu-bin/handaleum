@@ -11,6 +11,7 @@ import type {
   placeClusterSchema,
   visitAdminLevelSchema,
   visitPlaceSchema,
+  resolvedPlaceSchema,
 } from './schema';
 
 export type MonthKey = z.infer<typeof monthKeySchema>;
@@ -23,3 +24,4 @@ export type PinCover = z.infer<typeof pinCoverSchema>;
 export type VisitAdminLevel = z.infer<typeof visitAdminLevelSchema>;
 export type VisitPlace = z.infer<typeof visitPlaceSchema>;
 export type HomeLocation = z.infer<typeof homeLocationSchema>;
+export type ResolvedPlace = z.infer<typeof resolvedPlaceSchema>;

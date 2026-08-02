@@ -3,7 +3,8 @@ import * as Location from 'expo-location';
 import { loadAllLocatedPhotos } from '@/features/photos/services/mediaLibrary';
 import type { PhotoRef } from '@/features/photos/types';
 import { currentMonthKey } from '@/features/photos/utils/month';
-import { resolveVisitPlaces } from '@/features/photos/utils/placeJourney';
+import { resolveVisitPlaces } from '@/features/photos/services/placeResolve';
+import { getStampsLibrarySyncAt } from '@/lib/storage';
 
 import { notifyStampsChanged } from '../hooks/useStamps';
 import { isKoreaLatLng } from './koreaBounds';
@@ -23,6 +24,8 @@ export type StampLibrarySyncResult = {
 const LIBRARY_GPS_BATCH = 24;
 /** Geocode / stamp write chunks so the grid fills while the rest runs. */
 const GEOCODE_PHOTO_CHUNK = 400;
+/** How often to re-check assets previously cached as no-GPS (iCloud etc.). */
+const DEEP_RECHECK_MS = 7 * 24 * 60 * 60 * 1000;
 
 async function ensureGeocodePermission(): Promise<boolean> {
   try {
@@ -82,19 +85,25 @@ export async function syncStampsFromLibrary(): Promise<StampLibrarySyncResult> {
     return { added: 0, photoCount: 0 };
   }
 
+  const lastSync = getStampsLibrarySyncAt();
+  const deepRecheck =
+    wasEmpty || lastSync === 0 || Date.now() - lastSync >= DEEP_RECHECK_MS;
+
   // Phase 1 — every album photo with GPS (all years). Geocode only after.
+  // Deep recheck (iCloud / prior no-GPS) is weekly — every visit would take hours.
   const photos = await loadAllLocatedPhotos({
     forceRealLibrary: true,
     locationBatchSize: LIBRARY_GPS_BATCH,
     retryFailedLocations: true,
-    networkLocationFallback: true,
-    recheckCachedNoLocation: true,
+    networkLocationFallback: deepRecheck,
+    recheckCachedNoLocation: deepRecheck,
   });
 
   console.warn(
     '[stamps] library GPS scan done',
     photos.length,
     'photos — geocoding places',
+    deepRecheck ? '(deep)' : '(incremental)',
   );
 
   // Phase 2 — places → stamps for the entire set (month picker never stamps).

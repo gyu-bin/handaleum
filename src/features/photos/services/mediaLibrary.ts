@@ -34,12 +34,14 @@ const PAGE_SIZE = 200;
  */
 const LOCATION_BATCH = 8;
 /** Cap simultaneous ImageManipulator exports (map pin thumbs). */
-const PIN_EXPORT_CONCURRENCY = 2;
+const PIN_EXPORT_CONCURRENCY = 3;
 /** Cap simultaneous Android URI lookups while scrolling grids. */
 const ANDROID_URI_CONCURRENCY = 6;
 /** Bound in-memory URI maps so multi-month sessions don't grow forever. */
 const URI_CACHE_MAX = 400;
-const FILE_URI_CACHE_MAX = 80;
+/** Above overview pin soft-cap (~116) so visible markers stay cached. */
+const FILE_URI_CACHE_MAX = 140;
+
 
 const limitPinExport = createConcurrencyLimiter(PIN_EXPORT_CONCURRENCY);
 const limitAndroidUri = createConcurrencyLimiter(ANDROID_URI_CONCURRENCY);
@@ -111,7 +113,8 @@ function coordsFromInfo(
  * Resolve GPS for one asset.
  * Default: local metadata only (map month loads — avoid iCloud download storms).
  * `networkFallback`: if local has no coords but asset is in iCloud, download once
- * (used by 발도장 full-album scan so remote originals still stamp).
+ * (monthly soft-recheck + 발도장). Never download every no-GPS local asset —
+ * that freezes the UI on screenshot-heavy months.
  */
 async function fetchLocation(
   asset: Asset,
@@ -126,8 +129,6 @@ async function fetchLocation(
       return local;
     }
 
-    // iCloud / network asset with no local GPS — don't blacklist as "no GPS"
-    // until we've tried a network read (stamp scan) or given up.
     if (options?.networkFallback && info.isNetworkAsset) {
       const remote = await getAssetInfoAsync(asset, {
         shouldDownloadFromNetwork: true,
@@ -180,6 +181,11 @@ async function pauseWhileBackgrounded(shouldContinue?: () => boolean): Promise<v
 /** Min gap between progressive UI updates — avoids re-clustering every batch. */
 const PARTIAL_MIN_MS = 400;
 
+/** Soft-retry assets once cached as no-GPS (iCloud metadata catch-up). */
+const softRecheckedNoLoc = new Set<string>();
+/** Unbounded soft-recheck of every "x" stalls month open on screenshot-heavy libraries. */
+const SOFT_RECHECK_CAP = 60;
+
 /**
  * Load all camera-roll photos for a month via expo-media-library.
  * Cached GPS hits resolve synchronously; only uncached assets pay getAssetInfoAsync.
@@ -203,13 +209,21 @@ export async function loadMonthlyPhotos(
   const photos: PhotoRef[] = [];
   let noLocationCount = 0;
   const uncached: Asset[] = [];
+  let softBudget = SOFT_RECHECK_CAP;
 
   for (const asset of assets) {
     const hit = fromCache(asset);
     if (hit === 'miss') {
       uncached.push(asset);
     } else if (hit === 'no-location') {
-      noLocationCount += 1;
+      // Recheck a capped set of prior misses (iCloud may have caught up).
+      if (softBudget > 0 && !softRecheckedNoLoc.has(asset.id)) {
+        softBudget -= 1;
+        softRecheckedNoLoc.add(asset.id);
+        uncached.push(asset);
+      } else {
+        noLocationCount += 1;
+      }
     } else {
       photos.push(hit);
     }
@@ -241,7 +255,10 @@ export async function loadMonthlyPhotos(
   for (let i = 0; i < uncached.length; i += LOCATION_BATCH) {
     await pauseWhileBackgrounded(shouldContinue);
     const chunk = uncached.slice(i, i + LOCATION_BATCH);
-    const results = await Promise.all(chunk.map((asset) => fetchLocation(asset)));
+    // networkFallback only hits isNetworkAsset — local screenshots stay cheap.
+    const results = await Promise.all(
+      chunk.map((asset) => fetchLocation(asset, { networkFallback: true })),
+    );
     for (const result of results) {
       if (result === 'no-location') {
         noLocationCount += 1;
@@ -361,6 +378,9 @@ export async function loadAllLocatedPhotos(
 
   for (let i = 0; i < uncached.length; i += batchSize) {
     await pauseWhileBackgrounded(shouldContinue);
+    // Yield MediaLibrary to map pin thumb exports (otherwise stamps starve pins).
+    await waitWhilePinExportBusy();
+    await pauseWhileBackgrounded(shouldContinue);
     const chunk = uncached.slice(i, i + batchSize);
     const results = await Promise.all(
       chunk.map((asset) => fetchLocation(asset, locOpts)),
@@ -382,6 +402,8 @@ export async function loadAllLocatedPhotos(
 
   if (retryFailedLocations && failed.length > 0) {
     for (let i = 0; i < failed.length; i += batchSize) {
+      await pauseWhileBackgrounded(shouldContinue);
+      await waitWhilePinExportBusy();
       await pauseWhileBackgrounded(shouldContinue);
       const chunk = failed.slice(i, i + batchSize);
       const results = await Promise.all(
@@ -406,6 +428,48 @@ export async function loadAllLocatedPhotos(
 const uriCache = new Map<string, string | null>();
 const fileUriCache = new Map<string, string | null>();
 const fileUriInflight = new Map<string, Promise<string | null>>();
+
+const pinExportIdleListeners = new Set<() => void>();
+
+function notifyPinExportMaybeIdle(): void {
+  if (fileUriInflight.size > 0) {
+    return;
+  }
+  for (const listener of [...pinExportIdleListeners]) {
+    listener();
+  }
+}
+
+/** True while any pin thumb export / disk resolve is in flight. */
+export function isPinExportBusy(): boolean {
+  return fileUriInflight.size > 0;
+}
+
+/** Resolves when pin thumb exports are idle, or after `maxMs` (whichever first). */
+export function waitWhilePinExportBusy(maxMs = 2500): Promise<void> {
+  if (!isPinExportBusy()) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      pinExportIdleListeners.delete(onIdle);
+      resolve();
+    };
+    const timer = setTimeout(finish, Math.max(0, maxMs));
+    const onIdle = () => {
+      if (!isPinExportBusy()) {
+        finish();
+      }
+    };
+    pinExportIdleListeners.add(onIdle);
+  });
+}
 
 /** Pin thumbs are ~44pt; 128px covers @3x without shipping full camera-roll files. */
 const PIN_THUMB_WIDTH = 128;
@@ -586,6 +650,7 @@ export async function resolveAssetFileUri(assetId: string): Promise<string | nul
     }
   })().finally(() => {
     fileUriInflight.delete(assetId);
+    notifyPinExportMaybeIdle();
   });
 
   fileUriInflight.set(assetId, work);

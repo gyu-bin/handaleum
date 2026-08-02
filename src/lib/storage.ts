@@ -173,3 +173,50 @@ export function getStampsScanIntroSeen(): boolean {
 export function setStampsScanIntroSeen(): void {
   storage.set(STAMPS_SCAN_INTRO_KEY, '1');
 }
+
+const STAMPS_LIBRARY_SYNC_AT_KEY = 'stampsLibrarySyncAt';
+/** Bump when place→구 parse changes so cooldown cannot hide new stamps. */
+const STAMPS_PLACE_PARSE_REV_KEY = 'stampsPlaceParseRev';
+export const STAMPS_PLACE_PARSE_REV = 12;
+
+/** Epoch ms of last finished full-album stamp sync (0 if never). */
+export function getStampsLibrarySyncAt(): number {
+  const raw = storage.getString(STAMPS_LIBRARY_SYNC_AT_KEY);
+  if (!raw) {
+    return 0;
+  }
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}
+
+export function setStampsLibrarySyncAt(atMs: number): void {
+  storage.set(STAMPS_LIBRARY_SYNC_AT_KEY, String(atMs));
+}
+
+export function getStampsPlaceParseRev(): number {
+  const raw = storage.getString(STAMPS_PLACE_PARSE_REV_KEY);
+  if (!raw) {
+    return 0;
+  }
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}
+
+export function setStampsPlaceParseRev(rev: number): void {
+  storage.set(STAMPS_PLACE_PARSE_REV_KEY, String(rev));
+}
+
+/**
+ * Persisted reverse-geocode result per ~110m bucket (placeRes:{rev}:{lat,lng}).
+ * GPS coords are in assetLoc; place *names* live here so cold start can show
+ * chips/sheet labels without waiting for CLGeocoder again.
+ */
+const PLACE_RESOLVE_PREFIX = 'placeRes:';
+
+export function getPlaceResolveRaw(cacheKey: string): string | null {
+  return storage.getString(`${PLACE_RESOLVE_PREFIX}${cacheKey}`) ?? null;
+}
+
+export function setPlaceResolveRaw(cacheKey: string, json: string): void {
+  storage.set(`${PLACE_RESOLVE_PREFIX}${cacheKey}`, json);
+}

@@ -6,4 +6,11 @@ module.exports = defineConfig([
   {
     ignores: ['dist/*'],
   },
+  {
+    // Build/tooling scripts run in Node, not in the Expo runtime.
+    files: ['scripts/**'],
+    languageOptions: {
+      globals: { __dirname: 'readonly', process: 'readonly' },
+    },
+  },
 ]);

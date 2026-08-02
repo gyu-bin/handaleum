@@ -24,8 +24,10 @@ import { useMonthJourney } from '../hooks/useMonthJourney';
 import { useMonthlyPhotos } from '../hooks/useMonthlyPhotos';
 import { usePhotoPermission } from '../hooks/usePhotoPermission';
 import { usePinCovers } from '../hooks/usePinCovers';
-import { clusterPhotos } from '../services/cluster';
+import { clusterPhotos, resetClusterCellCache } from '../services/cluster';
 import { isDevDummyPhotosEnabled } from '../services/dummyPhotos';
+import { isPinExportBusy } from '../services/mediaLibrary';
+import { startMonthImageWarmup } from '../services/monthImageWarmup';
 import type { MonthKey, PlaceCluster } from '../types';
 import { monthTimeBoundsIso } from '../utils/month';
 import { placeBucketKey } from '../utils/placeJourney';
@@ -85,16 +87,74 @@ export function MonthlyMapScreen() {
     [filteredPhotos, zoom],
   );
 
-  const { places: journeyPlaces } = useMonthJourney(filteredPhotos);
+  const { places: journeyPlaces } = useMonthJourney(filteredPhotos, {
+    // Geocode as soon as GPS photos exist. resolvePlace hits disk/memory first,
+    // so progressive batches mostly warm new buckets instead of re-hitting CLGeocoder.
+    // Waiting for !isFetching left cold start stuck on "사진 n장" until the whole month finished.
+    enabled: Boolean(data),
+    resetKey: month,
+  });
   const { unseenCount } = useStamps();
 
-  // Full-album stamp accumulate while the user is on the map (not stamps-only).
+  // Stamp sync yields to pin exports; still wait for a first pin wave first.
   useEffect(() => {
     if (!isReady || !hasLibraryAccess) {
       return;
     }
-    void startStampLibrarySync();
+    let cancelled = false;
+    const run = async () => {
+      await new Promise((r) => setTimeout(r, 2500));
+      const deadline = Date.now() + 25_000;
+      while (!cancelled && isPinExportBusy() && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 400));
+      }
+      if (!cancelled) {
+        void startStampLibrarySync();
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
   }, [hasLibraryAccess, isReady]);
+
+  // Warm only visible pin covers/seeds — never the whole month (10k–50k melts).
+  const imageWarmKey = useMemo(() => {
+    const photos = data?.allPhotos;
+    if (!photos || photos.length === 0) {
+      return null;
+    }
+    const first = photos[0]!;
+    const last = photos[photos.length - 1]!;
+    return `${month}:${photos.length}:${first.assetId}:${last.assetId}`;
+  }, [month, data?.allPhotos]);
+
+  useEffect(() => {
+    resetClusterCellCache();
+  }, [month]);
+
+  useEffect(() => {
+    if (!imageWarmKey) {
+      return;
+    }
+    const priority: string[] = [];
+    for (const cluster of clusters) {
+      const placeKey = placeBucketKey(cluster.centerLat, cluster.centerLng);
+      const coverId = covers[placeKey];
+      if (coverId) {
+        priority.push(coverId);
+      }
+      const seed = cluster.photos[0]?.assetId;
+      if (seed) {
+        priority.push(seed);
+      }
+    }
+    startMonthImageWarmup({
+      month,
+      assetIds: priority,
+    });
+  }, [imageWarmKey, clusters, covers, month]);
+
 
   const onSelectCluster = useCallback((cluster: PlaceCluster) => {
     setSelected((prev) => (prev?.id === cluster.id ? null : cluster));

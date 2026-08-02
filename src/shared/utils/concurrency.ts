@@ -7,7 +7,7 @@ export function createConcurrencyLimiter(limit: number): <T>(
 ) => Promise<T> {
   const max = Math.max(1, limit);
   let active = 0;
-  const queue: Array<() => void> = [];
+  const queue: (() => void)[] = [];
 
   const pump = () => {
     if (active >= max) {

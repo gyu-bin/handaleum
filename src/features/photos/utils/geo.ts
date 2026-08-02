@@ -206,7 +206,7 @@ export function geometryToPath(
  * Smooth Catmull-Rom spline through projected points, as cubic Beziers.
  * Used for the paper-map footpath (time-ordered pin trail).
  */
-export function catmullRomPath(points: Array<[number, number]>): string {
+export function catmullRomPath(points: [number, number][]): string {
   if (points.length < 2) {
     return '';
   }

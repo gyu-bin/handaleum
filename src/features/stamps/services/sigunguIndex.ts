@@ -59,8 +59,20 @@ type CitiesIndex = Record<string, Record<string, string[]>>;
 const CITIES = citiesBySido as CitiesIndex;
 
 /** 일반구 모시 — stamp grain is 구 only; city name alone must not collect. */
+const METRO_DONG_GU_KEYS = new Set([
+  '서울',
+  '부산',
+  '대구',
+  '인천',
+  '광주',
+  '대전',
+  '울산',
+]);
+
 export const GENERAL_GU_CITIES: ReadonlySet<string> = new Set(
-  Object.keys(dongGu as Record<string, unknown>).filter((k) => k !== '서울'),
+  Object.keys(dongGu as Record<string, unknown>).filter(
+    (k) => !METRO_DONG_GU_KEYS.has(k),
+  ),
 );
 
 /** Sido order for chips — provinces.json / cities-by-sido order. */
@@ -171,6 +183,20 @@ export function totalSigunguCount(): number {
 /** Whether `name` (gu ?? city) is a valid stamp unit for `sido`. */
 export function isKnownSigungu(sido: string, name: string): boolean {
   return sigunguListForSido(sido).includes(name);
+}
+
+/**
+ * When province is missing/wrong, infer sido from a unique stamp unit name
+ * (강릉시 → 강원). Ambiguous names (중구) return null.
+ */
+export function inferSidoForUnit(name: string): string | null {
+  const matches: string[] = [];
+  for (const sido of SIDO_ORDER) {
+    if (isKnownSigungu(sido, name)) {
+      matches.push(sido);
+    }
+  }
+  return matches.length === 1 ? matches[0]! : null;
 }
 
 /** Parent 시 names that must never be collected as stamps. */

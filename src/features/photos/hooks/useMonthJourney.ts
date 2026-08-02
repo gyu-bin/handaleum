@@ -2,55 +2,119 @@ import { useEffect, useMemo, useState } from 'react';
 
 import type { PhotoRef, VisitPlace } from '../types';
 import {
-  labelsForVisitLevel,
+  hydrateVisitPlacesFromPhotos,
   resolveVisitPlaces,
-} from '../utils/placeJourney';
+} from '../services/placeResolve';
+import { labelsForVisitLevel } from '../utils/placeLabels';
 
-/** Long enough to swallow a time-slider drag, short enough to feel immediate. */
-const RESOLVE_DEBOUNCE_MS = 250;
+/** Swallow time-slider noise; GPS progressive batches need a longer settle. */
+const RESOLVE_DEBOUNCE_MS = 400;
 
 /**
- * Reverse-geocodes month photos once; exposes the familiar place labels for the
- * header chips.
+ * O(n) fingerprint without allocating a multi-MB join string (2600+ months).
  */
-export function useMonthJourney(photos: PhotoRef[]): {
-  /** Familiar labels for header chips. */
+function photosFingerprint(photos: PhotoRef[]): string {
+  const n = photos.length;
+  if (n === 0) {
+    return '0';
+  }
+  let h = n | 0;
+  let latSum = 0;
+  let lngSum = 0;
+  for (let i = 0; i < n; i += 1) {
+    const p = photos[i]!;
+    latSum += p.lat;
+    lngSum += p.lng;
+    const id = p.assetId;
+    h = (Math.imul(h, 31) + id.length) | 0;
+    h = (Math.imul(h, 31) + (id.charCodeAt(0) || 0)) | 0;
+    h = (Math.imul(h, 31) + (id.charCodeAt(id.length - 1) || 0)) | 0;
+    h = (Math.imul(h, 31) + Math.round(p.lat * 1000)) | 0;
+    h = (Math.imul(h, 31) + Math.round(p.lng * 1000)) | 0;
+  }
+  return `${n}:${h}:${latSum.toFixed(2)}:${lngSum.toFixed(2)}`;
+}
+
+export type UseMonthJourneyOptions = {
+  /**
+   * When false, skip network geocode (keep hydrated/disk places).
+   * Pass `!isFetching` so progressive GPS batches don't cancel geocode storms.
+   */
+  enabled?: boolean;
+  /** Clear places when the month changes so we don't flash the previous month. */
+  resetKey?: string;
+};
+
+/**
+ * Reverse-geocodes month photos; exposes familiar place labels for header chips.
+ * Cold start: hydrate from disk immediately (GPS was already cached; names now too).
+ */
+export function useMonthJourney(
+  photos: PhotoRef[],
+  options?: UseMonthJourneyOptions,
+): {
   places: string[];
-  /** Raw visit places for stamp sync / insights grain. */
   visitPlaces: VisitPlace[];
   isResolving: boolean;
 } {
+  const enabled = options?.enabled ?? true;
+  const resetKey = options?.resetKey;
   const [visitPlaces, setVisitPlaces] = useState<VisitPlace[]>([]);
   const [isResolving, setIsResolving] = useState(false);
 
-  const photosKey = photos
-    .map((p) => `${p.assetId}:${p.lat.toFixed(3)},${p.lng.toFixed(3)}`)
-    .join('|');
+  const photosKey = photosFingerprint(photos);
 
+  // Immediate disk/memory hydrate — do not wait for isFetching / geocode.
   useEffect(() => {
-    let cancelled = false;
-
     if (photos.length === 0) {
       setVisitPlaces([]);
       setIsResolving(false);
       return;
     }
+    const hydrated = hydrateVisitPlacesFromPhotos(photos);
+    if (hydrated.length > 0) {
+      setVisitPlaces(hydrated);
+    } else if (resetKey) {
+      // New month with no disk hits — clear previous month chips.
+      setVisitPlaces([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by photosKey/resetKey
+  }, [photosKey, resetKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!enabled) {
+      return;
+    }
+
+    if (photos.length === 0) {
+      return;
+    }
 
     setIsResolving(true);
-    // Settle before geocoding: dragging the time slider changes the photo set
-    // on every frame, and each resolve awaits a permission check per call.
+    const signal = { cancelled: false };
     const timer = setTimeout(() => {
-      void resolveVisitPlaces(photos)
-        .then((next) => {
-          if (!cancelled) {
-            setVisitPlaces(next);
-            setIsResolving(false);
+      void resolveVisitPlaces(photos, {
+        signal,
+        onProgress: (partial) => {
+          if (!signal.cancelled && partial.length > 0) {
+            setVisitPlaces(partial);
           }
+        },
+      })
+        .then((next) => {
+          if (cancelled) {
+            return;
+          }
+          if (next.length > 0) {
+            setVisitPlaces(next);
+          }
+          setIsResolving(false);
         })
         .catch((error) => {
           console.warn('resolveVisitPlaces failed', error);
           if (!cancelled) {
-            setVisitPlaces([]);
             setIsResolving(false);
           }
         });
@@ -58,12 +122,12 @@ export function useMonthJourney(photos: PhotoRef[]): {
 
     return () => {
       cancelled = true;
+      signal.cancelled = true;
       clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by photosKey
-  }, [photosKey]);
+  }, [photosKey, enabled]);
 
-  // Finest familiar grain (famous-area alias / 구 / 동) for the header chips.
   const places = useMemo(
     () => labelsForVisitLevel(visitPlaces, 'dong'),
     [visitPlaces],

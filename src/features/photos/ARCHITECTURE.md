@@ -8,7 +8,7 @@
 - 장소클러스터 PlaceCluster: 파생 데이터. 조회 시 계산, 절대 저장하지 않음
 - 핀대표사진 PinCover: month + placeKey(~110m 버킷) + assetId — kv 저장
 - 지도테마 MapThemeId: dawn | ink | warm — kv 저장
-- 방문지 VisitPlace: 파생(geocode). province/city/dong + journey label
+- 방문지 VisitPlace / ResolvedPlace: 파생(geocode). `placeResolve`가 단일 소스
 
 원본 사진은 카메라롤에 있고 앱은 assetId 참조만 다룬다.
 
@@ -22,7 +22,7 @@
 | 마지막 조회 월 | sqlite kv + `useCurrentMonth` | 화면마다 useState면 월 선택이 지도에 반영 안 됨 |
 | 지도 팔레트 | sqlite kv + `useMapTheme` | 앱 설정. Zustand 대신 kv (기존 month 패턴) |
 | 핀 대표 사진 | sqlite kv + `usePinCovers(month)` | 월별 설정. 클러스터 id는 줌에 따라 변하므로 placeKey 사용 |
-| 방문지 목록 | 화면 파생 (`useMonthJourney`) | geocode 결과. 저장 안 함 |
+| 방문지 / 장소 라벨 | `placeCache` 메모리+디스크 (`placeRes:`) → `placeResolve` → `useMonthJourney` hydrate | GPS는 assetLoc. 이름은 geocode 후 디스크에 남겨 콜드스타트 칩 즉시 표시 |
 
 ## 결정 기록
 
@@ -50,6 +50,9 @@
 | 구 테이블 **전국 일반구 시로 확장** (서울 자치구 + 성남·수원·고양·용인·안양·안산·전주·창원·천안·청주·포항). `{시:{동:구}}` 시-스코프 키. journeyLabel에 구 포함해 구별 칩 분리 | 서울만 / 동 이름 단일 키(전국 충돌) | 비용 동일하고 일관. 시-스코프로 전국 동명 충돌 회피, 시내 충돌 8개(창원7·천안1)는 생략→시 폴백 | 2026-07-22 |
 | 지도 톤: **Figma 서베이 맵에 맞춘 SVG+한지 그레인** (양피지·잉크 경계·산/소나무). 래스터 맵 교체 없음 | 피그마 일러스트 PNG를 배경으로 / 평탄 팔레트 | 줌·rebase·전국 핀 유지하면서 목업 톤 근접. 한강 geo 없음 | 2026-07-27 |
 | 방문 마커: **thumb file 즉시 httpUri** → 백그라운드에서 종이 프레임 bake로 교체. 대표 없으면 첫 사진 | bake 끝날 때까지 숨김 | 첫 페인트 체감 | 2026-08-02 |
+| 대량 월(수천 장): 마커는 **placeholder symbol 즉시** + cluster `id`=grid cell(멤버수 제외) + 맵 진입 시 스탬프 sync 지연. thumb export 전 `return null` 금지 | thumb 준비될 때까지 핀 숨김 | 2600장에서 trail만 보이던 체감 | 2026-08-02 |
+| 월 이미지 워밍: **예산 캡(≤120)** — 보이는 핀 커버/시드 + 시트·재생 **현재 페이지**만 `Image.prefetch`. 월 전체(수천~수만) prefetch 금지 | 월 전체 warm | 50k에서 디스크·MediaLibrary 고갈 방지 | 2026-08-02 |
+| 핀 vs 스탬프: 핀 thumb export busy면 라이브러리 GPS 배치 **양보**; 맵은 첫 핀 파도 후 스탬프 시작. cluster cellDeg **줌별 sticky**로 progressive remount 감소 | 고정 4.5s 후 스탬프 / grain 매번 재계산 | 핀 사진 교체 지연 완화 | 2026-08-02 |
 | 지도 정돈(A): **BUILDING 등 레이어 off** + 핀 `isHideCollidedSymbols`. POI 랜드마크 단독 필터는 SDK 미지원 | 커스텀 방문 라벨(B) | 사용자 선택 A | 2026-07-27 |
 | 지도 라벨: 제스처 중에도 **마운트 유지** (MapScreenAnchor). 숨김은 깜빡임의 원인 | 제스처 중 unmount | 확대/패닝 시 라벨 깜빡임 해소 | 2026-07-27 |
 | 클러스터링: **공간 그리드 O(n)** + **줌별 핀 상한** (넘치면 셀 확대). 개요≈20핀, 확대 시 ≤116 | 시드+haversine O(n²) / 상한 없음 | 대량·전국 산포 시 핀 카펫·튕김 방지 | 2026-07-23 |
@@ -58,6 +61,14 @@
 | __DEV__ 더미: **서울·경기 고정 ~55장** (구/시 허브). picsum 썸네일. 설정에서 off | 전국 랜덤 / 수백~수천 스트레스 | 시뮬·위치별 피커 확인용 | 2026-07-27 |
 | 유료: 계획=무료 3개월 / 프로 전체·₩3,990. **지금은 `IS_MONETIZATION_LIVE=false`로 전부 개방** | 출시 전 결제 강제 | 도그푸드·출시 우선 | 2026-07-23 |
 | 월 GPS 로드: **캐시 히트 즉시 맵 + 배치 점진 갱신**; 다른 달은 현재 월 완료 후 **인접→나머지** 워밍업. 백그라운드면 배치 사이 일시정지, 복귀 시 재개 (`assetLoc` 유지). OS 백그라운드 페치 미도입 | 완료 전 전면 로딩 / OS background-fetch | 첫 페인트 체감 + 라이브러리 없이 재개 | 2026-07-23 |
+| **Place resolve (A):** GPS→핀 유지. 좌표→이름은 `placeResolve` + 디스크 캐시. 파서=**행정단위 토큰 파이프라인** (`adminTokens`). 시트/여정/발도장/카드/몰아보기 동일 API | 화면별 geocode / 필드별 휴리스틱 | 불일치·리 누락·콜드스타트 | 2026-08-02 |
+| 주소 파싱: 전 필드 토큰화 후 계층 조립. **읍·면·동·리를 버리지 않음** (`eupMyon` 필드). 라벨=구>동·리>읍·면>시. place cache v16 / parse rev 12 | 시 있으면 읍·면 drop → 전부 "강릉시"로 붕괴 | 교향리/주문진읍 등 농어촌 칩 누락 | 2026-08-03 |
+| 2글자 법정동(우동·중동·목동)은 `dong-gu` 화이트리스트로만 토큰 인정. 매칭 후 같은 kind로 최장 확장(중동 ⊂ 중동리) | 3글자 이상만 동 인정 | 부산 우동 등 2글자 동 전체 누락 | 2026-08-03 |
+| geocode는 **직렬 큐 + 최소 간격 + 지수 백오프 + 3회 재시도**. 실패 버킷을 버리지 않음 | 동시 6 Promise.all | CLGeocoder 스로틀로 임의 장소가 영구 누락(교항리) + JS 스레드 잼 | 2026-08-03 |
+| 디스크 miss를 메모리에 기억(`diskMissCache`), 동일 버킷 in-flight 합치기. `resolveVisitPlaces`는 캐시분 즉시 emit 후 점진 갱신 | 리페인트마다 버킷당 동기 SQLite read | 칩 스크롤 끊김 | 2026-08-03 |
+| 광역시 라벨은 **짧은 형태로 통일**: "서울 강남구". `toSiForm` 삭제 | 시트·몰아보기만 "서울시 강남구" | 같은 장소가 칩과 시트에서 다르게 보였음 | 2026-08-03 |
+| place resolve를 4개로 분리: `placeCache`(버킷키·2단 캐시) / `geocodeQueue`(권한·직렬 큐) / `visitPlaceBuild`(순수 조립) / `placeResolve`(네이밍 정책 + 공개 API). 외부는 계속 `placeResolve`만 import | 단일 456줄 파일 | 캐시·스로틀·조립이 한 파일에 섞여 원인 추적이 어려웠음 | 2026-08-03 |
+| 여정 칩: 디스크 hydrate 즉시 + GPS partial 중에도 geocode(캐시 우선). 빈 결과로 기존 칩을 지우지 않음. visit place 중복은 시+구+동 단위 | `!isFetching` 대기만 / 매 partial마다 wipe | 콜드스타트 "사진 n장"만 · 칩 소실 | 2026-08-02 |
 
 ## 경계
 

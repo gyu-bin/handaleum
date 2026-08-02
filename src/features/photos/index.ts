@@ -1,5 +1,11 @@
 export { resolveAssetUri } from './services/mediaLibrary';
 export { clusterPhotos } from './services/cluster';
+export {
+  placeBucketKey,
+  resolveDetailLabel,
+  resolvePlace,
+  resolveVisitPlaces,
+} from './services/placeResolve';
 export { photosQueryKeys } from './hooks/photosQueryKeys';
 export {
   prefetchMonthlyPhotos,

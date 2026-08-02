@@ -1,3 +1,6 @@
+import type { MonthKey, VisitPlace } from '@/features/photos/types';
+import { isEupMyonName } from '@/features/photos/utils/adminNames';
+import { monthKeyFromTimestamp } from '@/features/photos/utils/month';
 import {
   getStampsRaw,
   getStampsUnseenRaw,
@@ -5,12 +8,10 @@ import {
   setStampsUnseenRaw,
 } from '@/lib/storage';
 
-import type { MonthKey, VisitPlace } from '@/features/photos/types';
-import { monthKeyFromTimestamp } from '@/features/photos/utils/month';
-
 import { stampsCollectedSchema, stampsUnseenSchema } from '../schema';
 import type { StampEntry, StampsCollected } from '../types';
 import {
+  inferSidoForUnit,
   isGeneralGuParentCity,
   isKnownSigungu,
   isMetroStampParent,
@@ -72,6 +73,10 @@ export function sigunguFromVisit(place: VisitPlace): string | null {
   // Legacy bad parse "강화군시" → treat as 강화군
   const normalized = city.endsWith('군시') ? city.slice(0, -1) : city;
   if (isGeneralGuParentCity(normalized) || isMetroStampParent(normalized)) {
+    return null;
+  }
+  // 주문진읍 등 — stamp grain is parent 시/군 only (lift happens in placeResolve).
+  if (isEupMyonName(normalized)) {
     return null;
   }
   return normalized;
@@ -150,8 +155,14 @@ export function syncStampsFromVisits(
 
   for (const place of places) {
     const name = sigunguFromVisit(place);
-    const sido = normalizeSido(place.province ?? null);
-    if (!name || !sido) {
+    if (!name) {
+      continue;
+    }
+    const sido =
+      normalizeSido(place.province ?? null) ??
+      inferSidoForUnit(name) ??
+      (place.city ? inferSidoForUnit(place.city) : null);
+    if (!sido) {
       continue;
     }
     if (isGeneralGuParentCity(name)) {

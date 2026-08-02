@@ -18,6 +18,57 @@ import type { VisitAdminLevel, VisitPlace } from '../types';
 const DONG_GU = dongGu as Record<string, Record<string, string>>;
 
 /**
+ * Metro / admin-dong aliases so iOS "우2동" (행정동) recovers the same 구 as
+ * legal 우동. Prefer `legalDongFromAdmin` strip for numbered 동 (신정1동→신정동);
+ * keep explicit entries only when strip is not enough.
+ */
+const EXTRA_DONG_GU: Record<string, Record<string, string>> = {
+  부산: {
+    우동: '해운대구',
+    우1동: '해운대구',
+    우2동: '해운대구',
+    우3동: '해운대구',
+  },
+};
+
+/**
+ * iOS often returns 행정동 with a digit (신정1동, 목3동, 우2동). The 법정동
+ * table only has 신정동/목동/우동 — strip the digit so 양천구 etc. recover.
+ * Leaves 성수동1가 alone (…가 suffix).
+ */
+export function legalDongFromAdmin(dong: string): string | null {
+  const match = dong.match(/^([가-힣]+)\d+동$/);
+  if (!match?.[1]) {
+    return null;
+  }
+  return `${match[1]}동`;
+}
+
+function lookupDongGu(cityShort: string, dong: string): string | null {
+  return (
+    DONG_GU[cityShort]?.[dong] ??
+    EXTRA_DONG_GU[cityShort]?.[dong] ??
+    null
+  );
+}
+
+/** Recover the 구 for a 법정동 when iOS returns the dong but not the 구. */
+export function guForDong(cityShort: string, dong: string | null): string | null {
+  if (!dong) {
+    return null;
+  }
+  const direct = lookupDongGu(cityShort, dong);
+  if (direct) {
+    return direct;
+  }
+  const legal = legalDongFromAdmin(dong);
+  if (legal && legal !== dong) {
+    return lookupDongGu(cityShort, legal);
+  }
+  return null;
+}
+
+/**
  * Familiar colloquial area names so the finest label reads like a place people
  * know (판교) instead of an official dong (삼평동). Entries also cover dongs that
  * are themselves the well-known name (성수동 → 성수). Anything not listed falls
@@ -63,14 +114,6 @@ function inGarosuGil(lat: number, lng: number): boolean {
   );
 }
 
-/** Recover the 구 for a 법정동 when iOS returns the dong but not the 구. */
-export function guForDong(cityShort: string, dong: string | null): string | null {
-  if (!dong) {
-    return null;
-  }
-  return DONG_GU[cityShort]?.[dong] ?? null;
-}
-
 /** Colloquial alias for a dong, if we have one. */
 function areaAlias(
   gu: string | null,
@@ -94,28 +137,36 @@ function areaAlias(
 }
 
 /**
- * Finest-grain label people recognize: a famous-area alias if known (판교), else
- * the 구 (서울 마포구), else the dong (강릉시 홍제동), else the city.
+ * Finest-grain label people recognize: alias > 구 > 동·리 > 읍·면 > 시.
+ * Never drop 읍·면 just because parent 시 exists (강릉시 주문진읍).
  * Pass coords when available so street-level aliases (가로수길) stay accurate.
+ *
+ * `city` is used verbatim (서울 강남구, not 서울시 강남구) so chips, pin sheet
+ * and playback all read the same for a metro.
  */
 export function composeFineLabel(
   city: string | null,
   gu: string | null,
   dong: string | null,
   coords?: PlaceCoords | null,
+  eupMyon?: string | null,
 ): string | null {
   const alias = areaAlias(gu, dong, coords);
   if (alias) {
     return alias;
   }
   if (!city) {
-    return gu ?? dong ?? null;
+    return gu ?? dong ?? eupMyon ?? null;
   }
   if (gu) {
     return `${city} ${gu}`;
   }
+  // 동·리 is finer than 읍·면 — prefer 교항리 over 주문진읍 when both exist.
   if (dong) {
     return `${city} ${dong}`;
+  }
+  if (eupMyon && eupMyon !== city) {
+    return `${city} ${eupMyon}`;
   }
   return city;
 }
@@ -129,11 +180,6 @@ export function coordsFromBucketKey(key: string): PlaceCoords | null {
     return null;
   }
   return { lat, lng };
-}
-
-/** City name in its "…시" form: 서울 → 서울시, 부산 → 부산시, 수원시 → 수원시. */
-export function toSiForm(cityShort: string): string {
-  return /시$/.test(cityShort) ? cityShort : `${cityShort}시`;
 }
 
 /** Collapse visit places to labels for a given zoom grain. */
@@ -151,13 +197,14 @@ export function labelsForVisitLevel(
     } else if (level === 'city') {
       label = place.city ?? place.label;
     } else {
-      // Finest grain: famous-area alias > 구 > 동, computed together.
+      // Finest grain: alias > 구 > 동·리 > 읍·면.
       label =
         composeFineLabel(
           place.city ?? null,
           place.gu ?? null,
           place.dong ?? null,
           coordsFromBucketKey(place.key),
+          place.eupMyon ?? null,
         ) ??
         place.label;
     }

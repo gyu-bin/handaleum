@@ -15,8 +15,10 @@ import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
 import { resolveAssetUri } from '../services/mediaLibrary';
+import { startMonthImageWarmup } from '../services/monthImageWarmup';
 import type { PlaceCluster, PhotoRef } from '../types';
 import { placeBucketKey, resolveClusterDetailLabel } from '../utils/placeJourney';
+import { useCurrentMonth } from '../hooks/useCurrentMonth';
 
 /** Photos appended per scroll page in the pin sheet grid. */
 const PAGE_SIZE = 50;
@@ -104,6 +106,7 @@ export function PhotoPreviewSheet({
   onSetCover,
 }: PhotoPreviewSheetProps) {
   const insets = useSafeAreaInsets();
+  const { month } = useCurrentMonth();
   const placeKey = cluster
     ? placeBucketKey(cluster.centerLat, cluster.centerLng)
     : null;
@@ -114,6 +117,24 @@ export function PhotoPreviewSheet({
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
   }, [cluster?.id]);
+
+  const pagePhotos = useMemo(() => {
+    if (!cluster) {
+      return [];
+    }
+    return cluster.photos.slice(0, visibleCount);
+  }, [cluster, visibleCount]);
+
+  // Warm only the visible sheet page (not the whole cluster if it has thousands).
+  useEffect(() => {
+    if (pagePhotos.length === 0) {
+      return;
+    }
+    startMonthImageWarmup({
+      month,
+      assetIds: pagePhotos.map((p) => p.assetId),
+    });
+  }, [month, pagePhotos]);
 
   useEffect(() => {
     if (!cluster) {
@@ -152,13 +173,6 @@ export function PhotoPreviewSheet({
     };
   }, [cluster, coverAssetId]);
 
-  const pagePhotos = useMemo(() => {
-    if (!cluster) {
-      return [];
-    }
-    return cluster.photos.slice(0, visibleCount);
-  }, [cluster, visibleCount]);
-
   const loadMore = useCallback(() => {
     if (!cluster) {
       return;
@@ -188,11 +202,9 @@ export function PhotoPreviewSheet({
             <Text style={styles.title} numberOfLines={1}>
               {titleText}
             </Text>
-            {cluster && !labelLoading ? (
+            {cluster && !labelLoading && placeLabel ? (
               <Text style={styles.meta} numberOfLines={1}>
-                {placeLabel
-                  ? strings.map.clusterCount(cluster.photos.length)
-                  : strings.map.placeUnknown}
+                {strings.map.clusterCount(cluster.photos.length)}
               </Text>
             ) : null}
             {onSetCover ? (

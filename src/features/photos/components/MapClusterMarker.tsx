@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { NaverMapMarkerOverlay } from '@mj-studio/react-native-naver-map';
+import type { MapImageProp } from '@mj-studio/react-native-naver-map';
 
 import { theme } from '@/shared/constants/theme';
 
@@ -13,7 +14,11 @@ const CARD_SELECTED = 44;
 const BORDER = 2.5;
 const CARET_H = 8;
 
-type MarkerImage = { httpUri: string; reuseIdentifier: string };
+/** Dawn-blue default pin while thumb export is still in the concurrency queue. */
+const PLACEHOLDER_IMAGE: MapImageProp = {
+  symbol: 'lightblue',
+  reuseIdentifier: 'handaleum-pin-placeholder',
+};
 
 export interface MapClusterMarkerProps {
   cluster: PlaceCluster;
@@ -23,8 +28,8 @@ export interface MapClusterMarkerProps {
 }
 
 /**
- * Photo map pin. Shows any place photo (cover, else first) as soon as the
- * thumb file is ready; paper-frame bake upgrades in the background.
+ * Photo map pin. Placeholder symbol paints immediately; thumb file then paper
+ * bake upgrade in the background (never hide the marker while exporting).
  */
 export function MapClusterMarker({
   cluster,
@@ -36,9 +41,22 @@ export function MapClusterMarker({
     coverAssetId && cluster.photos.some((p) => p.assetId === coverAssetId)
       ? cluster.photos.find((p) => p.assetId === coverAssetId)
       : undefined;
-  // No cover yet → first photo is fine; user can set cover from the sheet.
-  const display = cover ?? cluster.photos[0];
-  const displayAssetId = display?.assetId;
+  // Sticky first asset for this mount so progressive member growth doesn't
+  // thrash exports (cover still wins when set).
+  const stickyAssetRef = useRef<string | null>(null);
+  const displayAssetId = useMemo(() => {
+    if (cover?.assetId) {
+      return cover.assetId;
+    }
+    const prev = stickyAssetRef.current;
+    if (prev && cluster.photos.some((p) => p.assetId === prev)) {
+      return prev;
+    }
+    const next = cluster.photos[0]?.assetId ?? null;
+    stickyAssetRef.current = next;
+    return next;
+  }, [cover?.assetId, cluster.photos]);
+
 
   const cardSize = selected ? CARD_SELECTED : CARD;
   const markerW = cardSize + BORDER * 2;
@@ -47,7 +65,7 @@ export function MapClusterMarker({
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   /** Framed bake when ready; until then we show the raw thumb file. */
   const [framedUri, setFramedUri] = useState<string | null>(null);
-  const lastHttpRef = useRef<MarkerImage | null>(null);
+  const lastHttpRef = useRef<MapImageProp | null>(null);
   const loadedAssetRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -106,10 +124,10 @@ export function MapClusterMarker({
     };
   }, [photoUri, selected, cardSize, displayAssetId]);
 
-  const image = useMemo((): MarkerImage | null => {
+  const image = useMemo((): MapImageProp => {
     const uri = framedUri ?? photoUri;
     if (uri && displayAssetId) {
-      const next = {
+      const next: MapImageProp = {
         httpUri: uri,
         reuseIdentifier: framedUri
           ? `framed-${displayAssetId}-${selected ? 1 : 0}-${cardSize}`
@@ -118,15 +136,11 @@ export function MapClusterMarker({
       lastHttpRef.current = next;
       return next;
     }
-    // Keep previous marker while the next asset loads (cover change / refetch).
-    return lastHttpRef.current;
+    // Keep previous photo while the next asset loads; else show symbol now.
+    return lastHttpRef.current ?? PLACEHOLDER_IMAGE;
   }, [framedUri, photoUri, displayAssetId, selected, cardSize]);
 
   const count = cluster.photos.length;
-
-  if (!image) {
-    return null;
-  }
 
   return (
     <NaverMapMarkerOverlay

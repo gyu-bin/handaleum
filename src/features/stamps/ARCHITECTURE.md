@@ -42,15 +42,19 @@ Grain = **시군구** (서울·광역 구, 도 시·군, 일반구 시 → 구�
 | 군=군 그대로(강화군), 광역 부모명만 있을 때 도장 안 찍음 | `강화군시` / `대전` 단독 수집 | 슬롯 불일치로 “안 찍힘”처럼 보임 | 2026-08-02 |
 | 전체 앨범 sync = 지도 진입에서도 single-flight + GPS 실패 1회 재시도 + geocode miss 재시도 | 발도장 탭에서만 | “모든 GPS 사진 → 시군구” 누적 | 2026-08-02 |
 | 발도장 sync = **전 연도 GPS 먼저 전부** → 그다음 geocode (월 진입과 무관) | GPS 배치마다 geocode await | 월 열 때만 도장 찍히는 체감 | 2026-08-02 |
+| 발도장 문구 상시 표시 방지: sync **6시간 쿨다운** + iCloud no-GPS **주 1회 deep recheck** + 핀 export 양보 **최대 2.5s** | 방문마다 전체 재스캔 / 핀 idle 무한 대기 | “하루종일 찾는 중” 체감 | 2026-08-02 |
 | 발도장 = **국내만** (한국 bbox + 시군구 인덱스에 있는 것만) | 해외 방문도 수집 | 사용자 요청. 지도 해외 핀은 유지 | 2026-08-02 |
 | 도장 수집 = 라이브러리 sync만. 월 선택 `useStampSync` 제거 | 월 열 때 places → stamp | 안 간 달 열어도 도장 쌓이던 문제 | 2026-08-02 |
 | 발도장 첫 진입 안내 모달 + 백그라운드 sync (차단 로더 없음) | 빈 화면 풀로딩 | 사용자 요청 | 2026-08-02 |
 | 일반구 모시(용인시) 단독 도장 금지 | 시+구 둘 다 | 이중 수집 버그 | 2026-08-01 |
+| 장소 파싱 = 행정 토큰 파이프라인. 발도장 city=시/군만, 라벨용 **eupMyon·dong 보존**. parse rev 11 | 읍·면 drop / 시만 표시 | 여정 칩 붕괴·리 안 보임 | 2026-08-03 |
+| 광역 법정동→구: `dong-gu`에 부산·인천·대전·대구·광주·울산 추가. province가 시명으로 오던 버그 수정 + `inferSidoForUnit`(강릉시→강원). 인천 `미추홀구` 슬롯 추가. parse rev 4 재스캔 | 서울·일반구만 dong-gu | 인천/대전 구 miss→metro reject, 강릉 province=강릉시→sido null | 2026-08-02 |
+| 행정동 숫자 strip (`신정1동`→`신정동`→양천구) + place-parse rev bump 시 쿨다운 무시 1회 재스캔 | 행정동 EXTRA 전수 / 쿨다운 대기 | iOS 행정동 miss → 서울만 → metro reject | 2026-08-02 |
 | 진입 연출 = unseen 팝업 id당 1회. 탭 슬램 재생은 유지. 라이브러리 sync silent | 전체 sync도 팝업 | 새 방문만 축하 + 탭 재미 | 2026-08-02 |
 
 ## 경계
 
-- 의존: photos(VisitPlace, useMonthJourney, useMonthlyPhotos, loadAllLocatedPhotos, resolveVisitPlaces), lib/storage, theme, PinGlyph 언어
+- 의존: photos(VisitPlace, placeResolve/resolveVisitPlaces, loadAllLocatedPhotos), lib/storage, theme, PinGlyph 언어
 - 피의존: HomeNavBar badge, MonthlyMapScreen sync, app/stamps
 
 ## 범위 제외

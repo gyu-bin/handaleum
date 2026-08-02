@@ -24,7 +24,8 @@ import { useMonthlyPhotos } from '../hooks/useMonthlyPhotos';
 import { usePinCovers } from '../hooks/usePinCovers';
 import { clusterPhotos } from '../services/cluster';
 import { resolveAssetUri } from '../services/mediaLibrary';
-import type { PhotoRef, PlaceCluster } from '../types';
+import { startMonthImageWarmup } from '../services/monthImageWarmup';
+import type { MonthKey, PhotoRef, PlaceCluster } from '../types';
 import {
   placeBucketKey,
   resolveClusterDetailLabel,
@@ -103,11 +104,13 @@ function ClusterSlide({
   width,
   coverAssetId,
   onSetCover,
+  month,
 }: {
   cluster: PlaceCluster;
   width: number;
   coverAssetId?: string | null;
   onSetCover: (placeKey: string, assetId: string) => void;
+  month: MonthKey;
 }) {
   const placeKey = placeBucketKey(cluster.centerLat, cluster.centerLng);
   const [activeId, setActiveId] = useState(
@@ -140,6 +143,18 @@ function ClusterSlide({
 
   const activePhoto =
     cluster.photos.find((p) => p.assetId === activeId) ?? cluster.photos[0];
+
+  const pagePhotos = useMemo(
+    () => cluster.photos.slice(0, visibleCount),
+    [cluster.photos, visibleCount],
+  );
+
+  useEffect(() => {
+    startMonthImageWarmup({
+      month,
+      assetIds: pagePhotos.map((p) => p.assetId),
+    });
+  }, [month, pagePhotos]);
 
   useEffect(() => {
     if (!activePhoto) {
@@ -194,11 +209,6 @@ function ClusterSlide({
   const placeText = labelLoading
     ? strings.playback.placeLoading
     : (placeLabel ?? strings.playback.placeUnknown);
-
-  const pagePhotos = useMemo(
-    () => cluster.photos.slice(0, visibleCount),
-    [cluster.photos, visibleCount],
-  );
 
   const loadMore = useCallback(() => {
     setVisibleCount((n) =>
@@ -437,6 +447,7 @@ export function PlaybackScreen() {
               width={width}
               coverAssetId={covers[key] ?? null}
               onSetCover={setCover}
+              month={month}
             />
           );
         }}

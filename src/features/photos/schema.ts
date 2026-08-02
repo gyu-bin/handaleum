@@ -70,6 +70,28 @@ export const homeLocationSchema = z.object({
 /** Zoom-scoped visit list admin grain. */
 export const visitAdminLevelSchema = z.enum(['province', 'city', 'dong']);
 
+/**
+ * Normalized place from one reverse-geocode.
+ * Also persisted under placeRes:{rev}:{bucket} for cold-start chips/sheet.
+ * Single source for sheet titles, journey chips, and stamp 시군구.
+ */
+export const resolvedPlaceSchema = z.object({
+  /** ~110m bucket key — same as pin covers / journey. */
+  key: z.string().min(1),
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
+  province: z.string().min(1).nullable(),
+  city: z.string().min(1).nullable(),
+  gu: z.string().min(1).nullable(),
+  /** 읍·면 under parent 시 — kept for labels (주문진읍). */
+  eupMyon: z.string().min(1).nullable(),
+  dong: z.string().min(1).nullable(),
+  /** City-grain journey label ("서울 - 양천구" / "양양군"). */
+  journeyLabel: z.string().min(1),
+  /** Sheet / chip fine label ("서울시 양천구" / "강릉시 교항리"). */
+  detailLabel: z.string().min(1),
+});
+
 /** Derived from reverse-geocode — never persisted. */
 export const visitPlaceSchema = z.object({
   key: z.string().min(1),
@@ -78,6 +100,7 @@ export const visitPlaceSchema = z.object({
   province: z.string().min(1).optional(),
   city: z.string().min(1).optional(),
   gu: z.string().min(1).optional(),
+  eupMyon: z.string().min(1).optional(),
   dong: z.string().min(1).optional(),
   firstTakenAt: z.iso.datetime(),
 });

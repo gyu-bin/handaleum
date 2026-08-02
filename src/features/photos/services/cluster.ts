@@ -17,6 +17,13 @@ function cellDegForZoom(zoom: number): number {
   return Math.max(radiusKm / 111, 0.008);
 }
 
+/**
+ * Sticky cell size per zoom bucket. Progressive GPS used to grow cellDeg and
+ * remount every marker (cancelling thumb exports). We only allow cellDeg to
+ * increase within a zoom; month change clears via resetClusterCellCache().
+ */
+const stickyCellDegByZoom = new Map<number, number>();
+
 function gridCluster(photos: PhotoRef[], cellDeg: number): PlaceCluster[] {
   const cells = new Map<string, PhotoRef[]>();
 
@@ -33,15 +40,17 @@ function gridCluster(photos: PhotoRef[], cellDeg: number): PlaceCluster[] {
   }
 
   const clusters: PlaceCluster[] = [];
-  for (const members of cells.values()) {
+  // Id = grid cell only (not member count / seed). Progressive GPS and
+  // time-slider updates must not remount markers or cancel in-flight thumbs.
+  const grain = cellDeg.toFixed(6);
+  for (const [cellKey, members] of cells.entries()) {
     members.sort((a, b) => a.takenAt.localeCompare(b.takenAt));
     const centerLat =
       members.reduce((sum, p) => sum + p.lat, 0) / members.length;
     const centerLng =
       members.reduce((sum, p) => sum + p.lng, 0) / members.length;
-    const seedId = members[0]!.assetId;
     clusters.push({
-      id: `${centerLat.toFixed(4)},${centerLng.toFixed(4)}:${members.length}:${seedId}`,
+      id: `${grain}:${cellKey}`,
       centerLat,
       centerLng,
       photos: members,
@@ -65,7 +74,9 @@ export function clusterPhotos(photos: PhotoRef[], zoom: number): PlaceCluster[] 
   }
 
   const maxPins = maxPinsForZoom(zoom);
-  let cellDeg = cellDegForZoom(zoom);
+  const zKey = Math.round(zoom);
+  const sticky = stickyCellDegByZoom.get(zKey);
+  let cellDeg = sticky ?? cellDegForZoom(zoom);
   let clusters = gridCluster(photos, cellDeg);
 
   let guard = 0;
@@ -75,5 +86,19 @@ export function clusterPhotos(photos: PhotoRef[], zoom: number): PlaceCluster[] 
     guard += 1;
   }
 
+  const prev = stickyCellDegByZoom.get(zKey);
+  if (prev == null || cellDeg >= prev) {
+    stickyCellDegByZoom.set(zKey, cellDeg);
+  } else {
+    // Keep the coarser sticky grain so progressive fill doesn't remount pins.
+    cellDeg = prev;
+    clusters = gridCluster(photos, cellDeg);
+  }
+
   return clusters;
+}
+
+/** Call when the viewed month changes so sticky grain doesn't leak across months. */
+export function resetClusterCellCache(): void {
+  stickyCellDegByZoom.clear();
 }
