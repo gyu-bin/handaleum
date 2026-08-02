@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Redirect, useRouter, type Href } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,6 +12,7 @@ import { theme } from '@/shared/constants/theme';
 import { useOnboarding } from '@/features/onboarding/hooks/useOnboarding';
 import { useStamps } from '@/features/stamps/hooks/useStamps';
 import { useStampSync } from '@/features/stamps/hooks/useStampSync';
+import { startStampLibrarySync } from '@/features/stamps/services/stampLibrarySyncRunner';
 
 import { DEFAULT_MAP_ZOOM, MapCanvas } from '../components/MapCanvas';
 import { HomeNavBar } from '../components/HomeNavBar';
@@ -88,6 +89,14 @@ export function MonthlyMapScreen() {
   const { places: journeyPlaces, visitPlaces } = useMonthJourney(filteredPhotos);
   useStampSync(month, visitPlaces);
   const { unseenCount } = useStamps();
+
+  // Full-album stamp accumulate while the user is on the map (not stamps-only).
+  useEffect(() => {
+    if (!isReady || !hasLibraryAccess) {
+      return;
+    }
+    void startStampLibrarySync();
+  }, [hasLibraryAccess, isReady]);
 
   const onSelectCluster = useCallback((cluster: PlaceCluster) => {
     setSelected((prev) => (prev?.id === cluster.id ? null : cluster));

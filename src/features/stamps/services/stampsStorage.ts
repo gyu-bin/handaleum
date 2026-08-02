@@ -13,6 +13,7 @@ import type { StampEntry, StampsCollected } from '../types';
 import {
   isGeneralGuParentCity,
   isKnownSigungu,
+  isMetroStampParent,
   normalizeSido,
   stampId,
   warnUnknownSigungu,
@@ -56,7 +57,9 @@ function writeUnseen(ids: string[]): void {
 
 /**
  * 시군구 grain from a visit place.
- * 일반구 모시(용인시 등) with no `gu` → null (do not stamp the parent 시).
+ * - 구 있으면 구
+ * - 강화군 등 군·일반 시·군은 city
+ * - 일반구 모시 / 광역시 부모명만 있고 구 없음 → null (슬롯 안 맞는 가짜 도장 방지)
  */
 export function sigunguFromVisit(place: VisitPlace): string | null {
   const gu = place.gu?.trim() || null;
@@ -64,10 +67,15 @@ export function sigunguFromVisit(place: VisitPlace): string | null {
   if (gu) {
     return gu;
   }
-  if (city && isGeneralGuParentCity(city)) {
+  if (!city) {
     return null;
   }
-  return city;
+  // Legacy bad parse "강화군시" → treat as 강화군
+  const normalized = city.endsWith('군시') ? city.slice(0, -1) : city;
+  if (isGeneralGuParentCity(normalized) || isMetroStampParent(normalized)) {
+    return null;
+  }
+  return normalized;
 }
 
 export type StampSyncResult = {
@@ -98,8 +106,8 @@ function monthForPlace(place: VisitPlace, fallback: MonthKey): MonthKey {
 }
 
 /**
- * Drop collected entries that are 일반구 parent cities (용인시, …).
- * Also strips them from unseen.
+ * Drop collected entries that can never fill a grid slot:
+ * 일반구 parent cities, metro parents (서울/대전…), legacy "○○군시".
  */
 export function pruneGeneralGuParentStamps(
   collected: StampsCollected,
@@ -108,7 +116,13 @@ export function pruneGeneralGuParentStamps(
   const next = { ...collected };
   const pruned: string[] = [];
   for (const [id, entry] of Object.entries(next)) {
-    if (isGeneralGuParentCity(entry.name)) {
+    const name = entry.name;
+    const badGunSi = /군시$/.test(name);
+    if (
+      isGeneralGuParentCity(name) ||
+      isMetroStampParent(name) ||
+      badGunSi
+    ) {
       delete next[id];
       pruned.push(id);
     }

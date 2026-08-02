@@ -124,6 +124,26 @@ export function extractDong(
   return null;
 }
 
+/** Pull "○○군" (강화군, 기장군) — must not be treated as a 시. */
+export function extractGun(
+  ...parts: (string | null | undefined)[]
+): string | null {
+  for (const part of parts) {
+    if (part == null || !part.trim()) {
+      continue;
+    }
+    const compact = part.replace(/\s+/g, '');
+    if (/군$/.test(compact) && compact.length >= 2 && compact.length <= 12) {
+      return compact;
+    }
+    const match = part.match(/([가-힣]{1,10}군)/);
+    if (match?.[1]) {
+      return match[1];
+    }
+  }
+  return null;
+}
+
 export function looksLikeSeoul(
   addr: Location.LocationGeocodedAddress,
   rawCity: string,

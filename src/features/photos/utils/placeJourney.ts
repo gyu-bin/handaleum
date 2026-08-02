@@ -8,6 +8,7 @@ import {
   endsWithGu,
   extractDong,
   extractGu,
+  extractGun,
   extractProvince,
   isMetroCity,
   looksLikeSeoul,
@@ -91,6 +92,16 @@ export function parseGeocodedPlace(
     addr.formattedAddress,
   );
 
+  // 강화군 / 기장군: iOS often sets city=인천광역시 and subregion/district=강화군.
+  // Prefer the 군 as the place city so stamps are 강화군, not parent 인천.
+  const gun = extractGun(
+    addr.district,
+    addr.subregion,
+    addr.city,
+    addr.name,
+    addr.formattedAddress,
+  );
+
   // iOS returns the 법정동 but not the 구 for cities that have one; recover it
   // from the dong when direct extraction finds nothing.
   const gu =
@@ -103,21 +114,28 @@ export function parseGeocodedPlace(
       addr.formattedAddress,
     ) ?? guForDong(cityShort, dong);
 
-  // The city stays at 시 grain; the 구 lives in its own field.
+  // The city stays at 시/군 grain; the 구 lives in its own field.
   let cityLabel: string;
-  if (metro) {
+  if (gun) {
+    cityLabel = gun;
+  } else if (metro) {
     cityLabel = cityShort;
   } else if (/시$/.test(rawCity)) {
     cityLabel = rawCity;
   } else if (/시$/.test(cityShort)) {
     cityLabel = cityShort;
+  } else if (/군$/.test(rawCity) || /군$/.test(cityShort)) {
+    // Never append 시 → "강화군시"
+    cityLabel = /군$/.test(rawCity) ? rawCity : cityShort;
   } else {
     cityLabel = `${cityShort}시`;
   }
 
   // Append the 구 whenever we have one (metro or 일반구 시) so distinct 구 stay
   // distinct — resolveVisitPlaces dedupes buckets by this label.
-  const journeyLabel = gu ? `${cityLabel} - ${gu}` : cityLabel;
+  // 군 places have no 구 grain.
+  const journeyLabel =
+    gun || !gu ? cityLabel : `${cityLabel} - ${gu}`;
 
   const province = extractProvince(addr, cityShort, metro);
 
@@ -125,7 +143,7 @@ export function parseGeocodedPlace(
     journeyLabel,
     province,
     city: cityLabel,
-    gu: gu && endsWithGu(gu) ? gu : null,
+    gu: gun ? null : gu && endsWithGu(gu) ? gu : null,
     dong: dong && !endsWithGu(dong) ? dong : null,
   };
 }
@@ -208,7 +226,7 @@ export async function resolveClusterGuLabel(
 }
 
 async function reverseParsed(lat: number, lng: number): Promise<ParsedPlace | null> {
-  const key = `v6:${placeBucketKey(lat, lng)}`;
+  const key = `v7:${placeBucketKey(lat, lng)}`;
   if (labelCache.has(key)) {
     return labelCache.get(key) ?? null;
   }
@@ -219,10 +237,13 @@ async function reverseParsed(lat: number, lng: number): Promise<ParsedPlace | nu
       longitude: lng,
     });
     const parsed = results[0] ? parseGeocodedPlace(results[0]) : null;
-    labelCache.set(key, parsed);
+    // Only cache successes — transient empty/failures must be retryable
+    // (stamp full-album pass re-geocodes misses).
+    if (parsed) {
+      labelCache.set(key, parsed);
+    }
     return parsed;
   } catch {
-    labelCache.set(key, null);
     return null;
   }
 }

@@ -255,6 +255,8 @@ export type LoadAllLocatedPhotosOptions = {
   forceRealLibrary?: boolean;
   /** Override LOCATION_BATCH for long full-library scans (default 8). */
   locationBatchSize?: number;
+  /** Re-read assets that failed getAssetInfoAsync once (transient native errors). */
+  retryFailedLocations?: boolean;
 };
 
 /**
@@ -264,8 +266,13 @@ export type LoadAllLocatedPhotosOptions = {
 export async function loadAllLocatedPhotos(
   options?: LoadAllLocatedPhotosOptions,
 ): Promise<PhotoRef[]> {
-  const { onPartial, shouldContinue, forceRealLibrary, locationBatchSize } =
-    options ?? {};
+  const {
+    onPartial,
+    shouldContinue,
+    forceRealLibrary,
+    locationBatchSize,
+    retryFailedLocations,
+  } = options ?? {};
   const batchSize =
     locationBatchSize != null && locationBatchSize > 0
       ? locationBatchSize
@@ -299,19 +306,43 @@ export async function loadAllLocatedPhotos(
     await onPartial?.(photos.slice());
   }
 
+  const failed: Asset[] = [];
+
   for (let i = 0; i < uncached.length; i += batchSize) {
     await pauseWhileBackgrounded(shouldContinue);
     const chunk = uncached.slice(i, i + batchSize);
     const results = await Promise.all(chunk.map(fetchLocation));
     let grew = false;
-    for (const result of results) {
+    for (let j = 0; j < results.length; j++) {
+      const result = results[j];
+      const asset = chunk[j]!;
       if (result != null && result !== 'no-location') {
         photos.push(result);
         grew = true;
+      } else if (result === null) {
+        failed.push(asset);
       }
     }
     if (grew) {
       await onPartial?.(photos.slice());
+    }
+  }
+
+  if (retryFailedLocations && failed.length > 0) {
+    for (let i = 0; i < failed.length; i += batchSize) {
+      await pauseWhileBackgrounded(shouldContinue);
+      const chunk = failed.slice(i, i + batchSize);
+      const results = await Promise.all(chunk.map(fetchLocation));
+      let grew = false;
+      for (const result of results) {
+        if (result != null && result !== 'no-location') {
+          photos.push(result);
+          grew = true;
+        }
+      }
+      if (grew) {
+        await onPartial?.(photos.slice());
+      }
     }
   }
 

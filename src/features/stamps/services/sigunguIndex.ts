@@ -182,6 +182,24 @@ export function isGeneralGuParentCity(name: string): boolean {
   return GENERAL_GU_CITIES.has(name);
 }
 
+/**
+ * Metro parents whose stamp grain is 구 (or leaf 군 under the sido).
+ * Collecting "대전" / "서울" alone never fills a slot in the grid.
+ */
+export const METRO_STAMP_PARENTS: ReadonlySet<string> = new Set([
+  '서울',
+  '부산',
+  '대구',
+  '인천',
+  '광주',
+  '대전',
+  '울산',
+]);
+
+export function isMetroStampParent(name: string): boolean {
+  return METRO_STAMP_PARENTS.has(name);
+}
+
 export function warnUnknownSigungu(sido: string, name: string): void {
   const key = `${sido}/${name}`;
   if (warnedMiss.has(key)) {

@@ -1,15 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { PhotoPermissionStatus } from '@/features/photos/hooks/usePhotoPermission';
 
-import { syncStampsFromLibrary } from '../services/stampBackfill';
-import { countCollected, readStampsCollected } from '../services/stampsStorage';
+import {
+  isStampLibrarySyncing,
+  startStampLibrarySync,
+  subscribeStampLibrarySync,
+} from '../services/stampLibrarySyncRunner';
 
 /**
- * On StampScreen: after photo permission is ready, sync stamps from all GPS
- * photos in the real album (not current month only, not __DEV__ dummy).
- * Blocking loader while the collection is still empty; otherwise syncs in
- * background and keeps `syncing` true until finished.
+ * Keeps stamp UI in sync with the single-flight full-album scan.
+ * Starts the scan when photo library access is ready (also started from map).
  */
 export function useStampLibrarySync(permission: {
   isReady: boolean;
@@ -17,36 +18,22 @@ export function useStampLibrarySync(permission: {
 }): {
   syncing: boolean;
 } {
-  const [syncing, setSyncing] = useState(false);
-  const started = useRef(false);
+  const [syncing, setSyncing] = useState(isStampLibrarySyncing);
 
   useEffect(() => {
-    if (!permission.isReady || started.current) {
+    return subscribeStampLibrarySync(setSyncing);
+  }, []);
+
+  useEffect(() => {
+    if (!permission.isReady) {
       return;
     }
     const hasAccess =
       permission.status === 'granted' || permission.status === 'limited';
     if (!hasAccess) {
-      setSyncing(false);
       return;
     }
-
-    started.current = true;
-    const showBlock = countCollected(readStampsCollected()) === 0;
-    setSyncing(true);
-    if (!showBlock) {
-      // Non-empty: still sync, but grid stays visible (StampScreen uses syncing).
-    }
-
-    void syncStampsFromLibrary()
-      .catch((error) => {
-        console.warn('[stamps] library sync failed', error);
-        // Allow retry on next mount if this run failed early.
-        started.current = false;
-      })
-      .finally(() => {
-        setSyncing(false);
-      });
+    void startStampLibrarySync();
   }, [permission.isReady, permission.status]);
 
   return { syncing };
