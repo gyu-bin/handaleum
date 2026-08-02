@@ -194,11 +194,19 @@ export const strings = {
   },
   months: {
     title: '월 선택',
+    journalTitle: '사진 일기',
+    journalSubtitle: '여행의 순간을 기록해보세요',
     photoCount: (count: number) => `${count}장`,
     empty: '표시할 월이 없습니다',
     freeWindowHint: (priceLabel: string) =>
       `무료는 최근 3개월만 볼 수 있어요. 더 지난 달은 프로(${priceLabel}·일회)에서 열려요.`,
     proOnly: '프로',
+    pickYear: '연도',
+    pickMonth: '월',
+    yearLabel: (year: string) => `${year}년`,
+    monthOnly: (month: number) => `${month}월`,
+    prevYear: '이전 해',
+    nextYear: '다음 해',
   },
   playback: {
     title: '몰아보기',
@@ -284,6 +292,10 @@ export const strings = {
     errorTitle: '도장을 불러오지 못했어요',
     errorRetry: '다시 시도',
     loading: '도장 준비 중…',
-    backfilling: '지금까지 간 곳 도장 찍는 중…',
+    backfilling: '앨범 전체에서 간 곳 찾는 중…',
+    scanIntroTitle: '앨범에서 도장을 모아요',
+    scanIntroBody:
+      '지금까지 찍은 사진의 위치를 모두 살펴봐요. 사진이 많으면 시간이 걸릴 수 있어요. 확인을 눌러도 백그라운드에서 계속 찾고, 다른 화면도 그대로 쓸 수 있어요.',
+    scanIntroConfirm: '확인',
   },
 } as const;

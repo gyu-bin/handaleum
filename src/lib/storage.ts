@@ -162,3 +162,14 @@ export function getStampsUnseenRaw(): string | null {
 export function setStampsUnseenRaw(json: string): void {
   storage.set(STAMPS_UNSEEN_KEY, json);
 }
+
+const STAMPS_SCAN_INTRO_KEY = 'stampsScanIntroSeen';
+
+/** First-visit notice: full-album stamp scan may take a while. */
+export function getStampsScanIntroSeen(): boolean {
+  return storage.getString(STAMPS_SCAN_INTRO_KEY) === '1';
+}
+
+export function setStampsScanIntroSeen(): void {
+  storage.set(STAMPS_SCAN_INTRO_KEY, '1');
+}

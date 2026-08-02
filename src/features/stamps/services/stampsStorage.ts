@@ -16,7 +16,6 @@ import {
   isMetroStampParent,
   normalizeSido,
   stampId,
-  warnUnknownSigungu,
 } from './sigunguIndex';
 
 export function readStampsCollected(): StampsCollected {
@@ -158,8 +157,9 @@ export function syncStampsFromVisits(
     if (isGeneralGuParentCity(name)) {
       continue;
     }
+    // Domestic index only — foreign / unknown admin names never collect.
     if (!isKnownSigungu(sido, name)) {
-      warnUnknownSigungu(sido, name);
+      continue;
     }
     const id = stampId(sido, name);
     if (collected[id]) {

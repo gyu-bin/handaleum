@@ -168,11 +168,7 @@ export function totalSigunguCount(): number {
   return SIDO_ORDER.reduce((n, s) => n + sigunguListForSido(s).length, 0);
 }
 
-/**
- * Whether `name` (gu ?? city) is a valid stamp unit for `sido`.
- */
-const warnedMiss = new Set<string>();
-
+/** Whether `name` (gu ?? city) is a valid stamp unit for `sido`. */
 export function isKnownSigungu(sido: string, name: string): boolean {
   return sigunguListForSido(sido).includes(name);
 }
@@ -198,13 +194,4 @@ export const METRO_STAMP_PARENTS: ReadonlySet<string> = new Set([
 
 export function isMetroStampParent(name: string): boolean {
   return METRO_STAMP_PARENTS.has(name);
-}
-
-export function warnUnknownSigungu(sido: string, name: string): void {
-  const key = `${sido}/${name}`;
-  if (warnedMiss.has(key)) {
-    return;
-  }
-  warnedMiss.add(key);
-  console.warn('[stamps] sigungu not in index (will still collect)', sido, name);
 }

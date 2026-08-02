@@ -6,6 +6,7 @@ import { currentMonthKey } from '@/features/photos/utils/month';
 import { resolveVisitPlaces } from '@/features/photos/utils/placeJourney';
 
 import { notifyStampsChanged } from '../hooks/useStamps';
+import { isKoreaLatLng } from './koreaBounds';
 import {
   countCollected,
   markAllStampsSeen,
@@ -18,8 +19,10 @@ export type StampLibrarySyncResult = {
   photoCount: number;
 };
 
-/** Slightly larger than map month loads — full album can be tens of thousands. */
-const LIBRARY_GPS_BATCH = 16;
+/** GPS-only phase — keep batches modest to avoid jetsam. */
+const LIBRARY_GPS_BATCH = 24;
+/** Geocode / stamp write chunks so the grid fills while the rest runs. */
+const GEOCODE_PHOTO_CHUNK = 400;
 
 async function ensureGeocodePermission(): Promise<boolean> {
   try {
@@ -38,17 +41,20 @@ async function ensureGeocodePermission(): Promise<boolean> {
 async function ingestPlaces(
   photos: PhotoRef[],
   fallbackMonth: ReturnType<typeof currentMonthKey>,
+  silent: boolean,
 ): Promise<number> {
-  if (photos.length === 0) {
+  // Domestic only — skip overseas GPS before reverse-geocode.
+  const domestic = photos.filter((p) => isKoreaLatLng(p.lat, p.lng));
+  if (domestic.length === 0) {
     return 0;
   }
-  const places = await resolveVisitPlaces(photos);
+  const places = await resolveVisitPlaces(domestic);
   if (places.length === 0) {
     return 0;
   }
   const result = syncStampsFromVisits(places, {
     month: fallbackMonth,
-    silent: true,
+    silent,
   });
   if (result.added.length > 0 || result.pruned.length > 0) {
     notifyStampsChanged();
@@ -57,49 +63,59 @@ async function ingestPlaces(
 }
 
 /**
- * Lifetime accumulate from all GPS photos in the real album.
- * Always silent — no earn popup / tab badge from bulk scan.
- * New-visit popups come from map month sync (useStampSync) only.
+ * Lifetime accumulate from **all** GPS photos in the real album (every year),
+ * not the month currently open on the map.
  *
- * Progressive: as GPS batches resolve, places are geocoded and written so the
- * stamp grid fills while the rest of the library is still scanning.
- * Ends with a full pass over every located photo (cache hits = cheap).
+ * Phase 1: scan MediaLibrary GPS as fast as possible (no reverse-geocode waits).
+ * Phase 2: geocode unique places in chunks and write stamps.
+ *
+ * Always silent — earn popups come from map month sync only.
  */
 export async function syncStampsFromLibrary(): Promise<StampLibrarySyncResult> {
   const wasEmpty = countCollected(readStampsCollected()) === 0;
   const fallbackMonth = currentMonthKey();
+  // First fill: silent (no earn spam). Later runs: unseen for truly new places.
+  const silent = wasEmpty;
 
   if (!(await ensureGeocodePermission())) {
     console.warn('[stamps] library sync skipped — location permission denied');
     return { added: 0, photoCount: 0 };
   }
 
-  let totalAdded = 0;
-  let consumed = 0;
-
-  const ingestDelta = async (photos: PhotoRef[]) => {
-    if (photos.length <= consumed) {
-      return;
-    }
-    const slice = photos.slice(consumed);
-    consumed = photos.length;
-    totalAdded += await ingestPlaces(slice, fallbackMonth);
-  };
-
+  // Phase 1 — every album photo with GPS (all years). Geocode only after.
   const photos = await loadAllLocatedPhotos({
     forceRealLibrary: true,
     locationBatchSize: LIBRARY_GPS_BATCH,
     retryFailedLocations: true,
-    onPartial: ingestDelta,
+    networkLocationFallback: true,
+    recheckCachedNoLocation: true,
   });
 
-  // Final full pass — retries geocode misses from progressive phase.
-  totalAdded += await ingestPlaces(photos, fallbackMonth);
+  console.warn(
+    '[stamps] library GPS scan done',
+    photos.length,
+    'photos — geocoding places',
+  );
+
+  // Phase 2 — places → stamps for the entire set (month picker never stamps).
+  let totalAdded = 0;
+  for (let i = 0; i < photos.length; i += GEOCODE_PHOTO_CHUNK) {
+    const chunk = photos.slice(i, i + GEOCODE_PHOTO_CHUNK);
+    totalAdded += await ingestPlaces(chunk, fallbackMonth, silent);
+  }
 
   if (wasEmpty) {
     markAllStampsSeen();
     notifyStampsChanged();
   }
+
+  console.warn(
+    '[stamps] library sync done',
+    'photos=',
+    photos.length,
+    'added=',
+    totalAdded,
+  );
 
   return { added: totalAdded, photoCount: photos.length };
 }

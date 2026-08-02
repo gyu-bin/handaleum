@@ -2,6 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import {
+  getStampsScanIntroSeen,
+  setStampsScanIntroSeen,
+} from '@/lib/storage';
 import { LoadingView } from '@/shared/components/LoadingView';
 import { ScreenHeader } from '@/shared/components/ScreenHeader';
 import { StateView } from '@/shared/components/StateView';
@@ -18,6 +22,7 @@ import {
 import { MascotPin } from '../components/MascotPin';
 import { RegionChips } from '../components/RegionChips';
 import { StampEarnOverlay } from '../components/StampEarnOverlay';
+import { StampScanIntroModal } from '../components/StampScanIntroModal';
 import { useStampLibrarySync } from '../hooks/useStampLibrarySync';
 import { useStamps } from '../hooks/useStamps';
 import {
@@ -57,9 +62,17 @@ export function StampScreen() {
   const [celebrate, setCelebrate] = useState<string[] | null>(null);
   const [animateIds, setAnimateIds] = useState<Set<string>>(() => new Set());
   const [replayNonce, setReplayNonce] = useState<Record<string, number>>({});
+  const [showScanIntro, setShowScanIntro] = useState(
+    () => !getStampsScanIntroSeen(),
+  );
   /** Stamp ids already shown in the earn overlay this session (once each). */
   const celebratedIds = useRef(new Set<string>());
   const celebrating = useRef(false);
+
+  const onScanIntroConfirm = useCallback(() => {
+    setStampsScanIntroSeen();
+    setShowScanIntro(false);
+  }, []);
 
   // Earn popup only for unseen (new) stamps — once per id, never on re-entry.
   useEffect(() => {
@@ -192,10 +205,15 @@ export function StampScreen() {
     );
   }
 
-  const empty = collectedCount === 0 && !syncing;
+  const empty = collectedCount === 0;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <StampScanIntroModal
+        visible={showScanIntro}
+        onConfirm={onScanIntroConfirm}
+      />
+
       {celebrate && celebrate.length > 0 ? (
         <StampEarnOverlay names={celebrate} onDone={onOverlayDone} />
       ) : null}
@@ -223,19 +241,21 @@ export function StampScreen() {
         <View style={styles.track}>
           <View style={[styles.fill, { width: `${progressPct}%` }]} />
         </View>
-        {syncing && collectedCount > 0 ? (
+        {syncing ? (
           <Text style={styles.syncHint}>{strings.stamps.backfilling}</Text>
         ) : null}
       </View>
 
-      {syncing && collectedCount === 0 ? (
-        <LoadingView message={strings.stamps.backfilling} />
-      ) : empty ? (
+      {empty ? (
         <View style={styles.emptyWrap}>
           <MascotPin size={48} />
           <StateView
-            title={strings.stamps.emptyTitle}
-            description={strings.stamps.empty}
+            title={
+              syncing ? strings.stamps.backfilling : strings.stamps.emptyTitle
+            }
+            description={
+              syncing ? strings.stamps.scanIntroBody : strings.stamps.empty
+            }
           />
         </View>
       ) : (
@@ -243,7 +263,8 @@ export function StampScreen() {
           sections={sections}
           replayNonce={replayNonce}
           onReplay={onReplayStamp}
-        />      )}
+        />
+      )}
     </SafeAreaView>
   );
 }

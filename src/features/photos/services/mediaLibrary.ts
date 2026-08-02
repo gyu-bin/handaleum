@@ -93,19 +93,55 @@ function fromCache(asset: Asset): PhotoRef | 'no-location' | 'miss' {
   return 'miss';
 }
 
-async function fetchLocation(asset: Asset): Promise<PhotoRef | 'no-location' | null> {
+function coordsFromInfo(
+  asset: Asset,
+  info: { location?: { latitude: number; longitude: number } | null },
+): PhotoRef | null {
+  const location = info.location;
+  const lat = location == null ? NaN : Number(location.latitude);
+  const lng = location == null ? NaN : Number(location.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return null;
+  }
+  setAssetLocationRaw(asset.id, `${lat},${lng}`);
+  return refFromCoords(asset, lat, lng);
+}
+
+/**
+ * Resolve GPS for one asset.
+ * Default: local metadata only (map month loads — avoid iCloud download storms).
+ * `networkFallback`: if local has no coords but asset is in iCloud, download once
+ * (used by 발도장 full-album scan so remote originals still stamp).
+ */
+async function fetchLocation(
+  asset: Asset,
+  options?: { networkFallback?: boolean },
+): Promise<PhotoRef | 'no-location' | null> {
   try {
-    const info = await getAssetInfoAsync(asset, { shouldDownloadFromNetwork: false });
-    const location = info.location;
-    // Native module exports coordinates as strings despite the number type.
-    const lat = location == null ? NaN : Number(location.latitude);
-    const lng = location == null ? NaN : Number(location.longitude);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      setAssetLocationRaw(asset.id, 'x');
-      return 'no-location';
+    const info = await getAssetInfoAsync(asset, {
+      shouldDownloadFromNetwork: false,
+    });
+    const local = coordsFromInfo(asset, info);
+    if (local) {
+      return local;
     }
-    setAssetLocationRaw(asset.id, `${lat},${lng}`);
-    return refFromCoords(asset, lat, lng);
+
+    // iCloud / network asset with no local GPS — don't blacklist as "no GPS"
+    // until we've tried a network read (stamp scan) or given up.
+    if (options?.networkFallback && info.isNetworkAsset) {
+      const remote = await getAssetInfoAsync(asset, {
+        shouldDownloadFromNetwork: true,
+      });
+      const fromNetwork = coordsFromInfo(asset, remote);
+      if (fromNetwork) {
+        return fromNetwork;
+      }
+    } else if (info.isNetworkAsset && !options?.networkFallback) {
+      return null; // leave uncached — stamp scan / retry can try again
+    }
+
+    setAssetLocationRaw(asset.id, 'x');
+    return 'no-location';
   } catch (error) {
     console.error('getAssetInfoAsync failed', asset.id, error);
     return null; // transient failure — leave uncached so a retry can succeed
@@ -205,7 +241,7 @@ export async function loadMonthlyPhotos(
   for (let i = 0; i < uncached.length; i += LOCATION_BATCH) {
     await pauseWhileBackgrounded(shouldContinue);
     const chunk = uncached.slice(i, i + LOCATION_BATCH);
-    const results = await Promise.all(chunk.map(fetchLocation));
+    const results = await Promise.all(chunk.map((asset) => fetchLocation(asset)));
     for (const result of results) {
       if (result === 'no-location') {
         noLocationCount += 1;
@@ -257,11 +293,19 @@ export type LoadAllLocatedPhotosOptions = {
   locationBatchSize?: number;
   /** Re-read assets that failed getAssetInfoAsync once (transient native errors). */
   retryFailedLocations?: boolean;
+  /** Try iCloud download when local metadata has no GPS (발도장 only). */
+  networkLocationFallback?: boolean;
+  /**
+   * Re-check assets previously cached as no-location (may have been iCloud
+   * blacklisted before network fallback existed).
+   */
+  recheckCachedNoLocation?: boolean;
 };
 
 /**
  * All library photos that have GPS — cache hits first, then uncached batches.
  * Used for 발도장 historical backfill (pass forceRealLibrary).
+ * Does not reverse-geocode — callers should do that after the full list returns.
  */
 export async function loadAllLocatedPhotos(
   options?: LoadAllLocatedPhotosOptions,
@@ -272,11 +316,14 @@ export async function loadAllLocatedPhotos(
     forceRealLibrary,
     locationBatchSize,
     retryFailedLocations,
+    networkLocationFallback,
+    recheckCachedNoLocation,
   } = options ?? {};
   const batchSize =
     locationBatchSize != null && locationBatchSize > 0
       ? locationBatchSize
       : LOCATION_BATCH;
+  const locOpts = { networkFallback: networkLocationFallback === true };
 
   if (!forceRealLibrary && isDevDummyPhotosEnabled()) {
     const summaries = buildDummyMonthSummaries();
@@ -297,7 +344,11 @@ export async function loadAllLocatedPhotos(
     const hit = fromCache(asset);
     if (hit === 'miss') {
       uncached.push(asset);
-    } else if (hit !== 'no-location') {
+    } else if (hit === 'no-location') {
+      if (recheckCachedNoLocation) {
+        uncached.push(asset);
+      }
+    } else {
       photos.push(hit);
     }
   }
@@ -311,16 +362,17 @@ export async function loadAllLocatedPhotos(
   for (let i = 0; i < uncached.length; i += batchSize) {
     await pauseWhileBackgrounded(shouldContinue);
     const chunk = uncached.slice(i, i + batchSize);
-    const results = await Promise.all(chunk.map(fetchLocation));
+    const results = await Promise.all(
+      chunk.map((asset) => fetchLocation(asset, locOpts)),
+    );
     let grew = false;
     for (let j = 0; j < results.length; j++) {
       const result = results[j];
-      const asset = chunk[j]!;
       if (result != null && result !== 'no-location') {
         photos.push(result);
         grew = true;
       } else if (result === null) {
-        failed.push(asset);
+        failed.push(chunk[j]!);
       }
     }
     if (grew) {
@@ -332,7 +384,9 @@ export async function loadAllLocatedPhotos(
     for (let i = 0; i < failed.length; i += batchSize) {
       await pauseWhileBackgrounded(shouldContinue);
       const chunk = failed.slice(i, i + batchSize);
-      const results = await Promise.all(chunk.map(fetchLocation));
+      const results = await Promise.all(
+        chunk.map((asset) => fetchLocation(asset, locOpts)),
+      );
       let grew = false;
       for (const result of results) {
         if (result != null && result !== 'no-location') {

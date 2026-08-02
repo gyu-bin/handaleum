@@ -11,7 +11,6 @@ import { theme } from '@/shared/constants/theme';
 
 import { useOnboarding } from '@/features/onboarding/hooks/useOnboarding';
 import { useStamps } from '@/features/stamps/hooks/useStamps';
-import { useStampSync } from '@/features/stamps/hooks/useStampSync';
 import { startStampLibrarySync } from '@/features/stamps/services/stampLibrarySyncRunner';
 
 import { DEFAULT_MAP_ZOOM, MapCanvas } from '../components/MapCanvas';
@@ -86,8 +85,7 @@ export function MonthlyMapScreen() {
     [filteredPhotos, zoom],
   );
 
-  const { places: journeyPlaces, visitPlaces } = useMonthJourney(filteredPhotos);
-  useStampSync(month, visitPlaces);
+  const { places: journeyPlaces } = useMonthJourney(filteredPhotos);
   const { unseenCount } = useStamps();
 
   // Full-album stamp accumulate while the user is on the map (not stamps-only).
