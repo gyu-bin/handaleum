@@ -208,6 +208,7 @@ export const strings = {
     placeLoading: '위치 확인 중…',
     placeUnknown: '위치 없음',
     stripHint: '같은 장소 · 탭하면 대표 사진',
+    gridHint: '같은 장소 · 탭하면 대표 사진',
   },
   cards: {
     listTitle: '내 회고',
@@ -277,7 +278,7 @@ export const strings = {
     newThisMonth: (n: number) => `이번 달 +${n}`,
     earned: (name: string) => `${name} 도장 획득!`,
     emptyTitle: '첫 도장을 찍어보세요',
-    empty: '처음 간 시군구에 도장이 찍혀요',
+    empty: '사진에 위치가 있으면 시군구 도장이 쌓여요',
     uncollected: '미수집',
     slotUnknown: '?',
     errorTitle: '도장을 불러오지 못했어요',

@@ -23,9 +23,8 @@ export interface MapClusterMarkerProps {
 }
 
 /**
- * Photo map pin: paper frame + caret, delivered as a pre-baked PNG via Naver
- * `image.httpUri` (custom React children don't paint RN Image on device).
- * Renders nothing until the framed photo is ready — no gray placeholder dots.
+ * Photo map pin. Shows any place photo (cover, else first) as soon as the
+ * thumb file is ready; paper-frame bake upgrades in the background.
  */
 export function MapClusterMarker({
   cluster,
@@ -37,6 +36,7 @@ export function MapClusterMarker({
     coverAssetId && cluster.photos.some((p) => p.assetId === coverAssetId)
       ? cluster.photos.find((p) => p.assetId === coverAssetId)
       : undefined;
+  // No cover yet → first photo is fine; user can set cover from the sheet.
   const display = cover ?? cluster.photos[0];
   const displayAssetId = display?.assetId;
 
@@ -45,21 +45,20 @@ export function MapClusterMarker({
   const markerH = markerW + CARET_H;
 
   const [photoUri, setPhotoUri] = useState<string | null>(null);
-  const [pinUri, setPinUri] = useState<string | null>(null);
-  /** Keep last httpUri so we don't thrash Naver on select / rebake. */
+  /** Framed bake when ready; until then we show the raw thumb file. */
+  const [framedUri, setFramedUri] = useState<string | null>(null);
   const lastHttpRef = useRef<MarkerImage | null>(null);
+  const loadedAssetRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!displayAssetId) {
       setPhotoUri(null);
-      setPinUri(null);
+      setFramedUri(null);
       lastHttpRef.current = null;
+      loadedAssetRef.current = null;
       return;
     }
     let cancelled = false;
-    // Keep previous pinUri until the next bake finishes — clearing both
-    // forces the pin to disappear mid-interaction (cover change / select).
-    setPhotoUri(null);
 
     const load = async () => {
       try {
@@ -69,10 +68,13 @@ export function MapClusterMarker({
             return;
           }
           if (next) {
+            loadedAssetRef.current = displayAssetId;
             setPhotoUri(next);
+            // Immediate pin: raw thumb. Do not wait for view-shot bake.
+            setFramedUri(null);
             return;
           }
-          await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+          await new Promise((r) => setTimeout(r, 200 * (attempt + 1)));
         }
       } catch (error) {
         console.warn('MapClusterMarker load failed', displayAssetId, error);
@@ -86,42 +88,42 @@ export function MapClusterMarker({
   }, [displayAssetId]);
 
   useEffect(() => {
-    if (!photoUri) {
+    if (!photoUri || !displayAssetId) {
       return;
     }
     let cancelled = false;
     void requestMapPinBake(photoUri, selected, cardSize)
       .then((baked) => {
-        if (!cancelled) {
-          setPinUri(baked);
+        if (!cancelled && baked && loadedAssetRef.current === displayAssetId) {
+          setFramedUri(baked);
         }
       })
       .catch((error) => {
         console.warn('map pin bake request failed', error);
-        if (!cancelled) {
-          setPinUri(null);
-        }
       });
     return () => {
       cancelled = true;
     };
-  }, [photoUri, selected, cardSize]);
+  }, [photoUri, selected, cardSize, displayAssetId]);
 
   const image = useMemo((): MarkerImage | null => {
-    if (pinUri) {
+    const uri = framedUri ?? photoUri;
+    if (uri && displayAssetId) {
       const next = {
-        httpUri: pinUri,
-        reuseIdentifier: `framed-${displayAssetId ?? 'x'}-${selected ? 1 : 0}-${cardSize}`,
+        httpUri: uri,
+        reuseIdentifier: framedUri
+          ? `framed-${displayAssetId}-${selected ? 1 : 0}-${cardSize}`
+          : `thumb-${displayAssetId}-${cardSize}`,
       };
       lastHttpRef.current = next;
       return next;
     }
+    // Keep previous marker while the next asset loads (cover change / refetch).
     return lastHttpRef.current;
-  }, [pinUri, displayAssetId, selected, cardSize]);
+  }, [framedUri, photoUri, displayAssetId, selected, cardSize]);
 
   const count = cluster.photos.length;
 
-  // No gray symbol fallback — only show pins once the photo frame is baked.
   if (!image) {
     return null;
   }

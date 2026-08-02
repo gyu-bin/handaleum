@@ -9,10 +9,7 @@ import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
 import { useCurrentMonth } from '@/features/photos/hooks/useCurrentMonth';
-import { useMonthJourney } from '@/features/photos/hooks/useMonthJourney';
-import { useMonthlyPhotos } from '@/features/photos/hooks/useMonthlyPhotos';
 import { usePhotoPermission } from '@/features/photos/hooks/usePhotoPermission';
-import { isDevDummyPhotosEnabled } from '@/features/photos/services/dummyPhotos';
 
 import {
   CityStampSections,
@@ -21,8 +18,7 @@ import {
 import { MascotPin } from '../components/MascotPin';
 import { RegionChips } from '../components/RegionChips';
 import { StampEarnOverlay } from '../components/StampEarnOverlay';
-import { useStampBackfill } from '../hooks/useStampBackfill';
-import { useStampSync } from '../hooks/useStampSync';
+import { useStampLibrarySync } from '../hooks/useStampLibrarySync';
 import { useStamps } from '../hooks/useStamps';
 import {
   SIDO_ORDER,
@@ -46,37 +42,41 @@ function tiltForName(name: string): number {
 }
 
 /**
- * 발도장 — 시·도 칩 + 한 페이지에서 시별 구역(일반구 시는 그룹).
+ * 발도장 — lifetime accumulate from all GPS photos (not current month only).
  */
 export function StampScreen() {
   const { month } = useCurrentMonth();
-  const { status, isReady } = usePhotoPermission();
-  const hasAccess =
-    status === 'granted' || status === 'limited' || isDevDummyPhotosEnabled();
-  const photosQuery = useMonthlyPhotos(month, {
-    enabled: isReady && hasAccess,
-  });
-  const photos = photosQuery.data?.photos ?? [];
-  const { visitPlaces } = useMonthJourney(photos);
-  useStampSync(month, visitPlaces);
-  const { backfilling } = useStampBackfill(month);
+  const { isReady } = usePhotoPermission();
+  const { syncing } = useStampLibrarySync();
 
   const { collected, unseen, collectedCount, markAllSeen } = useStamps();
   const [sido, setSido] = useState(SIDO_ORDER[0] ?? '서울');
   const [celebrate, setCelebrate] = useState<string[] | null>(null);
   const [animateIds, setAnimateIds] = useState<Set<string>>(() => new Set());
   const [replayNonce, setReplayNonce] = useState<Record<string, number>>({});
-  const entryHandled = useRef(false);
+  /** Stamp ids already shown in the earn overlay this session (once each). */
+  const celebratedIds = useRef(new Set<string>());
+  const celebrating = useRef(false);
 
+  // Earn popup only for unseen (new) stamps — once per id, never on re-entry.
   useEffect(() => {
-    if (entryHandled.current || unseen.length === 0) {
+    if (celebrating.current || unseen.length === 0) {
       return;
     }
-    entryHandled.current = true;
+    const fresh = unseen.filter((id) => !celebratedIds.current.has(id));
+    if (fresh.length === 0) {
+      markAllSeen();
+      return;
+    }
+
+    celebrating.current = true;
+    for (const id of fresh) {
+      celebratedIds.current.add(id);
+    }
 
     const ids = new Set<string>();
     const names: string[] = [];
-    for (const id of unseen) {
+    for (const id of fresh) {
       const entry = collected[id];
       if (!entry) {
         continue;
@@ -87,33 +87,35 @@ export function StampScreen() {
       }
     }
 
+    // Clear badge immediately so remount / re-sync cannot re-queue the same ids.
+    markAllSeen();
+
     if (ids.size > 0) {
       setAnimateIds(ids);
       setCelebrate(names.slice(0, 5));
-      const firstId = unseen[0];
+      const firstId = fresh[0];
       const first = firstId ? collected[firstId] : undefined;
       if (first?.sido) {
         setSido(first.sido);
       }
+    } else {
+      celebrating.current = false;
     }
-    markAllSeen();
   }, [collected, markAllSeen, unseen]);
 
   const onOverlayDone = useCallback(() => {
     setCelebrate(null);
+    celebrating.current = false;
   }, []);
 
   const onReplayStamp = useCallback((id: string) => {
     setReplayNonce((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
   }, []);
-
   const cities = useMemo(() => cityListForSido(sido), [sido]);
   const collectedInSido = countCollectedInSido(collected, sido);
   const monthFirsts = firstsInMonth(collected, month);
 
   const sections: CityStampSection[] = useMemo(() => {
-    // Only 일반구 시 (창원·용인…) get a labeled block. Metro 구 + 군 + plain
-    // 시·군 share one continuous 3-col grid — avoids 기장군 alone above 부산 구.
     const groups: CityStampSection[] = [];
     let leafUnits: CityStampSection['units'] = [];
     let leafCollected = 0;
@@ -179,7 +181,7 @@ export function StampScreen() {
       ? 0
       : Math.min(100, (collectedInSido / progressTotal) * 100);
 
-  if (!isReady || (photosQuery.isPending && hasAccess && !backfilling)) {
+  if (!isReady) {
     return (
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
         <LoadingView message={strings.stamps.loading} />
@@ -187,24 +189,7 @@ export function StampScreen() {
     );
   }
 
-  if (photosQuery.isError && !backfilling) {
-    return (
-      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-        <StateView
-          title={strings.stamps.errorTitle}
-          description={
-            photosQuery.error instanceof Error
-              ? photosQuery.error.message
-              : undefined
-          }
-          actionLabel={strings.stamps.errorRetry}
-          onAction={() => void photosQuery.refetch()}
-        />
-      </SafeAreaView>
-    );
-  }
-
-  const empty = collectedCount === 0 && !backfilling;
+  const empty = collectedCount === 0 && !syncing;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
@@ -237,7 +222,7 @@ export function StampScreen() {
         </View>
       </View>
 
-      {backfilling && collectedCount === 0 ? (
+      {syncing && collectedCount === 0 ? (
         <LoadingView message={strings.stamps.backfilling} />
       ) : empty ? (
         <View style={styles.emptyWrap}>
@@ -252,8 +237,7 @@ export function StampScreen() {
           sections={sections}
           replayNonce={replayNonce}
           onReplay={onReplayStamp}
-        />
-      )}
+        />      )}
     </SafeAreaView>
   );
 }

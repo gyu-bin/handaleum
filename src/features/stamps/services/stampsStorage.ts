@@ -1,8 +1,6 @@
 import {
-  getStampsBackfillDoneRaw,
   getStampsRaw,
   getStampsUnseenRaw,
-  setStampsBackfillDoneRaw,
   setStampsRaw,
   setStampsUnseenRaw,
 } from '@/lib/storage';
@@ -177,14 +175,6 @@ export function syncStampsFromVisits(
 export function markAllStampsSeen(): string[] {
   writeUnseen([]);
   return [];
-}
-
-export function isStampsBackfillDone(): boolean {
-  return getStampsBackfillDoneRaw();
-}
-
-export function markStampsBackfillDone(): void {
-  setStampsBackfillDoneRaw(true);
 }
 
 export function countCollected(collected: StampsCollected): number {

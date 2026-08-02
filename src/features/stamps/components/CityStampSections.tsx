@@ -25,8 +25,9 @@ export type CityStampSection = {
 
 export interface CityStampSectionsProps {
   sections: CityStampSection[];
-  replayNonce: Record<string, number>;
-  onReplay: (id: string) => void;
+  /** Remount nonce so a collected stamp can replay its slam on tap. */
+  replayNonce?: Record<string, number>;
+  onReplay?: (id: string) => void;
 }
 
 const COLS = 3;
@@ -45,7 +46,7 @@ function chunkRows<T>(items: T[], size: number): T[][] {
  */
 export function CityStampSections({
   sections,
-  replayNonce,
+  replayNonce = {},
   onReplay,
 }: CityStampSectionsProps) {
   return (
@@ -77,13 +78,14 @@ export function CityStampSections({
                         animateIn={unit.animateIn || nonce > 0}
                         tiltDeg={unit.tiltDeg}
                         onPress={
-                          unit.collected ? () => onReplay(unit.id) : undefined
+                          unit.collected && onReplay
+                            ? () => onReplay(unit.id)
+                            : undefined
                         }
                       />
                     </View>
                   );
                 })}
-                {/* Pad short last row so cell widths stay equal. */}
                 {row.length < COLS
                   ? Array.from({ length: COLS - row.length }, (_, i) => (
                       <View key={`pad-${i}`} style={styles.cell} />

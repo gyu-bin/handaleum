@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   type NativeScrollEvent,
@@ -29,15 +29,19 @@ import {
   resolveClusterDetailLabel,
 } from '../utils/placeJourney';
 
-const STRIP_SIZE = 64;
+const GRID_COLS = 3;
+/** Photos appended per scroll page in the place grid. */
+const PAGE_SIZE = 50;
 
-function StripThumb({
+function GridThumb({
   photo,
+  size,
   selected,
   isCover,
   onPress,
 }: {
   photo: PhotoRef;
+  size: number;
   selected: boolean;
   isCover: boolean;
   onPress: () => void;
@@ -52,7 +56,7 @@ function StripThumb({
         }
       })
       .catch((error) => {
-        console.warn('StripThumb uri failed', photo.assetId, error);
+        console.warn('GridThumb uri failed', photo.assetId, error);
       });
     return () => {
       cancelled = true;
@@ -67,25 +71,26 @@ function StripThumb({
         isCover ? strings.map.coverSelected : strings.map.setAsCover
       }
       style={[
-        styles.stripThumb,
-        selected && styles.stripThumbSelected,
-        isCover && styles.stripThumbCover,
+        styles.gridThumb,
+        { width: size, height: size },
+        selected && styles.gridThumbSelected,
+        isCover && styles.gridThumbCover,
       ]}
     >
       {uri ? (
         <Image
           source={{ uri }}
-          style={styles.stripImage}
+          style={styles.gridImage}
           contentFit="cover"
           recyclingKey={photo.assetId}
           cachePolicy="memory-disk"
         />
       ) : (
-        <View style={[styles.stripImage, styles.placeholder]} />
+        <View style={[styles.gridImage, styles.placeholder]} />
       )}
       {isCover ? (
-        <View style={styles.stripBadge}>
-          <Text style={styles.stripBadgeText}>{strings.map.coverBadge}</Text>
+        <View style={styles.gridBadge}>
+          <Text style={styles.gridBadgeText}>{strings.map.coverBadge}</Text>
         </View>
       ) : null}
     </Pressable>
@@ -110,8 +115,17 @@ function ClusterSlide({
   const [uri, setUri] = useState<string | null>(null);
   const [placeLabel, setPlaceLabel] = useState<string | null>(null);
   const [labelLoading, setLabelLoading] = useState(true);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
-  // Prefer cover when cluster or cover changes.
+  const pad = theme.spacing.lg;
+  const gap = theme.spacing.sm;
+  const contentW = width - pad * 2;
+  const cell = (contentW - gap * (GRID_COLS - 1)) / GRID_COLS;
+
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [cluster.id]);
+
   useEffect(() => {
     const next =
       (coverAssetId &&
@@ -180,13 +194,37 @@ function ClusterSlide({
     ? strings.playback.placeLoading
     : (placeLabel ?? strings.playback.placeUnknown);
 
-  return (
-    <View style={[styles.slide, { width }]}>
+  const pagePhotos = useMemo(
+    () => cluster.photos.slice(0, visibleCount),
+    [cluster.photos, visibleCount],
+  );
+
+  const loadMore = useCallback(() => {
+    setVisibleCount((n) =>
+      n >= cluster.photos.length
+        ? n
+        : Math.min(n + PAGE_SIZE, cluster.photos.length),
+    );
+  }, [cluster.photos.length]);
+
+  const header = (
+    <View
+      style={[
+        styles.headerBlock,
+        cluster.photos.length <= 1 && styles.gridContent,
+      ]}
+    >
       <View style={styles.imageWrap}>
         {uri ? (
-          <Image source={{ uri }} style={styles.image} contentFit="cover" />
+          <Image
+            source={{ uri }}
+            style={[styles.hero, { width: contentW }]}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            recyclingKey={activeId}
+          />
         ) : (
-          <View style={[styles.image, styles.placeholder]} />
+          <View style={[styles.hero, styles.placeholder, { width: contentW }]} />
         )}
       </View>
       <Text style={styles.place} numberOfLines={2}>
@@ -198,27 +236,42 @@ function ClusterSlide({
       <Text style={styles.date}>
         {new Date(activePhoto?.takenAt ?? '').toLocaleString('ko-KR')}
       </Text>
-
       {cluster.photos.length > 1 ? (
-        <View style={styles.stripBlock}>
-          <Text style={styles.stripHint}>{strings.playback.stripHint}</Text>
-          <FlatList
-            horizontal
-            data={cluster.photos}
-            keyExtractor={(item) => item.assetId}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.stripList}
-            renderItem={({ item }) => (
-              <StripThumb
-                photo={item}
-                selected={item.assetId === activeId}
-                isCover={item.assetId === coverAssetId}
-                onPress={() => onSelectPhoto(item.assetId)}
-              />
-            )}
-          />
-        </View>
+        <Text style={styles.gridHint}>{strings.playback.gridHint}</Text>
       ) : null}
+    </View>
+  );
+
+  return (
+    <View style={[styles.slide, { width }]}>
+      {cluster.photos.length <= 1 ? (
+        header
+      ) : (
+        <FlatList
+          data={pagePhotos}
+          keyExtractor={(item) => item.assetId}
+          numColumns={GRID_COLS}
+          ListHeaderComponent={header}
+          contentContainerStyle={styles.gridContent}
+          columnWrapperStyle={[styles.gridRow, { gap }]}
+          showsVerticalScrollIndicator={false}
+          nestedScrollEnabled
+          initialNumToRender={PAGE_SIZE}
+          maxToRenderPerBatch={12}
+          windowSize={7}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.4}
+          renderItem={({ item }) => (
+            <GridThumb
+              photo={item}
+              size={cell}
+              selected={item.assetId === activeId}
+              isCover={item.assetId === (coverAssetId ?? activeId)}
+              onPress={() => onSelectPhoto(item.assetId)}
+            />
+          )}
+        />
+      )}
     </View>
   );
 }
@@ -227,9 +280,8 @@ function ClusterSlide({
 const AUTOPLAY_MS = 2800;
 
 /**
- * Storytelling view: steps through clusters in chronological order, by manual
- * swipe or auto-play. A drag pauses auto-play so the user is never fought.
- * Same-place strip sets the pin cover (shared with the map).
+ * Storytelling view: horizontal pages per place. Each page shows a large
+ * cover photo and a 3-column grid of photos at that place.
  */
 export function PlaybackScreen() {
   const { width } = useWindowDimensions();
@@ -423,18 +475,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   slide: {
+    flex: 1,
+  },
+  gridContent: {
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.sm,
-    paddingBottom: theme.spacing.md,
+    paddingBottom: theme.spacing.xl,
+  },
+  headerBlock: {
+    marginBottom: theme.spacing.sm,
   },
   imageWrap: {
     borderRadius: theme.radius.card,
     backgroundColor: theme.colors.surface,
     ...theme.shadows.card,
   },
-  image: {
-    width: '100%',
-    aspectRatio: 3 / 4,
+  hero: {
+    aspectRatio: 4 / 5,
     borderRadius: theme.radius.card,
     backgroundColor: theme.colors.surfaceAlt,
   },
@@ -458,37 +514,32 @@ const styles = StyleSheet.create({
     marginTop: 2,
     color: theme.colors.subtle,
   },
-  stripBlock: {
-    marginTop: theme.spacing.md,
-    gap: theme.spacing.sm,
-  },
-  stripHint: {
+  gridHint: {
     ...theme.type.micro,
+    marginTop: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
     color: theme.colors.subtle,
   },
-  stripList: {
-    gap: theme.spacing.sm,
-    paddingVertical: 2,
+  gridRow: {
+    marginBottom: theme.spacing.sm,
   },
-  stripThumb: {
-    width: STRIP_SIZE,
-    height: STRIP_SIZE,
+  gridThumb: {
     borderRadius: theme.radius.sm,
     overflow: 'hidden',
     borderWidth: 2,
     borderColor: theme.colors.line,
   },
-  stripThumbSelected: {
+  gridThumbSelected: {
     borderColor: theme.colors.accent,
   },
-  stripThumbCover: {
+  gridThumbCover: {
     borderColor: theme.colors.sand,
   },
-  stripImage: {
+  gridImage: {
     width: '100%',
     height: '100%',
   },
-  stripBadge: {
+  gridBadge: {
     position: 'absolute',
     left: 4,
     bottom: 4,
@@ -497,7 +548,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.sm,
     backgroundColor: theme.colors.sand,
   },
-  stripBadgeText: {
+  gridBadgeText: {
     ...theme.type.micro,
     color: theme.colors.white,
     fontWeight: '700',

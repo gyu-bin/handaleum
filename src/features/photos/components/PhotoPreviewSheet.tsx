@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   Modal,
@@ -17,6 +17,9 @@ import { theme } from '@/shared/constants/theme';
 import { resolveAssetUri } from '../services/mediaLibrary';
 import type { PlaceCluster, PhotoRef } from '../types';
 import { placeBucketKey, resolveClusterDetailLabel } from '../utils/placeJourney';
+
+/** Photos appended per scroll page in the pin sheet grid. */
+const PAGE_SIZE = 50;
 
 export interface PhotoPreviewSheetProps {
   /** null closes the sheet */
@@ -106,6 +109,11 @@ export function PhotoPreviewSheet({
     : null;
   const [placeLabel, setPlaceLabel] = useState<string | null>(null);
   const [labelLoading, setLabelLoading] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [cluster?.id]);
 
   useEffect(() => {
     if (!cluster) {
@@ -144,6 +152,24 @@ export function PhotoPreviewSheet({
     };
   }, [cluster, coverAssetId]);
 
+  const pagePhotos = useMemo(() => {
+    if (!cluster) {
+      return [];
+    }
+    return cluster.photos.slice(0, visibleCount);
+  }, [cluster, visibleCount]);
+
+  const loadMore = useCallback(() => {
+    if (!cluster) {
+      return;
+    }
+    setVisibleCount((n) =>
+      n >= cluster.photos.length
+        ? n
+        : Math.min(n + PAGE_SIZE, cluster.photos.length),
+    );
+  }, [cluster]);
+
   const titleText = labelLoading
     ? strings.map.placeLoading
     : (placeLabel ??
@@ -179,15 +205,17 @@ export function PhotoPreviewSheet({
         </View>
         {cluster ? (
           <FlatList
-            data={cluster.photos}
+            data={pagePhotos}
             keyExtractor={(item) => item.assetId}
             numColumns={3}
             contentContainerStyle={styles.list}
-            initialNumToRender={12}
-            maxToRenderPerBatch={6}
-            windowSize={5}
+            initialNumToRender={PAGE_SIZE}
+            maxToRenderPerBatch={12}
+            windowSize={7}
             updateCellsBatchingPeriod={50}
             removeClippedSubviews
+            onEndReached={loadMore}
+            onEndReachedThreshold={0.4}
             renderItem={({ item }) => (
               <PhotoThumb
                 photo={item}

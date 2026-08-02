@@ -162,18 +162,3 @@ export function getStampsUnseenRaw(): string | null {
 export function setStampsUnseenRaw(json: string): void {
   storage.set(STAMPS_UNSEEN_KEY, json);
 }
-
-const STAMPS_BACKFILL_DONE_KEY = 'stampsBackfillDone';
-
-/** One-shot full-library stamp backfill completed. */
-export function getStampsBackfillDoneRaw(): boolean {
-  return storage.getString(STAMPS_BACKFILL_DONE_KEY) === '1';
-}
-
-export function setStampsBackfillDoneRaw(done: boolean): void {
-  if (done) {
-    storage.set(STAMPS_BACKFILL_DONE_KEY, '1');
-  } else {
-    storage.remove(STAMPS_BACKFILL_DONE_KEY);
-  }
-}

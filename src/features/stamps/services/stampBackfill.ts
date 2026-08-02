@@ -1,58 +1,48 @@
 import { loadAllLocatedPhotos } from '@/features/photos/services/mediaLibrary';
-import type { MonthKey } from '@/features/photos/types';
 import { currentMonthKey } from '@/features/photos/utils/month';
 import { resolveVisitPlaces } from '@/features/photos/utils/placeJourney';
 
 import { notifyStampsChanged } from '../hooks/useStamps';
 import {
-  isStampsBackfillDone,
+  countCollected,
   markAllStampsSeen,
-  markStampsBackfillDone,
+  readStampsCollected,
   syncStampsFromVisits,
 } from './stampsStorage';
 
-export type StampBackfillResult = {
+export type StampLibrarySyncResult = {
   added: number;
-  skipped: boolean;
 };
 
 /**
- * One-shot: all GPS photos → bucketed parallel geocode → silent stamp sync.
- * Cache-first photo load; geocode concurrency capped in resolveVisitPlaces.
+ * Lifetime accumulate from all GPS photos.
+ * Always silent — no earn popup / tab badge from bulk scan.
+ * New-visit popups come from map month sync (useStampSync) only.
  */
-export async function runStampBackfill(
-  month: MonthKey = currentMonthKey(),
-): Promise<StampBackfillResult> {
-  if (isStampsBackfillDone()) {
-    return { added: 0, skipped: true };
+export async function syncStampsFromLibrary(): Promise<StampLibrarySyncResult> {
+  const wasEmpty = countCollected(readStampsCollected()) === 0;
+  const fallbackMonth = currentMonthKey();
+
+  const photos = await loadAllLocatedPhotos();
+  if (photos.length === 0) {
+    return { added: 0 };
   }
 
-  let totalAdded = 0;
-
-  const photos = await loadAllLocatedPhotos({
-    onPartial: (partial) => {
-      void resolveVisitPlaces(partial).then((places) => {
-        if (isStampsBackfillDone()) {
-          return;
-        }
-        const result = syncStampsFromVisits(places, { month, silent: true });
-        if (result.added.length > 0 || result.pruned.length > 0) {
-          totalAdded += result.added.length;
-          notifyStampsChanged();
-        }
-      });
-    },
+  const places = await resolveVisitPlaces(photos);
+  const result = syncStampsFromVisits(places, {
+    month: fallbackMonth,
+    silent: true,
   });
 
-  if (!isStampsBackfillDone()) {
-    const places = await resolveVisitPlaces(photos);
-    const result = syncStampsFromVisits(places, { month, silent: true });
-    totalAdded += result.added.length;
+  if (result.added.length > 0 || result.pruned.length > 0) {
+    notifyStampsChanged();
   }
 
-  markAllStampsSeen();
-  markStampsBackfillDone();
-  notifyStampsChanged();
+  // Historical fill should not leave a badge / popup backlog.
+  if (wasEmpty) {
+    markAllStampsSeen();
+    notifyStampsChanged();
+  }
 
-  return { added: totalAdded, skipped: false };
+  return { added: result.added.length };
 }

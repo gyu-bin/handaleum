@@ -24,6 +24,7 @@ import {
   isDevDummyPhotosEnabled,
   isDummyAssetId,
 } from './dummyPhotos';
+import { readPinThumbFromDisk, writePinThumbToDisk } from './pinThumbCache';
 
 /** Larger pages = fewer native round-trips when listing a month. */
 const PAGE_SIZE = 200;
@@ -464,13 +465,20 @@ export async function resolveAssetFileUri(assetId: string): Promise<string | nul
     }
 
     try {
-      // One slot covers getAssetInfoAsync + manipulateAsync (avoid parallel decode storms).
-      const uri = await limitPinExport(() => exportPinThumbFileUri(assetId));
-      if (uri) {
-        lruSet(fileUriCache, assetId, uri, FILE_URI_CACHE_MAX);
+      const diskHit = await readPinThumbFromDisk(assetId);
+      if (diskHit) {
+        lruSet(fileUriCache, assetId, diskHit, FILE_URI_CACHE_MAX);
+        return diskHit;
       }
-      // Leave uncached on miss so iCloud download can succeed on retry.
-      return uri;
+
+      // One slot covers getAssetInfoAsync + manipulateAsync (avoid parallel decode storms).
+      const exported = await limitPinExport(() => exportPinThumbFileUri(assetId));
+      if (!exported) {
+        return null;
+      }
+      const durable = (await writePinThumbToDisk(assetId, exported)) ?? exported;
+      lruSet(fileUriCache, assetId, durable, FILE_URI_CACHE_MAX);
+      return durable;
     } catch (error) {
       console.error('resolveAssetFileUri failed', assetId, error);
       return null;
