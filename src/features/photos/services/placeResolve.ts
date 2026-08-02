@@ -9,7 +9,11 @@ import {
   type PlaceBucket,
 } from '../utils/visitPlaceBuild';
 
-import { ensurePlacePermission, reverseGeocode } from './geocodeQueue';
+import {
+  ensurePlacePermission,
+  reverseGeocode,
+  type GeocodePriority,
+} from './geocodeQueue';
 import {
   BUCKET_DECIMALS,
   peekResolvedPlace,
@@ -94,6 +98,7 @@ function toResolvedPlace(
 export async function resolvePlace(
   lat: number,
   lng: number,
+  priority: GeocodePriority = 'interactive',
 ): Promise<ResolvedPlace | null> {
   const cached = peekResolvedPlace(lat, lng);
   if (cached) {
@@ -105,7 +110,7 @@ export async function resolvePlace(
     return inflight;
   }
 
-  const task = reverseGeocode(lat, lng)
+  const task = reverseGeocode(lat, lng, priority)
     .then((addr) => {
       const parsed = addr ? parseGeocodedPlace(addr) : null;
       if (!parsed?.journeyLabel) {
@@ -162,6 +167,8 @@ export type ResolveVisitPlacesOptions = {
   onProgress?: (places: VisitPlace[]) => void;
   /** Flip `cancelled` to stop geocoding when the month or filter changes. */
   signal?: { cancelled: boolean };
+  /** `background` for the full-album stamp scan — yields to screen requests. */
+  priority?: GeocodePriority;
 };
 
 /**
@@ -197,21 +204,39 @@ export async function resolveVisitPlaces(
   let emitted = collectVisitPlaces(buckets, resolved);
   options?.onProgress?.(emitted);
 
-  for (const bucket of pending) {
-    if (options?.signal?.cancelled) {
-      return emitted;
+  const priority = options?.priority ?? 'interactive';
+
+  const resolvePass = async (targets: PlaceBucket[]): Promise<PlaceBucket[]> => {
+    const failed: PlaceBucket[] = [];
+    for (const bucket of targets) {
+      if (options?.signal?.cancelled) {
+        return failed;
+      }
+      const place = await resolvePlace(bucket.lat, bucket.lng, priority);
+      if (!place) {
+        failed.push(bucket);
+        continue;
+      }
+      resolved.set(bucket.key, place);
+      const next = collectVisitPlaces(buckets, resolved);
+      const grew = next.length !== emitted.length;
+      emitted = next;
+      if (grew) {
+        options?.onProgress?.(emitted);
+      }
     }
-    const place = await resolvePlace(bucket.lat, bucket.lng);
-    if (!place) {
-      continue;
-    }
-    resolved.set(bucket.key, place);
-    const next = collectVisitPlaces(buckets, resolved);
-    const grew = next.length !== emitted.length;
-    emitted = next;
-    if (grew) {
-      options?.onProgress?.(emitted);
-    }
+    return failed;
+  };
+
+  const failed = await resolvePass(pending);
+  // Throttle-window losses: if only some buckets failed, one more pass usually
+  // recovers them (this is how a single 리 could stay missing for a session).
+  if (
+    !options?.signal?.cancelled &&
+    failed.length > 0 &&
+    failed.length < pending.length
+  ) {
+    await resolvePass(failed);
   }
 
   return emitted;

@@ -68,10 +68,11 @@ export function startStampLibrarySync(
 
   if (parseRevStale || options?.force) {
     // Drop in-memory geocode results so the new parser runs; disk keys are
-    // already invalidated by placeResolve CACHE_REV.
+    // already invalidated by placeResolve CACHE_REV. Do NOT zero
+    // stampsLibrarySyncAt here: `force` already bypasses the cooldown, and a
+    // zeroed timestamp flips syncStampsFromLibrary into deep recheck (network
+    // re-reads of no-GPS assets) — a parse change never needs GPS re-reads.
     clearPlaceResolveCache();
-    // Allow the scan even if a previous sync finished moments ago.
-    setStampsLibrarySyncAt(0);
   }
 
   syncing = true;

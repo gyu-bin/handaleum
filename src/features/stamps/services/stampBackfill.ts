@@ -51,7 +51,8 @@ async function ingestPlaces(
   if (domestic.length === 0) {
     return 0;
   }
-  const places = await resolveVisitPlaces(domestic);
+  // Background lane — the month view's chips always geocode first.
+  const places = await resolveVisitPlaces(domestic, { priority: 'background' });
   if (places.length === 0) {
     return 0;
   }

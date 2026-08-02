@@ -47,7 +47,8 @@ Grain = **시군구** (서울·광역 구, 도 시·군, 일반구 시 → 구�
 | 도장 수집 = 라이브러리 sync만. 월 선택 `useStampSync` 제거 | 월 열 때 places → stamp | 안 간 달 열어도 도장 쌓이던 문제 | 2026-08-02 |
 | 발도장 첫 진입 안내 모달 + 백그라운드 sync (차단 로더 없음) | 빈 화면 풀로딩 | 사용자 요청 | 2026-08-02 |
 | 일반구 모시(용인시) 단독 도장 금지 | 시+구 둘 다 | 이중 수집 버그 | 2026-08-01 |
-| 장소 파싱 = 행정 토큰 파이프라인. 발도장 city=시/군만, 라벨용 **eupMyon·dong 보존**. parse rev 11 | 읍·면 drop / 시만 표시 | 여정 칩 붕괴·리 안 보임 | 2026-08-03 |
+| 장소 파싱 = 행정 토큰 파이프라인. 발도장 city=시/군만, 라벨용 **eupMyon·dong 보존**. parse rev 12 | 읍·면 drop / 시만 표시 | 여정 칩 붕괴·리 안 보임 | 2026-08-03 |
+| 전체 스캔 geocode는 **background 우선순위**(월 화면이 항상 먼저). parse rev 재스캔이 `stampsLibrarySyncAt=0`을 쓰지 않음 — deep GPS recheck는 주 1회 그대로 | rev bump마다 deep recheck | 파서 변경에 GPS 네트워크 재확인이 따라와 버벅임 유발 | 2026-08-03 |
 | 광역 법정동→구: `dong-gu`에 부산·인천·대전·대구·광주·울산 추가. province가 시명으로 오던 버그 수정 + `inferSidoForUnit`(강릉시→강원). 인천 `미추홀구` 슬롯 추가. parse rev 4 재스캔 | 서울·일반구만 dong-gu | 인천/대전 구 miss→metro reject, 강릉 province=강릉시→sido null | 2026-08-02 |
 | 행정동 숫자 strip (`신정1동`→`신정동`→양천구) + place-parse rev bump 시 쿨다운 무시 1회 재스캔 | 행정동 EXTRA 전수 / 쿨다운 대기 | iOS 행정동 miss → 서울만 → metro reject | 2026-08-02 |
 | 진입 연출 = unseen 팝업 id당 1회. 탭 슬램 재생은 유지. 라이브러리 sync silent | 전체 sync도 팝업 | 새 방문만 축하 + 탭 재미 | 2026-08-02 |
