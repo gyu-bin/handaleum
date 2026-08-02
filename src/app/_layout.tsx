@@ -6,7 +6,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { applyOtaUpdateIfAvailable } from '@/lib/applyOtaUpdate';
+import { startOtaAutoApply } from '@/lib/applyOtaUpdate';
 import { configurePurchases } from '@/lib/purchases';
 import { consumeOtaJustApplied } from '@/lib/otaUpdateFlag';
 import { queryClient } from '@/lib/queryClient';
@@ -27,42 +27,30 @@ export default function RootLayout() {
   const [otaToastPersistent, setOtaToastPersistent] = useState(false);
   const [otaDoneToast, setOtaDoneToast] = useState(false);
 
-  const justUpdatedRef = useRef(false);
   const finishingRef = useRef(false);
 
   useEffect(() => {
-    justUpdatedRef.current = consumeOtaJustApplied();
-    if (justUpdatedRef.current) {
+    if (consumeOtaJustApplied()) {
       setOtaDoneToast(true);
     }
 
-    // OTA runs in the background — never hold the splash on the network check
-    // (that was the "stuck then snap" handoff on TestFlight).
-    let cancelled = false;
-    void (async () => {
-      const result = await applyOtaUpdateIfAvailable((phase) => {
-        if (cancelled) {
-          return;
-        }
+    // Startup + foreground return + periodic while open. Never blocks splash.
+    return startOtaAutoApply({
+      onProgress: (phase) => {
         setOtaToastPersistent(true);
         setOtaToastMessage(
           phase === 'updating' ? strings.ota.updating : strings.ota.checking,
         );
-      });
-      if (cancelled) {
-        return;
-      }
-      if (result.kind === 'reloading') {
-        // App restarts — leave toast up until reload.
-        return;
-      }
-      setOtaToastMessage(null);
-      setOtaToastPersistent(false);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+      },
+      onSettled: (result) => {
+        if (result.kind === 'reloading') {
+          // App restarts — leave toast up until reload.
+          return;
+        }
+        setOtaToastMessage(null);
+        setOtaToastPersistent(false);
+      },
+    });
   }, []);
 
   const onSplashReady = useCallback(() => {
