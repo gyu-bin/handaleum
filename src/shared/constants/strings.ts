@@ -157,6 +157,19 @@ export const strings = {
     buildEmbedded: '내장 번들 (OTA 미적용)',
     buildOta: (publishedAt: string, shortId: string) =>
       `OTA ${publishedAt} · ${shortId}`,
+    diag: {
+      section: '진단',
+      queue: (i: number, b: number, backoff: number, done: number, failed: number) =>
+        `지오코딩 대기 화면 ${i} · 스캔 ${b} · 지연 ${backoff}ms · 완료 ${done} · 실패 ${failed}`,
+      monthIdle: '이번 달: 아직 조회 없음',
+      month: (resolved: number, cached: number, total: number, failed: number, finished: boolean) =>
+        `이번 달 동네 ${resolved + cached}/${total}${failed > 0 ? ` · 실패 ${failed}` : ''}${finished ? ' · 완료' : ' · 진행 중'}`,
+      scanIdle: '발도장 스캔: 대기',
+      scanGps: (elapsedSec: number) => `발도장 스캔: GPS 읽는 중 · ${elapsedSec}초`,
+      scanGeocode: (done: number, total: number, elapsedSec: number) =>
+        `발도장 스캔: 동네 확인 ${done}/${total} · ${elapsedSec}초`,
+      scanDone: '발도장 스캔: 완료',
+    },
     proSection: '프로',
     proDescription: (priceLabel: string) =>
       `최근 3개월보다 지난 달을 열고, 인사이트 일부 지표를 잠금 해제합니다. ${priceLabel} · 일회 구매.`,

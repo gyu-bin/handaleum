@@ -37,6 +37,27 @@ const queues: Record<GeocodePriority, Job[]> = {
 };
 let working = false;
 let backoffMs = 0;
+let doneCount = 0;
+let failCount = 0;
+
+export type GeocodeQueueDebug = {
+  interactive: number;
+  background: number;
+  backoffMs: number;
+  done: number;
+  failed: number;
+};
+
+/** Live queue state for the settings diagnostics panel. */
+export function geocodeQueueDebug(): GeocodeQueueDebug {
+  return {
+    interactive: queues.interactive.length,
+    background: queues.background.length,
+    backoffMs,
+    done: doneCount,
+    failed: failCount,
+  };
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -61,6 +82,7 @@ async function runJob(job: Job): Promise<Location.LocationGeocodedAddress | null
       });
       backoffMs = 0;
       if (results.length > 0) {
+        doneCount += 1;
         return results[0] ?? null;
       }
       // An empty array is what a throttled CLGeocoder returns, so retry it.
@@ -72,6 +94,7 @@ async function runJob(job: Job): Promise<Location.LocationGeocodedAddress | null
       }
     }
   }
+  failCount += 1;
   return null;
 }
 

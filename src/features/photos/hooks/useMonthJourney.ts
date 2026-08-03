@@ -35,6 +35,19 @@ function photosFingerprint(photos: PhotoRef[]): string {
   return `${n}:${h}:${latSum.toFixed(2)}:${lngSum.toFixed(2)}`;
 }
 
+/** Skip state updates (and the map re-render they cause) when nothing changed. */
+function sameVisitPlaces(a: VisitPlace[], b: VisitPlace[]): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i]!.key !== b[i]!.key || a[i]!.label !== b[i]!.label) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export type UseMonthJourneyOptions = {
   /**
    * When false, skip network geocode (keep hydrated/disk places).
@@ -73,7 +86,7 @@ export function useMonthJourney(
     }
     const hydrated = hydrateVisitPlacesFromPhotos(photos);
     if (hydrated.length > 0) {
-      setVisitPlaces(hydrated);
+      setVisitPlaces((prev) => (sameVisitPlaces(prev, hydrated) ? prev : hydrated));
     } else if (resetKey) {
       // New month with no disk hits — clear previous month chips.
       setVisitPlaces([]);
@@ -99,7 +112,9 @@ export function useMonthJourney(
         signal,
         onProgress: (partial) => {
           if (!signal.cancelled && partial.length > 0) {
-            setVisitPlaces(partial);
+            setVisitPlaces((prev) =>
+              sameVisitPlaces(prev, partial) ? prev : partial,
+            );
           }
         },
       })
@@ -108,7 +123,9 @@ export function useMonthJourney(
             return;
           }
           if (next.length > 0) {
-            setVisitPlaces(next);
+            setVisitPlaces((prev) =>
+              sameVisitPlaces(prev, next) ? prev : next,
+            );
           }
           setIsResolving(false);
         })

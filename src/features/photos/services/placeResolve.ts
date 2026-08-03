@@ -162,6 +162,23 @@ export function hydrateVisitPlacesFromPhotos(photos: PhotoRef[]): VisitPlace[] {
   return collectVisitPlaces(buckets, resolved);
 }
 
+export type VisitResolveDebug = {
+  startedAt: number;
+  totalBuckets: number;
+  cachedBuckets: number;
+  resolvedBuckets: number;
+  failedBuckets: number;
+  finished: boolean;
+  labels: string[];
+};
+
+let lastInteractiveResolve: VisitResolveDebug | null = null;
+
+/** Last month-view resolve snapshot — settings diagnostics panel. */
+export function getVisitResolveDebug(): VisitResolveDebug | null {
+  return lastInteractiveResolve;
+}
+
 export type ResolveVisitPlacesOptions = {
   /** Paint chips as buckets land instead of one flush after the last geocode. */
   onProgress?: (places: VisitPlace[]) => void;
@@ -206,6 +223,22 @@ export async function resolveVisitPlaces(
 
   const priority = options?.priority ?? 'interactive';
 
+  const debug: VisitResolveDebug | null =
+    priority === 'interactive'
+      ? {
+          startedAt: Date.now(),
+          totalBuckets: buckets.length,
+          cachedBuckets: buckets.length - pending.length,
+          resolvedBuckets: 0,
+          failedBuckets: 0,
+          finished: false,
+          labels: emitted.map((p) => p.label),
+        }
+      : null;
+  if (debug) {
+    lastInteractiveResolve = debug;
+  }
+
   const resolvePass = async (targets: PlaceBucket[]): Promise<PlaceBucket[]> => {
     const failed: PlaceBucket[] = [];
     for (const bucket of targets) {
@@ -215,12 +248,21 @@ export async function resolveVisitPlaces(
       const place = await resolvePlace(bucket.lat, bucket.lng, priority);
       if (!place) {
         failed.push(bucket);
+        if (debug) {
+          debug.failedBuckets += 1;
+        }
         continue;
       }
       resolved.set(bucket.key, place);
+      if (debug) {
+        debug.resolvedBuckets += 1;
+      }
       const next = collectVisitPlaces(buckets, resolved);
       const grew = next.length !== emitted.length;
       emitted = next;
+      if (debug) {
+        debug.labels = emitted.map((p) => p.label);
+      }
       if (grew) {
         options?.onProgress?.(emitted);
       }
@@ -236,8 +278,14 @@ export async function resolveVisitPlaces(
     failed.length > 0 &&
     failed.length < pending.length
   ) {
+    if (debug) {
+      debug.failedBuckets = 0;
+    }
     await resolvePass(failed);
   }
 
+  if (debug) {
+    debug.finished = !options?.signal?.cancelled;
+  }
   return emitted;
 }

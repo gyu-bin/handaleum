@@ -1,4 +1,4 @@
-import { BUCKET_DECIMALS, placeBucketKey } from '../services/placeCache';
+import { placeBucketKey } from '../services/placeCache';
 import type {
   PhotoRef,
   ResolvedPlace,
@@ -18,7 +18,15 @@ export type PlaceBucket = {
   firstTakenAt: string;
 };
 
-/** Photos → distinct ~110m buckets, in first-visit order. */
+/**
+ * Photos → distinct ~110m buckets, in first-visit order.
+ *
+ * lat/lng is a REAL photo coordinate, not the rounded cell center: geocoding
+ * the rounded point can land ~78m into the neighbouring 리 (교항리→주문리 at
+ * the 주문진항 boundary), which then dedupes the whole village away. Apple
+ * Photos geocodes exact coordinates — so must we. The cache key still rounds,
+ * so nearby photos keep sharing one geocode call.
+ */
 export function collectBuckets(photos: PhotoRef[]): PlaceBucket[] {
   const map = new Map<string, PlaceBucket>();
   for (const photo of photos) {
@@ -27,8 +35,8 @@ export function collectBuckets(photos: PhotoRef[]): PlaceBucket[] {
     if (!existing) {
       map.set(key, {
         key,
-        lat: Number(photo.lat.toFixed(BUCKET_DECIMALS)),
-        lng: Number(photo.lng.toFixed(BUCKET_DECIMALS)),
+        lat: photo.lat,
+        lng: photo.lng,
         firstTakenAt: photo.takenAt,
       });
     } else if (photo.takenAt < existing.firstTakenAt) {

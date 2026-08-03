@@ -12,8 +12,12 @@ import { strings } from '@/shared/constants/strings';
 import { formatProPriceKrw, IS_MONETIZATION_LIVE } from '@/shared/constants/pricing';
 import { theme } from '@/shared/constants/theme';
 
+import { getStampScanDebug } from '@/features/stamps/services/stampBackfill';
+
 import { useHomeLocation } from '../hooks/useHomeLocation';
 import { useDevDummyPhotos } from '../hooks/useDevDummyPhotos';
+import { geocodeQueueDebug } from '../services/geocodeQueue';
+import { getVisitResolveDebug } from '../services/placeResolve';
 import { DEFAULT_HOME_RADIUS_M } from '../services/homeLocationStorage';
 import { dummyPhotoCount } from '../services/dummyPhotos';
 import { ProPaywallModal } from '@/features/insights/components/ProPaywallModal';
@@ -23,6 +27,46 @@ const RADIUS_CHOICES = [100, 300, 500, 1000] as const;
 
 function radiusLabel(radiusM: number): string {
   return radiusM >= 1000 ? `${radiusM / 1000}km` : `${radiusM}m`;
+}
+
+/** Live geocode/scan counters — settles "is it still loading or broken?" on device. */
+function diagLines(): string[] {
+  const q = geocodeQueueDebug();
+  const lines = [
+    strings.settings.diag.queue(q.interactive, q.background, q.backoffMs, q.done, q.failed),
+  ];
+
+  const month = getVisitResolveDebug();
+  if (!month) {
+    lines.push(strings.settings.diag.monthIdle);
+  } else {
+    lines.push(
+      strings.settings.diag.month(
+        month.resolvedBuckets,
+        month.cachedBuckets,
+        month.totalBuckets,
+        month.failedBuckets,
+        month.finished,
+      ),
+    );
+    lines.push(month.labels.join(' · '));
+  }
+
+  const scan = getStampScanDebug();
+  const elapsedSec =
+    scan.startedAt > 0 ? Math.round((Date.now() - scan.startedAt) / 1000) : 0;
+  if (scan.phase === 'idle') {
+    lines.push(strings.settings.diag.scanIdle);
+  } else if (scan.phase === 'gps') {
+    lines.push(strings.settings.diag.scanGps(elapsedSec));
+  } else if (scan.phase === 'geocode') {
+    lines.push(
+      strings.settings.diag.scanGeocode(scan.chunkDone, scan.chunkTotal, elapsedSec),
+    );
+  } else {
+    lines.push(strings.settings.diag.scanDone);
+  }
+  return lines;
 }
 
 /** Which JS bundle is actually running — settles "did the OTA apply?" on device. */
@@ -45,6 +89,13 @@ export function SettingsScreen() {
   const [isLocating, setIsLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paywallOpen, setPaywallOpen] = useState(false);
+  const [diag, setDiag] = useState<string[]>(() => diagLines());
+
+  // 1s poll only while this screen is mounted — cheap reads of module counters.
+  useEffect(() => {
+    const timer = setInterval(() => setDiag(diagLines()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (isPro) {
@@ -200,6 +251,15 @@ export function SettingsScreen() {
         <View style={[styles.card, styles.cardSpaced]}>
           <Text style={styles.sectionTitle}>{strings.settings.buildSection}</Text>
           <Text style={styles.status}>{runningBundleLabel()}</Text>
+        </View>
+
+        <View style={[styles.card, styles.cardSpaced]}>
+          <Text style={styles.sectionTitle}>{strings.settings.diag.section}</Text>
+          {diag.map((line, i) => (
+            <Text key={i} style={styles.hint}>
+              {line}
+            </Text>
+          ))}
         </View>
 
         {__DEV__ ? (

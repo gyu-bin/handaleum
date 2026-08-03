@@ -20,6 +20,27 @@ export type StampLibrarySyncResult = {
   photoCount: number;
 };
 
+export type StampScanDebug = {
+  phase: 'idle' | 'gps' | 'geocode' | 'done';
+  photos: number;
+  chunkDone: number;
+  chunkTotal: number;
+  startedAt: number;
+};
+
+let scanDebug: StampScanDebug = {
+  phase: 'idle',
+  photos: 0,
+  chunkDone: 0,
+  chunkTotal: 0,
+  startedAt: 0,
+};
+
+/** Live full-album scan state for the settings diagnostics panel. */
+export function getStampScanDebug(): StampScanDebug {
+  return scanDebug;
+}
+
 /** GPS-only phase — keep batches modest to avoid jetsam. */
 const LIBRARY_GPS_BATCH = 24;
 /** Geocode / stamp write chunks so the grid fills while the rest runs. */
@@ -90,6 +111,14 @@ export async function syncStampsFromLibrary(): Promise<StampLibrarySyncResult> {
   const deepRecheck =
     wasEmpty || lastSync === 0 || Date.now() - lastSync >= DEEP_RECHECK_MS;
 
+  scanDebug = {
+    phase: 'gps',
+    photos: 0,
+    chunkDone: 0,
+    chunkTotal: 0,
+    startedAt: Date.now(),
+  };
+
   // Phase 1 — every album photo with GPS (all years). Geocode only after.
   // Deep recheck (iCloud / prior no-GPS) is weekly — every visit would take hours.
   const photos = await loadAllLocatedPhotos({
@@ -108,10 +137,18 @@ export async function syncStampsFromLibrary(): Promise<StampLibrarySyncResult> {
   );
 
   // Phase 2 — places → stamps for the entire set (month picker never stamps).
+  const chunkTotal = Math.ceil(photos.length / GEOCODE_PHOTO_CHUNK);
+  scanDebug = {
+    ...scanDebug,
+    phase: 'geocode',
+    photos: photos.length,
+    chunkTotal,
+  };
   let totalAdded = 0;
   for (let i = 0; i < photos.length; i += GEOCODE_PHOTO_CHUNK) {
     const chunk = photos.slice(i, i + GEOCODE_PHOTO_CHUNK);
     totalAdded += await ingestPlaces(chunk, fallbackMonth, silent);
+    scanDebug = { ...scanDebug, chunkDone: scanDebug.chunkDone + 1 };
   }
 
   if (wasEmpty) {
@@ -127,5 +164,6 @@ export async function syncStampsFromLibrary(): Promise<StampLibrarySyncResult> {
     totalAdded,
   );
 
+  scanDebug = { ...scanDebug, phase: 'done' };
   return { added: totalAdded, photoCount: photos.length };
 }
