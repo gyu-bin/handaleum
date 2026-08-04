@@ -1,3 +1,7 @@
+import {
+  isPinExportBusy,
+  setFullAlbumScanBusy,
+} from '@/features/photos/services/mediaLibrary';
 import { clearPlaceResolveCache } from '@/features/photos/services/placeResolve';
 import {
   getStampsLibrarySyncAt,
@@ -16,9 +20,14 @@ type Listener = (syncing: boolean) => void;
 
 /** Skip restarting a full-album scan if one finished within this window. */
 const SYNC_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
+/** Let the open month paint + pin thumbs settle before album GPS. */
+const MAP_KICKOFF_DELAY_MS = 8_000;
+const MAP_PIN_IDLE_WAIT_MS = 40_000;
 
 let inflight: Promise<StampLibrarySyncResult> | null = null;
 let syncing = false;
+/** Session-once deferred start from the map (survives screen unmount). */
+let mapKickoffScheduled = false;
 const listeners = new Set<Listener>();
 
 function emit(): void {
@@ -37,6 +46,25 @@ export function subscribeStampLibrarySync(listener: Listener): () => void {
   return () => {
     listeners.delete(listener);
   };
+}
+
+/**
+ * Once per JS session: wait for first-paint settle, then start the album scan.
+ * Not cancelled when the map unmounts — that used to drop the only kickoff.
+ */
+export function scheduleStampLibrarySyncFromMap(): void {
+  if (mapKickoffScheduled) {
+    return;
+  }
+  mapKickoffScheduled = true;
+  void (async () => {
+    await new Promise((r) => setTimeout(r, MAP_KICKOFF_DELAY_MS));
+    const deadline = Date.now() + MAP_PIN_IDLE_WAIT_MS;
+    while (isPinExportBusy() && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    void startStampLibrarySync();
+  })();
 }
 
 export type StartStampLibrarySyncOptions = {
@@ -76,6 +104,7 @@ export function startStampLibrarySync(
   }
 
   syncing = true;
+  setFullAlbumScanBusy(true);
   emit();
   const run = syncStampsFromLibrary()
     .then((result) => {
@@ -93,6 +122,7 @@ export function startStampLibrarySync(
     .finally(() => {
       inflight = null;
       syncing = false;
+      setFullAlbumScanBusy(false);
       emit();
     });
   inflight = run;

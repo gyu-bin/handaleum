@@ -26,6 +26,20 @@ import {
 } from './dummyPhotos';
 import { readPinThumbFromDisk, writePinThumbToDisk } from './pinThumbCache';
 
+/**
+ * Full-album stamp GPS scan in flight. Month warmup checks this so two
+ * MediaLibrary scanners never overlap (main heat source on the map).
+ */
+let fullAlbumScanBusy = false;
+
+export function setFullAlbumScanBusy(busy: boolean): void {
+  fullAlbumScanBusy = busy;
+}
+
+export function isFullAlbumScanBusy(): boolean {
+  return fullAlbumScanBusy;
+}
+
 /** Larger pages = fewer native round-trips when listing a month. */
 const PAGE_SIZE = 200;
 /**
@@ -406,6 +420,12 @@ export async function loadAllLocatedPhotos(
     if (grew) {
       await onPartial?.(photos.slice());
     }
+    // Full-album scans used to run batches back-to-back and melt the device
+    // while the user was still on the map. Same yield as the month path.
+    const remaining = uncached.length - (i + chunk.length);
+    if (remaining > 0) {
+      await new Promise((r) => setTimeout(r, BATCH_YIELD_MS));
+    }
   }
 
   if (retryFailedLocations && failed.length > 0) {
@@ -426,6 +446,10 @@ export async function loadAllLocatedPhotos(
       }
       if (grew) {
         await onPartial?.(photos.slice());
+      }
+      const remaining = failed.length - (i + chunk.length);
+      if (remaining > 0) {
+        await new Promise((r) => setTimeout(r, BATCH_YIELD_MS));
       }
     }
   }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Redirect, useRouter, type Href } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,7 +11,7 @@ import { theme } from '@/shared/constants/theme';
 
 import { useOnboarding } from '@/features/onboarding/hooks/useOnboarding';
 import { useStamps } from '@/features/stamps/hooks/useStamps';
-import { startStampLibrarySync } from '@/features/stamps/services/stampLibrarySyncRunner';
+import { scheduleStampLibrarySyncFromMap } from '@/features/stamps/services/stampLibrarySyncRunner';
 
 import { DEFAULT_MAP_ZOOM, MapCanvas } from '../components/MapCanvas';
 import { HomeNavBar } from '../components/HomeNavBar';
@@ -26,7 +26,6 @@ import { usePhotoPermission } from '../hooks/usePhotoPermission';
 import { usePinCovers } from '../hooks/usePinCovers';
 import { clusterPhotos, resetClusterCellCache } from '../services/cluster';
 import { isDevDummyPhotosEnabled } from '../services/dummyPhotos';
-import { isPinExportBusy } from '../services/mediaLibrary';
 import { startMonthImageWarmup } from '../services/monthImageWarmup';
 import type { MonthKey, PlaceCluster } from '../types';
 import { monthTimeBoundsIso } from '../utils/month';
@@ -87,6 +86,24 @@ export function MonthlyMapScreen() {
     [filteredPhotos, zoom],
   );
 
+  // Debounce zoom→recluster so every camera-idle tick doesn't remount markers.
+  const zoomTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onZoomChange = useCallback((next: number) => {
+    if (zoomTimerRef.current) {
+      clearTimeout(zoomTimerRef.current);
+    }
+    zoomTimerRef.current = setTimeout(() => {
+      setZoom(next);
+    }, 180);
+  }, []);
+  useEffect(() => {
+    return () => {
+      if (zoomTimerRef.current) {
+        clearTimeout(zoomTimerRef.current);
+      }
+    };
+  }, []);
+
   const { places: journeyPlaces, isResolving } = useMonthJourney(filteredPhotos, {
     // Disk hydrate runs always; network geocode waits until the month GPS pass
     // finishes so progressive batches don't cancel/restart the queue (main jank).
@@ -95,29 +112,16 @@ export function MonthlyMapScreen() {
   });
   const { unseenCount } = useStamps();
 
-  // Full-album stamp sync is heavy — never race the open month's GPS / pin bake.
+  // Full-album stamp sync — session-once, after first month GPS finishes.
   useEffect(() => {
     if (!isReady || !hasLibraryAccess || isFetching) {
       return;
     }
-    let cancelled = false;
-    const run = async () => {
-      await new Promise((r) => setTimeout(r, 8000));
-      const deadline = Date.now() + 40_000;
-      while (!cancelled && isPinExportBusy() && Date.now() < deadline) {
-        await new Promise((r) => setTimeout(r, 500));
-      }
-      if (!cancelled) {
-        void startStampLibrarySync();
-      }
-    };
-    void run();
-    return () => {
-      cancelled = true;
-    };
+    scheduleStampLibrarySyncFromMap();
   }, [hasLibraryAccess, isReady, isFetching]);
 
-  // Warm only visible pin covers/seeds — never the whole month (10k–50k melts).
+  // Warm pin covers + a stable photo sample — not cluster list (zoom reclusters
+  // used to re-enqueue Image.prefetch on every idle tick).
   const imageWarmKey = useMemo(() => {
     const photos = data?.allPhotos;
     if (!photos || photos.length === 0) {
@@ -133,26 +137,20 @@ export function MonthlyMapScreen() {
   }, [month]);
 
   useEffect(() => {
-    if (!imageWarmKey) {
+    if (!imageWarmKey || !data?.allPhotos) {
       return;
     }
-    const priority: string[] = [];
-    for (const cluster of clusters) {
-      const placeKey = placeBucketKey(cluster.centerLat, cluster.centerLng);
-      const coverId = covers[placeKey];
-      if (coverId) {
-        priority.push(coverId);
-      }
-      const seed = cluster.photos[0]?.assetId;
-      if (seed) {
-        priority.push(seed);
-      }
+    const priority: string[] = [...Object.values(covers)];
+    const sample = data.allPhotos;
+    const step = Math.max(1, Math.floor(sample.length / 40));
+    for (let i = 0; i < sample.length && priority.length < 80; i += step) {
+      priority.push(sample[i]!.assetId);
     }
     startMonthImageWarmup({
       month,
       assetIds: priority,
     });
-  }, [imageWarmKey, clusters, covers, month]);
+  }, [imageWarmKey, covers, month, data?.allPhotos]);
 
 
   const onSelectCluster = useCallback((cluster: PlaceCluster) => {
@@ -307,7 +305,7 @@ export function MonthlyMapScreen() {
           <MapCanvas
             clusters={clusters}
             frameKey={month}
-            onZoomChange={setZoom}
+            onZoomChange={onZoomChange}
             onSelectCluster={onSelectCluster}
             selectedClusterId={selected?.id ?? null}
             themeId={themeId}

@@ -1,5 +1,6 @@
 import * as Location from 'expo-location';
 
+import { isAppForeground, waitForAppForeground } from './appForeground';
 import { dummyGeocodeNear } from './dummyPhotos';
 
 /**
@@ -20,7 +21,8 @@ export type GeocodePriority = 'interactive' | 'background';
 
 const GAP_MS: Record<GeocodePriority, number> = {
   interactive: 90,
-  background: 300,
+  // Slow lane — stamp album scan. Keep Location cool while the user pans.
+  background: 500,
 };
 const MAX_BACKOFF_MS = 4000;
 const FIRST_BACKOFF_MS = 300;
@@ -114,8 +116,16 @@ async function work(): Promise<void> {
   working = true;
   try {
     while (true) {
-      const job = queues.interactive.shift() ?? queues.background.shift();
+      // Interactive always first. Background only while the app is foreground —
+      // pocketed phones were finishing the whole album scan and heating up.
+      const job =
+        queues.interactive.shift() ??
+        (isAppForeground() ? queues.background.shift() : undefined);
       if (!job) {
+        if (queues.background.length > 0 && !isAppForeground()) {
+          await waitForAppForeground();
+          continue;
+        }
         return;
       }
       await sleep(GAP_MS[job.priority] + backoffMs);

@@ -105,12 +105,15 @@ export function MapClusterMarker({
     };
   }, [displayAssetId]);
 
+  // Bake only the selected pin. Framing every visible marker via view-shot
+  // was a major heat source during pan/zoom; raw thumbs already look fine.
   useEffect(() => {
-    if (!photoUri || !displayAssetId) {
+    if (!selected || !photoUri || !displayAssetId) {
+      setFramedUri(null);
       return;
     }
     let cancelled = false;
-    void requestMapPinBake(photoUri, selected, cardSize)
+    void requestMapPinBake(photoUri, true, cardSize)
       .then((baked) => {
         if (!cancelled && baked && loadedAssetRef.current === displayAssetId) {
           setFramedUri(baked);

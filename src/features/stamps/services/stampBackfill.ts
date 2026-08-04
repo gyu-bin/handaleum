@@ -1,5 +1,9 @@
 import * as Location from 'expo-location';
 
+import {
+  isAppForeground,
+  waitForAppForeground,
+} from '@/features/photos/services/appForeground';
 import { loadAllLocatedPhotos } from '@/features/photos/services/mediaLibrary';
 import type { PhotoRef } from '@/features/photos/types';
 import { currentMonthKey } from '@/features/photos/utils/month';
@@ -41,10 +45,12 @@ export function getStampScanDebug(): StampScanDebug {
   return scanDebug;
 }
 
-/** GPS-only phase — keep batches modest to avoid jetsam. */
-const LIBRARY_GPS_BATCH = 24;
+/** GPS-only phase — match month path (8). 24 melted the UI during map use. */
+const LIBRARY_GPS_BATCH = 8;
 /** Geocode / stamp write chunks so the grid fills while the rest runs. */
-const GEOCODE_PHOTO_CHUNK = 400;
+const GEOCODE_PHOTO_CHUNK = 200;
+/** Pause between geocode chunks so gestures / interactive place resolve breathe. */
+const GEOCODE_CHUNK_YIELD_MS = 250;
 /** How often to re-check assets previously cached as no-GPS (iCloud etc.). */
 const DEEP_RECHECK_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -121,12 +127,14 @@ export async function syncStampsFromLibrary(): Promise<StampLibrarySyncResult> {
 
   // Phase 1 — every album photo with GPS (all years). Geocode only after.
   // Deep recheck (iCloud / prior no-GPS) is weekly — every visit would take hours.
+  // Pause while backgrounded so a pocketed phone doesn't keep scanning.
   const photos = await loadAllLocatedPhotos({
     forceRealLibrary: true,
     locationBatchSize: LIBRARY_GPS_BATCH,
     retryFailedLocations: true,
     networkLocationFallback: deepRecheck,
     recheckCachedNoLocation: deepRecheck,
+    shouldContinue: isAppForeground,
   });
 
   console.warn(
@@ -146,9 +154,13 @@ export async function syncStampsFromLibrary(): Promise<StampLibrarySyncResult> {
   };
   let totalAdded = 0;
   for (let i = 0; i < photos.length; i += GEOCODE_PHOTO_CHUNK) {
+    await waitForAppForeground();
     const chunk = photos.slice(i, i + GEOCODE_PHOTO_CHUNK);
     totalAdded += await ingestPlaces(chunk, fallbackMonth, silent);
     scanDebug = { ...scanDebug, chunkDone: scanDebug.chunkDone + 1 };
+    if (i + GEOCODE_PHOTO_CHUNK < photos.length) {
+      await new Promise((r) => setTimeout(r, GEOCODE_CHUNK_YIELD_MS));
+    }
   }
 
   if (wasEmpty) {

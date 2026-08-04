@@ -3,7 +3,18 @@ import { queryClient } from '@/lib/queryClient';
 import { photosQueryKeys } from '../hooks/photosQueryKeys';
 import type { MonthKey, MonthSummary } from '../types';
 import { isAppForeground, waitForAppForeground } from './appForeground';
-import { loadMonthSummaries, loadMonthlyPhotos } from './mediaLibrary';
+import {
+  isFullAlbumScanBusy,
+  loadMonthSummaries,
+  loadMonthlyPhotos,
+} from './mediaLibrary';
+
+/** Don't race MediaLibrary with the full-album stamp GPS scan. */
+async function waitWhileAlbumScan(): Promise<void> {
+  while (isFullAlbumScanBusy()) {
+    await new Promise((r) => setTimeout(r, 400));
+  }
+}
 
 /**
  * After the viewed month finishes, warm GPS caches for other months:
@@ -56,6 +67,7 @@ async function warmOne(month: MonthKey): Promise<void> {
   activeMonth = month;
   try {
     await waitForAppForeground();
+    await waitWhileAlbumScan();
     await queryClient.fetchQuery({
       queryKey: photosQueryKeys.monthly(month),
       queryFn: () =>
@@ -63,7 +75,8 @@ async function warmOne(month: MonthKey): Promise<void> {
           onPartial: (partial) => {
             queryClient.setQueryData(photosQueryKeys.monthly(month), partial);
           },
-          shouldContinue: isAppForeground,
+          // Stop a month mid-scan if the album stamp pass starts (map deferred it).
+          shouldContinue: () => isAppForeground() && !isFullAlbumScanBusy(),
         }),
     });
   } finally {
@@ -81,6 +94,7 @@ async function drainQueue(): Promise<void> {
   try {
     while (queue.length > 0) {
       await waitForAppForeground();
+      await waitWhileAlbumScan();
       const next = queue.shift();
       if (next == null) {
         break;

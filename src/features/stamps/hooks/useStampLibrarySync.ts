@@ -8,9 +8,13 @@ import {
   subscribeStampLibrarySync,
 } from '../services/stampLibrarySyncRunner';
 
+/** Fallback if the user opens 발도장 without visiting the map first. */
+const STAMP_SCREEN_SYNC_DELAY_MS = 12_000;
+
 /**
  * Keeps stamp UI in sync with the single-flight full-album scan.
- * Starts the scan when photo library access is ready (also started from map).
+ * Starts only after a long delay — the map owns the earlier deferred kickoff
+ * so we don't race first paint / pin bake with an immediate album GPS pass.
  */
 export function useStampLibrarySync(permission: {
   isReady: boolean;
@@ -33,7 +37,10 @@ export function useStampLibrarySync(permission: {
     if (!hasAccess) {
       return;
     }
-    void startStampLibrarySync();
+    const timer = setTimeout(() => {
+      void startStampLibrarySync();
+    }, STAMP_SCREEN_SYNC_DELAY_MS);
+    return () => clearTimeout(timer);
   }, [permission.isReady, permission.status]);
 
   return { syncing };
