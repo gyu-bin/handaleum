@@ -88,25 +88,24 @@ export function MonthlyMapScreen() {
   );
 
   const { places: journeyPlaces, isResolving } = useMonthJourney(filteredPhotos, {
-    // Geocode as soon as GPS photos exist. resolvePlace hits disk/memory first,
-    // so progressive batches mostly warm new buckets instead of re-hitting CLGeocoder.
-    // Waiting for !isFetching left cold start stuck on "사진 n장" until the whole month finished.
-    enabled: Boolean(data),
+    // Disk hydrate runs always; network geocode waits until the month GPS pass
+    // finishes so progressive batches don't cancel/restart the queue (main jank).
+    enabled: Boolean(data) && !isFetching,
     resetKey: month,
   });
   const { unseenCount } = useStamps();
 
-  // Stamp sync yields to pin exports; still wait for a first pin wave first.
+  // Full-album stamp sync is heavy — never race the open month's GPS / pin bake.
   useEffect(() => {
-    if (!isReady || !hasLibraryAccess) {
+    if (!isReady || !hasLibraryAccess || isFetching) {
       return;
     }
     let cancelled = false;
     const run = async () => {
-      await new Promise((r) => setTimeout(r, 2500));
-      const deadline = Date.now() + 25_000;
+      await new Promise((r) => setTimeout(r, 8000));
+      const deadline = Date.now() + 40_000;
       while (!cancelled && isPinExportBusy() && Date.now() < deadline) {
-        await new Promise((r) => setTimeout(r, 400));
+        await new Promise((r) => setTimeout(r, 500));
       }
       if (!cancelled) {
         void startStampLibrarySync();
@@ -116,7 +115,7 @@ export function MonthlyMapScreen() {
     return () => {
       cancelled = true;
     };
-  }, [hasLibraryAccess, isReady]);
+  }, [hasLibraryAccess, isReady, isFetching]);
 
   // Warm only visible pin covers/seeds — never the whole month (10k–50k melts).
   const imageWarmKey = useMemo(() => {

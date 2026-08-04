@@ -64,16 +64,25 @@ export function useMonthlyPhotos(month: MonthKey, options?: { enabled?: boolean 
     placeholderData: keepPreviousData,
   });
 
-  // After the viewed month fully resolves, warm neighbors then the rest.
+  // After the viewed month fully resolves, warm neighbors — delayed so pin
+  // bake / first interaction aren't fighting another MediaLibrary pass.
   useEffect(() => {
     if (!enabled || !query.isSuccess || query.isFetching) {
       return;
     }
-    startMonthWarmup(month);
+    const timer = setTimeout(() => {
+      startMonthWarmup(month);
+    }, 6000);
+    return () => clearTimeout(timer);
   }, [enabled, month, query.isSuccess, query.isFetching]);
 
   const data: MonthlyPhotosData | undefined = useMemo(() => {
     if (!query.data) {
+      return undefined;
+    }
+    // keepPreviousData can flash the previous month under the new month's
+    // time filter (every pin disappears). Treat placeholder as "no data".
+    if (query.isPlaceholderData) {
       return undefined;
     }
     const { photos, homeExcludedCount } = excludeHomePhotos(
@@ -86,7 +95,7 @@ export function useMonthlyPhotos(month: MonthKey, options?: { enabled?: boolean 
       allPhotos: query.data.photos,
       homeExcludedCount,
     };
-  }, [query.data, home]);
+  }, [query.data, query.isPlaceholderData, home]);
 
   return { ...query, data };
 }

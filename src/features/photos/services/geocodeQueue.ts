@@ -1,5 +1,7 @@
 import * as Location from 'expo-location';
 
+import { dummyGeocodeNear } from './dummyPhotos';
+
 /**
  * Serial, rate-limited access to CLGeocoder with two priorities.
  *
@@ -71,6 +73,13 @@ function penalize(): void {
 }
 
 async function runJob(job: Job): Promise<Location.LocationGeocodedAddress | null> {
+  // Sample pins ship canned iOS-shaped addresses — avoid CLGeocoder entirely.
+  const dummy = dummyGeocodeNear(job.lat, job.lng);
+  if (dummy) {
+    doneCount += 1;
+    return dummy;
+  }
+
   for (let attempt = 0; attempt < ATTEMPTS; attempt += 1) {
     if (attempt > 0) {
       await sleep(GAP_MS[job.priority] + backoffMs);

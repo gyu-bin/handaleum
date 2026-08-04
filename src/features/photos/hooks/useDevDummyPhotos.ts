@@ -6,6 +6,7 @@ import {
   isDevDummyPhotosEnabled,
   setDevDummyPhotosEnabled,
 } from '../services/dummyPhotos';
+import { clearPlaceResolveCache } from '../services/placeCache';
 import { photosQueryKeys } from './photosQueryKeys';
 
 const listeners = new Set<() => void>();
@@ -36,6 +37,7 @@ export function useDevDummyPhotos(): {
 
   const setEnabled = useCallback((next: boolean) => {
     setDevDummyPhotosEnabled(next);
+    clearPlaceResolveCache();
     void queryClient.invalidateQueries({ queryKey: photosQueryKeys.all });
     emit();
   }, []);

@@ -34,7 +34,7 @@ const PAGE_SIZE = 200;
  */
 const LOCATION_BATCH = 8;
 /** Cap simultaneous ImageManipulator exports (map pin thumbs). */
-const PIN_EXPORT_CONCURRENCY = 3;
+const PIN_EXPORT_CONCURRENCY = 2;
 /** Cap simultaneous Android URI lookups while scrolling grids. */
 const ANDROID_URI_CONCURRENCY = 6;
 /** Bound in-memory URI maps so multi-month sessions don't grow forever. */
@@ -179,12 +179,14 @@ async function pauseWhileBackgrounded(shouldContinue?: () => boolean): Promise<v
 }
 
 /** Min gap between progressive UI updates — avoids re-clustering every batch. */
-const PARTIAL_MIN_MS = 400;
+const PARTIAL_MIN_MS = 900;
 
 /** Soft-retry assets once cached as no-GPS (iCloud metadata catch-up). */
 const softRecheckedNoLoc = new Set<string>();
 /** Unbounded soft-recheck of every "x" stalls month open on screenshot-heavy libraries. */
-const SOFT_RECHECK_CAP = 60;
+const SOFT_RECHECK_CAP = 120;
+/** Yield to the UI between GPS batches so map gestures stay responsive. */
+const BATCH_YIELD_MS = 48;
 
 /**
  * Load all camera-roll photos for a month via expo-media-library.
@@ -265,10 +267,16 @@ export async function loadMonthlyPhotos(
       } else if (result != null) {
         photos.push(result);
       }
+      // null = transient failure — leave uncached for the next open (do not
+      // bump noLocationCount; that made photos look "eaten" with no notice).
     }
     const remaining = uncached.length - (i + chunk.length);
     if (photos.length > 0 || remaining <= 0) {
       emitPartial(remaining <= 0);
+    }
+    // Let React paint / gestures run between native MediaLibrary bursts.
+    if (remaining > 0) {
+      await new Promise((r) => setTimeout(r, BATCH_YIELD_MS));
     }
   }
 

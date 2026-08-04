@@ -23,12 +23,12 @@ function clamp01(n: number): number {
   return Math.min(1, Math.max(0, n));
 }
 
-/** Keep the thumb fluid; don't re-cluster the map on every touch sample. */
-const EMIT_INTERVAL_MS = 100;
-
 /**
  * Single-thumb slider controlling the upper bound (`to`).
  * `from` stays at the month start (bounds.from).
+ *
+ * Visual thumb updates live while dragging; parent `onChange` (map recluster)
+ * fires only on gesture end — mid-drag emits were the main slider jank source.
  *
  * Uses `onStart` (gesture ACTIVE), not `onBegin` — Begin can fire then fail on
  * the first touch, which looked like “slide once, nothing happens”.
@@ -54,34 +54,30 @@ export function TimeSlider({ bounds, value, onChange }: TimeSliderProps) {
   spanRef.current = span;
   const trackWidthRef = useRef(trackWidth);
   trackWidthRef.current = trackWidth;
-  const lastEmitAtRef = useRef(0);
   const draggingRef = useRef(false);
 
-  const emit = (nextRatio: number, force: boolean) => {
-    const now = performance.now();
-    if (!force && now - lastEmitAtRef.current < EMIT_INTERVAL_MS) {
-      return;
-    }
-    lastEmitAtRef.current = now;
+  const commit = (nextRatio: number) => {
     onChangeRef.current({
       from: boundsFromRef.current,
       to: new Date(startMsRef.current + nextRatio * spanRef.current).toISOString(),
     });
   };
 
-  const setFromX = (x: number, forceEmit: boolean) => {
+  const ratioFromX = (x: number): number | null => {
     const width = trackWidthRef.current;
     if (width <= 0) {
-      return;
+      return null;
     }
-    const next = clamp01(x / width);
-    setDragRatio(next);
-    emit(next, forceEmit);
+    return clamp01(x / width);
   };
 
   const endDrag = (x: number) => {
     draggingRef.current = false;
-    setFromX(x, true);
+    const next = ratioFromX(x);
+    if (next != null) {
+      setDragRatio(next);
+      commit(next);
+    }
     setDragRatio(null);
   };
 
@@ -95,13 +91,19 @@ export function TimeSlider({ bounds, value, onChange }: TimeSliderProps) {
         .shouldCancelWhenOutside(false)
         .onStart((e) => {
           draggingRef.current = true;
-          setFromX(e.x, true);
+          const next = ratioFromX(e.x);
+          if (next != null) {
+            setDragRatio(next);
+          }
         })
         .onUpdate((e) => {
           if (!draggingRef.current) {
             draggingRef.current = true;
           }
-          setFromX(e.x, false);
+          const next = ratioFromX(e.x);
+          if (next != null) {
+            setDragRatio(next);
+          }
         })
         .onEnd((e) => {
           endDrag(e.x);

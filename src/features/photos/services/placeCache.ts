@@ -11,7 +11,7 @@ import type { ResolvedPlace } from '../types';
 /** ~110m buckets — nearby photos share one reverse-geocode call. */
 export const BUCKET_DECIMALS = 3;
 /** Bump when parseGeocodedPlace / gu recovery changes (invalidates disk keys). */
-const CACHE_REV = 'v17';
+const CACHE_REV = 'v18';
 
 const placeCache = new Map<string, ResolvedPlace>();
 /** Buckets known absent from disk — avoids a sync SQLite read per repaint. */
