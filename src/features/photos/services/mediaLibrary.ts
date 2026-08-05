@@ -41,6 +41,8 @@ export function isFullAlbumScanBusy(): boolean {
 
 /** Larger pages = fewer native round-trips when listing a month. */
 const PAGE_SIZE = 200;
+/** Full-album listing — bigger pages cut getAssetsAsync round-trips hard. */
+const LIBRARY_PAGE_SIZE = 500;
 /**
  * Parallel getAssetInfoAsync for uncached GPS. Keep low — large months used to
  * fan out 40 native reads and jetsam the process.
@@ -365,10 +367,67 @@ export type LoadAllLocatedPhotosOptions = {
   recheckCachedNoLocation?: boolean;
 };
 
+async function resolveUncachedLocations(
+  uncached: Asset[],
+  options: {
+    batchSize: number;
+    yieldMs: number;
+    yieldToPinExports: boolean;
+    shouldContinue?: () => boolean;
+    locOpts: { networkFallback?: boolean };
+    /** Called after each native batch with how many assets were examined. */
+    onBatch?: (update: {
+      located: PhotoRef[];
+      failed: Asset[];
+      examined: number;
+    }) => void | Promise<void>;
+  },
+): Promise<{ located: PhotoRef[]; failed: Asset[] }> {
+  const located: PhotoRef[] = [];
+  const failed: Asset[] = [];
+  const { batchSize, yieldMs, yieldToPinExports, shouldContinue, locOpts } =
+    options;
+
+  for (let i = 0; i < uncached.length; i += batchSize) {
+    await pauseWhileBackgrounded(shouldContinue);
+    if (yieldToPinExports) {
+      await waitWhilePinExportBusy();
+    }
+    await pauseWhileBackgrounded(shouldContinue);
+    const chunk = uncached.slice(i, i + batchSize);
+    const results = await Promise.all(
+      chunk.map((asset) => fetchLocation(asset, locOpts)),
+    );
+    const batchLocated: PhotoRef[] = [];
+    const batchFailed: Asset[] = [];
+    for (let j = 0; j < results.length; j++) {
+      const result = results[j];
+      if (result != null && result !== 'no-location') {
+        batchLocated.push(result);
+        located.push(result);
+      } else if (result === null) {
+        batchFailed.push(chunk[j]!);
+        failed.push(chunk[j]!);
+      }
+    }
+    await options.onBatch?.({
+      located: batchLocated,
+      failed: batchFailed,
+      examined: chunk.length,
+    });
+    const remaining = uncached.length - (i + chunk.length);
+    if (remaining > 0 && yieldMs > 0) {
+      await new Promise((r) => setTimeout(r, yieldMs));
+    }
+  }
+
+  return { located, failed };
+}
+
 /**
- * All library photos that have GPS — cache hits first, then uncached batches.
- * Used for 발도장 historical backfill (pass forceRealLibrary).
- * Does not reverse-geocode — callers should do that after the full list returns.
+ * All library photos that have GPS.
+ * Streams MediaLibrary pages → GPS resolve (does not wait to list the whole
+ * album first). Does not reverse-geocode.
  */
 export async function loadAllLocatedPhotos(
   options?: LoadAllLocatedPhotosOptions,
@@ -409,104 +468,110 @@ export async function loadAllLocatedPhotos(
     return photos;
   }
 
-  const assets = await collectAssets({});
   const photos: PhotoRef[] = [];
-  const uncached: Asset[] = [];
+  const allFailed: Asset[] = [];
+  let listed = 0;
+  let scanned = 0;
+  let after: string | undefined;
+  let hasNextPage = true;
 
-  for (const asset of assets) {
-    const hit = fromCache(asset);
-    if (hit === 'miss') {
-      uncached.push(asset);
-    } else if (hit === 'no-location') {
-      if (recheckCachedNoLocation) {
+  const emit = () => {
+    onScanProgress?.({
+      assetTotal: hasNextPage ? listed + LIBRARY_PAGE_SIZE : listed,
+      assetScanned: scanned,
+      locatedCount: photos.length,
+    });
+  };
+
+  while (hasNextPage) {
+    await pauseWhileBackgrounded(shouldContinue);
+    const page = await getAssetsAsync({
+      first: LIBRARY_PAGE_SIZE,
+      after,
+      mediaType: MediaType.photo,
+      sortBy: [[SortBy.creationTime, false]],
+    });
+    hasNextPage = page.hasNextPage;
+    after = page.endCursor;
+    listed += page.assets.length;
+
+    const uncached: Asset[] = [];
+    let pageGrew = false;
+    for (const asset of page.assets) {
+      const hit = fromCache(asset);
+      if (hit === 'miss') {
         uncached.push(asset);
+      } else if (hit === 'no-location') {
+        if (recheckCachedNoLocation) {
+          uncached.push(asset);
+        } else {
+          scanned += 1;
+        }
+      } else {
+        photos.push(hit);
+        scanned += 1;
+        pageGrew = true;
       }
-    } else {
-      photos.push(hit);
     }
+    emit();
+    if (pageGrew) {
+      await onPartial?.(photos.slice());
+    }
+
+    if (uncached.length === 0) {
+      continue;
+    }
+
+    const { failed } = await resolveUncachedLocations(uncached, {
+      batchSize,
+      yieldMs,
+      yieldToPinExports,
+      shouldContinue,
+      locOpts,
+      onBatch: async ({ located: batchLocated, examined }) => {
+        photos.push(...batchLocated);
+        scanned += examined;
+        emit();
+        if (batchLocated.length > 0) {
+          await onPartial?.(photos.slice());
+        }
+      },
+    });
+    allFailed.push(...failed);
   }
 
-  const cachedDone = assets.length - uncached.length;
   onScanProgress?.({
-    assetTotal: assets.length,
-    assetScanned: cachedDone,
+    assetTotal: listed,
+    assetScanned: scanned,
     locatedCount: photos.length,
   });
 
-  if (photos.length > 0) {
-    await onPartial?.(photos.slice());
-  }
-
-  const failed: Asset[] = [];
-  let uncachedScanned = 0;
-
-  for (let i = 0; i < uncached.length; i += batchSize) {
-    await pauseWhileBackgrounded(shouldContinue);
-    if (yieldToPinExports) {
-      await waitWhilePinExportBusy();
-    }
-    await pauseWhileBackgrounded(shouldContinue);
-    const chunk = uncached.slice(i, i + batchSize);
-    const results = await Promise.all(
-      chunk.map((asset) => fetchLocation(asset, locOpts)),
-    );
-    let grew = false;
-    for (let j = 0; j < results.length; j++) {
-      const result = results[j];
-      if (result != null && result !== 'no-location') {
-        photos.push(result);
-        grew = true;
-      } else if (result === null) {
-        failed.push(chunk[j]!);
-      }
-    }
-    uncachedScanned += chunk.length;
-    onScanProgress?.({
-      assetTotal: assets.length,
-      assetScanned: cachedDone + uncachedScanned,
-      locatedCount: photos.length,
-    });
-    if (grew) {
-      await onPartial?.(photos.slice());
-    }
-    const remaining = uncached.length - (i + chunk.length);
-    if (remaining > 0 && yieldMs > 0) {
-      await new Promise((r) => setTimeout(r, yieldMs));
-    }
-  }
-
-  if (retryFailedLocations && failed.length > 0) {
-    for (let i = 0; i < failed.length; i += batchSize) {
-      await pauseWhileBackgrounded(shouldContinue);
-      if (yieldToPinExports) {
-        await waitWhilePinExportBusy();
-      }
-      await pauseWhileBackgrounded(shouldContinue);
-      const chunk = failed.slice(i, i + batchSize);
-      const results = await Promise.all(
-        chunk.map((asset) => fetchLocation(asset, locOpts)),
-      );
-      let grew = false;
-      for (const result of results) {
-        if (result != null && result !== 'no-location') {
-          photos.push(result);
-          grew = true;
+  if (retryFailedLocations && allFailed.length > 0) {
+    await resolveUncachedLocations(allFailed, {
+      batchSize,
+      yieldMs,
+      yieldToPinExports,
+      shouldContinue,
+      locOpts,
+      onBatch: async ({ located: batchLocated }) => {
+        photos.push(...batchLocated);
+        onScanProgress?.({
+          assetTotal: listed,
+          assetScanned: listed,
+          locatedCount: photos.length,
+        });
+        if (batchLocated.length > 0) {
+          await onPartial?.(photos.slice());
         }
-      }
-      onScanProgress?.({
-        assetTotal: assets.length,
-        assetScanned: assets.length,
-        locatedCount: photos.length,
-      });
-      if (grew) {
-        await onPartial?.(photos.slice());
-      }
-      const remaining = failed.length - (i + chunk.length);
-      if (remaining > 0 && yieldMs > 0) {
-        await new Promise((r) => setTimeout(r, yieldMs));
-      }
-    }
+      },
+    });
   }
+
+  onScanProgress?.({
+    assetTotal: listed,
+    assetScanned: listed,
+    locatedCount: photos.length,
+  });
 
   return photos;
 }

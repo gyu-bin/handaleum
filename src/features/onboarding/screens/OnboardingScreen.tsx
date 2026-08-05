@@ -156,7 +156,6 @@ export function OnboardingScreen() {
           onPress={() => void onStart()}
           style={styles.startBtn}
         />
-        <Text style={styles.ageNote}>{strings.onboarding.ageNote}</Text>
       </View>
     </SafeAreaView>
   );
@@ -254,11 +253,5 @@ const styles = StyleSheet.create({
   },
   startBtn: {
     alignSelf: 'stretch',
-  },
-  ageNote: {
-    ...theme.type.micro,
-    fontFamily: theme.fonts.sans,
-    color: theme.colors.subtle,
-    textAlign: 'center',
   },
 });

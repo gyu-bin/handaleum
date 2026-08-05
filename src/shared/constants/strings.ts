@@ -70,7 +70,6 @@ export const strings = {
     photoToggle: '앨범에서 이번 달·지난 기록을 불러와요',
     photoToggleHint: '사진은 기기에만 두고, 위치만 읽어 지도를 그립니다.',
     start: '시작하기',
-    ageNote: '만 14세 이상만 이용할 수 있습니다.',
     /** Kept for settings replay / legacy callers. */
     slides: [
       {

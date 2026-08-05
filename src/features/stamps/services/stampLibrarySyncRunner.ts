@@ -23,7 +23,8 @@ type Listener = (syncing: boolean) => void;
 const SYNC_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
 /** Brief settle before album GPS — long waits made first indexing feel stuck. */
 const MAP_KICKOFF_DELAY_MS = 1_200;
-const MAP_PIN_IDLE_WAIT_MS = 8_000;
+/** Cap how long we wait for map pin thumbs before starting the album scan. */
+const MAP_PIN_IDLE_WAIT_MS = 2_000;
 
 let inflight: Promise<StampLibrarySyncResult> | null = null;
 let syncing = false;

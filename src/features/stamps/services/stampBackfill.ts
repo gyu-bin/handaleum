@@ -97,9 +97,12 @@ export function getStampScanDebug(): StampScanDebug {
 
 /**
  * Full-album GPS batch — local EXIF only on the hot path.
+ * Keep modest: 64–128 + yield 0 melted phones; month path uses 8.
  * (Network/iCloud fallback is a separate weekly pass; it destroys throughput.)
  */
-const LIBRARY_GPS_BATCH = 64;
+const LIBRARY_GPS_BATCH = 24;
+/** Pause between GPS batches so the SoC can cool (and the UI can breathe). */
+const LIBRARY_GPS_YIELD_MS = 40;
 /** Geocode / stamp write chunks so the grid fills while the rest runs. */
 const GEOCODE_PHOTO_CHUNK = 500;
 /** Short yield — keep UI alive without stalling 발자취-like pace. */
@@ -160,12 +163,6 @@ export async function syncStampsFromLibrary(): Promise<StampLibrarySyncResult> {
   // First fill: silent (no earn spam). Later runs: unseen for truly new places.
   const silent = wasEmpty;
 
-  if (!(await ensureGeocodePermission())) {
-    console.warn('[stamps] library sync skipped — location permission denied');
-    setProgress(IDLE_PROGRESS);
-    return { added: 0, photoCount: 0 };
-  }
-
   const lastSync = getStampsLibrarySyncAt();
   // Weekly iCloud recheck only — never on first fill. First open must stay
   // local-metadata-fast (~발자취). wasEmpty||lastSync===0 used to force
@@ -186,15 +183,15 @@ export async function syncStampsFromLibrary(): Promise<StampLibrarySyncResult> {
     true,
   );
 
-  // Phase 1 — every album photo with GPS (all years). Geocode only after.
-  // Deep recheck (iCloud / prior no-GPS) is weekly — every visit would take hours.
-  // Pause while backgrounded so a pocketed phone doesn't keep scanning.
+  // Phase 1 — MediaLibrary GPS only (no Location permission needed).
+  // Stream pages so we don't wait to list 전체 앨범 before reading EXIF.
   const photos = await loadAllLocatedPhotos({
     forceRealLibrary: true,
     locationBatchSize: LIBRARY_GPS_BATCH,
-    batchYieldMs: 0,
-    yieldToPinExports: false,
-    retryFailedLocations: true,
+    batchYieldMs: LIBRARY_GPS_YIELD_MS,
+    // Don't fight map pin ImageManipulator — concurrent native work = heat.
+    yieldToPinExports: true,
+    retryFailedLocations: false,
     networkLocationFallback: deepRecheck,
     recheckCachedNoLocation: deepRecheck,
     shouldContinue: isAppForeground,
@@ -215,6 +212,13 @@ export async function syncStampsFromLibrary(): Promise<StampLibrarySyncResult> {
     'photos — geocoding places',
     deepRecheck ? '(deep)' : '(incremental)',
   );
+
+  // Location permission only for reverse-geocode (동 이름).
+  if (!(await ensureGeocodePermission())) {
+    console.warn('[stamps] geocode skipped — location permission denied');
+    setProgress({ ...progress, phase: 'done', photoCount: photos.length }, true);
+    return { added: 0, photoCount: photos.length };
+  }
 
   // Phase 2 — places → stamps for the entire set (month picker never stamps).
   const chunkTotal = Math.max(1, Math.ceil(photos.length / GEOCODE_PHOTO_CHUNK));
