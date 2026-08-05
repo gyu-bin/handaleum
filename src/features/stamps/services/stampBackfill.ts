@@ -60,14 +60,18 @@ function emitProgress(): void {
 }
 
 let lastProgressEmitAt = 0;
-const PROGRESS_EMIT_MIN_MS = 120;
+/** Keep GPS count ticks visible — batches are small now. */
+const PROGRESS_EMIT_MIN_MS = 32;
 
 function setProgress(next: StampLibraryProgress, force = false): void {
+  const scannedChanged = next.assetScanned !== progress.assetScanned;
   progress = next;
   const now = Date.now();
+  // Always surface count ticks; only throttle identical GPS snapshots.
   if (
     !force &&
     next.phase === 'gps' &&
+    !scannedChanged &&
     now - lastProgressEmitAt < PROGRESS_EMIT_MIN_MS
   ) {
     return;
@@ -97,14 +101,15 @@ export function getStampScanDebug(): StampScanDebug {
 
 /**
  * Full-album GPS batch via AssetLocations native (PHAsset.location).
- * Large batches are cheap now — no per-asset contentEditingInput.
+ * Keep modest: Android still opens EXIF per id; huge bursts jump the
+ * banner by hundreds and can jetsam while the map is open.
  */
-const LIBRARY_GPS_BATCH = 250;
-/** Tiny yield so the banner/UI can paint between big native bursts. */
-const LIBRARY_GPS_YIELD_MS = 8;
+const LIBRARY_GPS_BATCH = 32;
+/** Yield between batches so the banner paints and the OS can reclaim. */
+const LIBRARY_GPS_YIELD_MS = 24;
 /** Geocode / stamp write chunks so the grid fills while the rest runs. */
 const GEOCODE_PHOTO_CHUNK = 500;
-/** Short yield — keep UI alive without stalling 발자취-like pace. */
+/** Short yield — keep UI alive without stalling the scan. */
 const GEOCODE_CHUNK_YIELD_MS = 16;
 /** How often to re-check assets previously cached as no-GPS (iCloud etc.). */
 const DEEP_RECHECK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -164,7 +169,7 @@ export async function syncStampsFromLibrary(): Promise<StampLibrarySyncResult> {
 
   const lastSync = getStampsLibrarySyncAt();
   // Weekly iCloud recheck only — never on first fill. First open must stay
-  // local-metadata-fast (~발자취). wasEmpty||lastSync===0 used to force
+  // local-metadata-fast. wasEmpty||lastSync===0 used to force
   // network downloads and capped scan at ~tens of assets/sec.
   const deepRecheck =
     lastSync > 0 && Date.now() - lastSync >= DEEP_RECHECK_MS;
@@ -188,8 +193,10 @@ export async function syncStampsFromLibrary(): Promise<StampLibrarySyncResult> {
     forceRealLibrary: true,
     locationBatchSize: LIBRARY_GPS_BATCH,
     batchYieldMs: LIBRARY_GPS_YIELD_MS,
-    // Kickoff already waited for pin idle; don't stall the full album on thumbs.
-    yieldToPinExports: false,
+    // Pause GPS batches while map pins decode — concurrent ImageManipulator
+    // + MediaLibrary is the usual iOS jetsam on home.
+    yieldToPinExports: true,
+    pinExportYieldMaxMs: Number.POSITIVE_INFINITY,
     retryFailedLocations: false,
     networkLocationFallback: deepRecheck,
     recheckCachedNoLocation: deepRecheck,

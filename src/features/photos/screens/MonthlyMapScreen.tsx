@@ -32,6 +32,12 @@ import type { MonthKey, PlaceCluster } from '../types';
 import { monthTimeBoundsIso } from '../utils/month';
 import { placeBucketKey } from '../utils/placeJourney';
 
+/** Own the progress store so scan ticks don't re-render the whole map tree. */
+function HomeIndexingBanner() {
+  const progress = useStampLibraryProgress();
+  return <IndexingBanner progress={progress} />;
+}
+
 function useTimeRangeForMonth(month: MonthKey): [TimeRange, (value: TimeRange) => void] {
   const bounds = useMemo(() => monthTimeBoundsIso(month), [month]);
   const [monthForRange, setMonthForRange] = useState(month);
@@ -70,7 +76,6 @@ export function MonthlyMapScreen() {
   const hasAccess = hasLibraryAccess || isDevDummyPhotosEnabled();
   const { month } = useCurrentMonth();
   const { covers, setCover } = usePinCovers(month);
-  const indexingProgress = useStampLibraryProgress();
   const { data, isPending, isFetching, isError, refetch, isRefetching } = useMonthlyPhotos(month, {
     enabled: isReady && hasAccess,
   });
@@ -286,7 +291,7 @@ export function MonthlyMapScreen() {
           </View>
         </View>
 
-        <IndexingBanner progress={indexingProgress} />
+        <HomeIndexingBanner />
 
         {showNotices && (data.noLocationCount > 0 || data.homeExcludedCount > 0) ? (
           <View style={styles.noticeRow}>

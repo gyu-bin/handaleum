@@ -21,10 +21,10 @@ type Listener = (syncing: boolean) => void;
 
 /** Skip restarting a full-album scan if one finished within this window. */
 const SYNC_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
-/** Brief settle before album GPS — long waits made first indexing feel stuck. */
-const MAP_KICKOFF_DELAY_MS = 1_200;
-/** Cap how long we wait for map pin thumbs before starting the album scan. */
-const MAP_PIN_IDLE_WAIT_MS = 2_000;
+/** Settle after month GPS so pin thumb exports can start before album scan. */
+const MAP_KICKOFF_DELAY_MS = 1_800;
+/** Wait for first pin-export wave; scan still yields while later pins decode. */
+const MAP_PIN_IDLE_WAIT_MS = 4_000;
 
 let inflight: Promise<StampLibrarySyncResult> | null = null;
 let syncing = false;

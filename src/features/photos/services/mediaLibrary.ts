@@ -42,8 +42,8 @@ export function isFullAlbumScanBusy(): boolean {
 
 /** Larger pages = fewer native round-trips when listing a month. */
 const PAGE_SIZE = 200;
-/** Full-album listing — bigger pages cut getAssetsAsync round-trips hard. */
-const LIBRARY_PAGE_SIZE = 500;
+/** Full-album listing — keep pages modest so home stays responsive. */
+const LIBRARY_PAGE_SIZE = 200;
 /**
  * Parallel getAssetInfoAsync for uncached GPS. Keep low — large months used to
  * fan out 40 native reads and jetsam the process.
@@ -345,6 +345,11 @@ export type LoadAllLocatedPhotosOptions = {
    * Default true so month map pins stay responsive.
    */
   yieldToPinExports?: boolean;
+  /**
+   * Max wait per GPS batch for pin exports to go idle.
+   * Use Infinity on full-album scan so home never overlaps ImageManipulator.
+   */
+  pinExportYieldMaxMs?: number;
   /** Re-read assets that failed getAssetInfoAsync once (transient native errors). */
   retryFailedLocations?: boolean;
   /** Try iCloud download when local metadata has no GPS (발도장 only). */
@@ -357,6 +362,27 @@ export type LoadAllLocatedPhotosOptions = {
 };
 
 /**
+ * getAssetInfoAsync fallback — always capped at LOCATION_BATCH.
+ * Never Promise.all an entire native-sized chunk (32+); that jetsams iOS.
+ */
+async function resolveChunkViaGetAssetInfo(
+  chunk: Asset[],
+  locOpts: { networkFallback?: boolean },
+): Promise<(PhotoRef | 'no-location' | null)[]> {
+  const out: (PhotoRef | 'no-location' | null)[] = new Array(chunk.length);
+  for (let i = 0; i < chunk.length; i += LOCATION_BATCH) {
+    const slice = chunk.slice(i, i + LOCATION_BATCH);
+    const results = await Promise.all(
+      slice.map((asset) => fetchLocation(asset, locOpts)),
+    );
+    for (let j = 0; j < results.length; j++) {
+      out[i + j] = results[j] ?? null;
+    }
+  }
+  return out;
+}
+
+/**
  * Prefer AssetLocations native batch (PHAsset.location / EXIF latlng).
  * Falls back to per-asset getAssetInfoAsync when the module is missing.
  */
@@ -366,7 +392,7 @@ async function resolveChunkLocations(
 ): Promise<(PhotoRef | 'no-location' | null)[]> {
   const rows = await getAssetLocationsAsync(chunk.map((a) => a.id));
   if (rows == null) {
-    return Promise.all(chunk.map((asset) => fetchLocation(asset, locOpts)));
+    return resolveChunkViaGetAssetInfo(chunk, locOpts);
   }
 
   const out: (PhotoRef | 'no-location' | null)[] = new Array(chunk.length);
@@ -395,12 +421,14 @@ async function resolveChunkLocations(
     out[j] = 'no-location';
   }
 
-  if (needNetwork.length > 0) {
+  // iCloud / deep recheck — same cap as month GPS (opens image bytes).
+  for (let i = 0; i < needNetwork.length; i += LOCATION_BATCH) {
+    const slice = needNetwork.slice(i, i + LOCATION_BATCH);
     const recovered = await Promise.all(
-      needNetwork.map((j) => fetchLocation(chunk[j]!, locOpts)),
+      slice.map((j) => fetchLocation(chunk[j]!, locOpts)),
     );
-    for (let k = 0; k < needNetwork.length; k++) {
-      out[needNetwork[k]!] = recovered[k] ?? null;
+    for (let k = 0; k < recovered.length; k++) {
+      out[slice[k]!] = recovered[k] ?? null;
     }
   }
 
@@ -413,6 +441,7 @@ async function resolveUncachedLocations(
     batchSize: number;
     yieldMs: number;
     yieldToPinExports: boolean;
+    pinExportYieldMaxMs?: number;
     shouldContinue?: () => boolean;
     locOpts: { networkFallback?: boolean };
     /** Called after each native batch with how many assets were examined. */
@@ -426,13 +455,19 @@ async function resolveUncachedLocations(
 ): Promise<{ located: PhotoRef[]; failed: Asset[] }> {
   const located: PhotoRef[] = [];
   const failed: Asset[] = [];
-  const { batchSize, yieldMs, yieldToPinExports, shouldContinue, locOpts } =
-    options;
+  const {
+    batchSize,
+    yieldMs,
+    yieldToPinExports,
+    pinExportYieldMaxMs = 2500,
+    shouldContinue,
+    locOpts,
+  } = options;
 
   for (let i = 0; i < uncached.length; i += batchSize) {
     await pauseWhileBackgrounded(shouldContinue);
     if (yieldToPinExports) {
-      await waitWhilePinExportBusy();
+      await waitWhilePinExportBusy(pinExportYieldMaxMs);
     }
     await pauseWhileBackgrounded(shouldContinue);
     const chunk = uncached.slice(i, i + batchSize);
@@ -483,6 +518,7 @@ export async function loadAllLocatedPhotos(
     locationBatchSize,
     batchYieldMs,
     yieldToPinExports = true,
+    pinExportYieldMaxMs,
     retryFailedLocations,
     networkLocationFallback,
     recheckCachedNoLocation,
@@ -494,6 +530,7 @@ export async function loadAllLocatedPhotos(
   const yieldMs =
     batchYieldMs != null && batchYieldMs >= 0 ? batchYieldMs : BATCH_YIELD_MS;
   const locOpts = { networkFallback: networkLocationFallback === true };
+  const pinYieldMaxMs = pinExportYieldMaxMs ?? 2500;
 
   if (!forceRealLibrary && isDevDummyPhotosEnabled()) {
     const summaries = buildDummyMonthSummaries();
@@ -546,6 +583,9 @@ export async function loadAllLocatedPhotos(
 
     const uncached: Asset[] = [];
     let pageGrew = false;
+    /** Emit every N cache hits so the count climbs continuously, not by page. */
+    const CACHE_PROGRESS_EVERY = 16;
+    let sinceEmit = 0;
     for (const asset of page.assets) {
       const hit = fromCache(asset);
       if (hit === 'miss') {
@@ -555,14 +595,25 @@ export async function loadAllLocatedPhotos(
           uncached.push(asset);
         } else {
           scanned += 1;
+          sinceEmit += 1;
         }
       } else {
         photos.push(hit);
         scanned += 1;
         pageGrew = true;
+        sinceEmit += 1;
+      }
+      if (sinceEmit >= CACHE_PROGRESS_EVERY) {
+        emit();
+        sinceEmit = 0;
+        // Let the indexing banner paint during cache-only stretches.
+        await new Promise((r) => setTimeout(r, 0));
+        await pauseWhileBackgrounded(shouldContinue);
       }
     }
-    emit();
+    if (sinceEmit > 0) {
+      emit();
+    }
     if (pageGrew) {
       await onPartial?.(photos.slice());
     }
@@ -575,6 +626,7 @@ export async function loadAllLocatedPhotos(
       batchSize,
       yieldMs,
       yieldToPinExports,
+      pinExportYieldMaxMs: pinYieldMaxMs,
       shouldContinue,
       locOpts,
       onBatch: async ({ located: batchLocated, examined }) => {
@@ -597,6 +649,7 @@ export async function loadAllLocatedPhotos(
       batchSize,
       yieldMs,
       yieldToPinExports,
+      pinExportYieldMaxMs: pinYieldMaxMs,
       shouldContinue,
       locOpts,
       onBatch: async ({ located: batchLocated }) => {
@@ -642,23 +695,31 @@ export function isPinExportBusy(): boolean {
   return fileUriInflight.size > 0;
 }
 
-/** Resolves when pin thumb exports are idle, or after `maxMs` (whichever first). */
+/**
+ * Resolves when pin thumb exports are idle, or after `maxMs` (whichever first).
+ * Pass Infinity to wait until idle with no timeout (full-album home scan).
+ */
 export function waitWhilePinExportBusy(maxMs = 2500): Promise<void> {
   if (!isPinExportBusy()) {
     return Promise.resolve();
   }
   return new Promise((resolve) => {
     let settled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
     const finish = () => {
       if (settled) {
         return;
       }
       settled = true;
-      clearTimeout(timer);
+      if (timer != null) {
+        clearTimeout(timer);
+      }
       pinExportIdleListeners.delete(onIdle);
       resolve();
     };
-    const timer = setTimeout(finish, Math.max(0, maxMs));
+    if (Number.isFinite(maxMs)) {
+      timer = setTimeout(finish, Math.max(0, maxMs));
+    }
     const onIdle = () => {
       if (!isPinExportBusy()) {
         finish();

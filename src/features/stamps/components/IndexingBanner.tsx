@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { strings } from '@/shared/constants/strings';
@@ -9,13 +10,16 @@ function formatCount(n: number): string {
   return n.toLocaleString('ko-KR');
 }
 
-function lineFor(progress: StampLibraryProgress): string {
+function lineFor(
+  progress: StampLibraryProgress,
+  shownScanned: number,
+): string {
   if (progress.phase === 'gps') {
     if (progress.assetTotal <= 0) {
       return strings.map.indexingPreparing;
     }
     return `${strings.map.indexingPhotos}  ${strings.map.indexingPhotoCount(
-      formatCount(progress.assetScanned),
+      formatCount(shownScanned),
       formatCount(progress.assetTotal),
     )}`;
   }
@@ -35,9 +39,12 @@ function lineFor(progress: StampLibraryProgress): string {
   return '';
 }
 
-function ratio(progress: StampLibraryProgress): number {
+function ratio(
+  progress: StampLibraryProgress,
+  shownScanned: number,
+): number {
   if (progress.phase === 'gps' && progress.assetTotal > 0) {
-    return Math.min(1, progress.assetScanned / progress.assetTotal);
+    return Math.min(1, shownScanned / progress.assetTotal);
   }
   if (progress.phase === 'geocode' && progress.chunkTotal > 0) {
     return Math.min(1, progress.chunkDone / progress.chunkTotal);
@@ -54,12 +61,51 @@ export interface IndexingBannerProps {
 
 /** Minimal home indexing strip — one line + hairline bar. */
 export function IndexingBanner({ progress }: IndexingBannerProps) {
+  const [shownScanned, setShownScanned] = useState(progress.assetScanned);
+  const shownRef = useRef(progress.assetScanned);
+
+  // Tick the counter toward the latest scan value so the UI climbs
+  // continuously even when the scanner reports in small batches.
+  useEffect(() => {
+    if (progress.phase !== 'gps') {
+      shownRef.current = progress.assetScanned;
+      setShownScanned(progress.assetScanned);
+      return;
+    }
+
+    const target = progress.assetScanned;
+    if (shownRef.current > target) {
+      shownRef.current = target;
+      setShownScanned(target);
+      return;
+    }
+
+    let raf = 0;
+    const tick = () => {
+      const cur = shownRef.current;
+      if (cur >= target) {
+        return;
+      }
+      const gap = target - cur;
+      // Fast chase — feels like a live counter, not a jump.
+      const step = Math.max(1, Math.ceil(gap / 6));
+      const next = Math.min(target, cur + step);
+      shownRef.current = next;
+      setShownScanned(next);
+      if (next < target) {
+        raf = requestAnimationFrame(tick);
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [progress.assetScanned, progress.phase]);
+
   if (progress.phase === 'idle') {
     return null;
   }
 
-  const line = lineFor(progress);
-  const fill = ratio(progress);
+  const line = lineFor(progress, shownScanned);
+  const fill = ratio(progress, shownScanned);
 
   return (
     <View

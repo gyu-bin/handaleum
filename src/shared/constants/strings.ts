@@ -66,7 +66,7 @@ export const strings = {
   onboarding: {
     /** First-run — monthly photo journal, not walk-tracking. */
     headline: '한 달 동안 찍은 사진이\n지도 위 이야기로 모입니다.',
-    subhead: '카메라롤만으로 이번 달을 다시 걸어봐요.',
+    subhead: '카메라롤만으로 이번 달 지도를 그려요.',
     photoToggle: '앨범에서 이번 달·지난 기록을 불러와요',
     photoToggleHint: '사진은 기기에만 두고, 위치만 읽어 지도를 그립니다.',
     start: '시작하기',
@@ -74,7 +74,7 @@ export const strings = {
     slides: [
       {
         title: '한 달을 지도 위에',
-        body: '카메라롤 사진의 위치와 시간을 지도에 펼쳐,\n지난 한 달을 돌아봐요.',
+        body: '카메라롤 사진의 위치와 시간을 지도에 펼쳐,\n한 달을 사진으로 다시 봐요.',
       },
     ],
     next: '다음',
@@ -123,19 +123,17 @@ export const strings = {
     indexingDone: '앨범 정리 완료',
     indexingDoneDetail: (photos: string) => `위치 ${photos}장`,
     /**
-     * Headline above the visit chips. Count-based so the line height stays
-     * fixed no matter how many places the month holds — the places themselves
-     * are rendered as chips below it.
-     * e.g. "이번 달엔 다섯 곳에 갔어요~"
+     * Headline above the visit chips. Photo-journal tone (not walk-tracking).
+     * e.g. "이번 달엔 다섯 곳이 남았어요"
      */
     monthJourney: (places: string[]) => {
       if (places.length === 0) {
         return '';
       }
       if (places.length === 1) {
-        return `이번 달엔 ${places[0]}에 갔어요~`;
+        return `이번 달 사진, ${places[0]}`;
       }
-      return `이번 달엔 ${countWord(places.length)} 곳에 갔어요~`;
+      return `이번 달 사진 ${countWord(places.length)} 곳`;
     },
     navSeparator: '·',
     coverHint: '사진을 눌러 이 장소의 대표 사진으로 지정',
@@ -223,7 +221,7 @@ export const strings = {
   months: {
     title: '월 선택',
     journalTitle: '사진 일기',
-    journalSubtitle: '여행의 순간을 기록해보세요',
+    journalSubtitle: '한 달의 사진을 지도로 모아요',
     photoCount: (count: number) => `${count}장`,
     empty: '표시할 월이 없습니다',
     freeWindowHint: (priceLabel: string) =>
@@ -291,13 +289,13 @@ export const strings = {
   insights: {
     title: '인사이트',
     empty: '이 달은 보여줄 인사이트가 없어요',
-    placesCount: '다녀온 동네',
-    newPlaces: '처음 간 곳',
+    placesCount: '사진 찍힌 동네',
+    newPlaces: '새로 찍힌 곳',
     newPlacesWarming: '기록 쌓이는 중',
-    farthest: '가장 멀리 간 곳',
+    farthest: '가장 먼 촬영지',
     topPlace: '제일 많이 찍은 곳',
     approxDistance: '대략 이동 거리',
-    busiestDay: '가장 바빴던 날',
+    busiestDay: '사진이 가장 많던 날',
     proTag: '프로',
     proHint: '대략 이동 거리·바쁜 날은 프로에서 볼 수 있어요',
     unknownPlace: '알 수 없는 장소',
