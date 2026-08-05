@@ -96,13 +96,12 @@ export function getStampScanDebug(): StampScanDebug {
 }
 
 /**
- * Full-album GPS batch — local EXIF only on the hot path.
- * Keep modest: 64–128 + yield 0 melted phones; month path uses 8.
- * (Network/iCloud fallback is a separate weekly pass; it destroys throughput.)
+ * Full-album GPS batch via AssetLocations native (PHAsset.location).
+ * Large batches are cheap now — no per-asset contentEditingInput.
  */
-const LIBRARY_GPS_BATCH = 24;
-/** Pause between GPS batches so the SoC can cool (and the UI can breathe). */
-const LIBRARY_GPS_YIELD_MS = 40;
+const LIBRARY_GPS_BATCH = 250;
+/** Tiny yield so the banner/UI can paint between big native bursts. */
+const LIBRARY_GPS_YIELD_MS = 8;
 /** Geocode / stamp write chunks so the grid fills while the rest runs. */
 const GEOCODE_PHOTO_CHUNK = 500;
 /** Short yield — keep UI alive without stalling 발자취-like pace. */
@@ -189,8 +188,8 @@ export async function syncStampsFromLibrary(): Promise<StampLibrarySyncResult> {
     forceRealLibrary: true,
     locationBatchSize: LIBRARY_GPS_BATCH,
     batchYieldMs: LIBRARY_GPS_YIELD_MS,
-    // Don't fight map pin ImageManipulator — concurrent native work = heat.
-    yieldToPinExports: true,
+    // Kickoff already waited for pin idle; don't stall the full album on thumbs.
+    yieldToPinExports: false,
     retryFailedLocations: false,
     networkLocationFallback: deepRecheck,
     recheckCachedNoLocation: deepRecheck,

@@ -7,6 +7,7 @@ import {
   type Asset,
 } from 'expo-media-library';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import { getAssetLocationsAsync } from 'asset-locations';
 
 import { getAssetLocationRaw, setAssetLocationRaw } from '@/lib/storage';
 import {
@@ -276,31 +277,19 @@ export async function loadMonthlyPhotos(
     emitPartial(uncached.length === 0);
   }
 
-  for (let i = 0; i < uncached.length; i += LOCATION_BATCH) {
-    await pauseWhileBackgrounded(shouldContinue);
-    const chunk = uncached.slice(i, i + LOCATION_BATCH);
-    // networkFallback only hits isNetworkAsset — local screenshots stay cheap.
-    const results = await Promise.all(
-      chunk.map((asset) => fetchLocation(asset, { networkFallback: true })),
-    );
-    for (const result of results) {
-      if (result === 'no-location') {
-        noLocationCount += 1;
-      } else if (result != null) {
-        photos.push(result);
-      }
-      // null = transient failure — leave uncached for the next open (do not
-      // bump noLocationCount; that made photos look "eaten" with no notice).
-    }
-    const remaining = uncached.length - (i + chunk.length);
-    if (photos.length > 0 || remaining <= 0) {
-      emitPartial(remaining <= 0);
-    }
-    // Let React paint / gestures run between native MediaLibrary bursts.
-    if (remaining > 0) {
-      await new Promise((r) => setTimeout(r, BATCH_YIELD_MS));
-    }
-  }
+  await resolveUncachedLocations(uncached, {
+    batchSize: LOCATION_BATCH,
+    yieldMs: BATCH_YIELD_MS,
+    yieldToPinExports: true,
+    shouldContinue,
+    locOpts: { networkFallback: true },
+    onBatch: async ({ located: batchLocated, noLocation }) => {
+      photos.push(...batchLocated);
+      noLocationCount += noLocation;
+      emitPartial(false);
+    },
+  });
+  emitPartial(true);
 
   return snapshot(month, photos, noLocationCount, true);
 }
@@ -367,6 +356,57 @@ export type LoadAllLocatedPhotosOptions = {
   recheckCachedNoLocation?: boolean;
 };
 
+/**
+ * Prefer AssetLocations native batch (PHAsset.location / EXIF latlng).
+ * Falls back to per-asset getAssetInfoAsync when the module is missing.
+ */
+async function resolveChunkLocations(
+  chunk: Asset[],
+  locOpts: { networkFallback?: boolean },
+): Promise<(PhotoRef | 'no-location' | null)[]> {
+  const rows = await getAssetLocationsAsync(chunk.map((a) => a.id));
+  if (rows == null) {
+    return Promise.all(chunk.map((asset) => fetchLocation(asset, locOpts)));
+  }
+
+  const out: (PhotoRef | 'no-location' | null)[] = new Array(chunk.length);
+  const needNetwork: number[] = [];
+
+  for (let j = 0; j < chunk.length; j++) {
+    const asset = chunk[j]!;
+    const row = rows[j];
+    const lat = row?.latitude;
+    const lng = row?.longitude;
+    if (
+      lat != null &&
+      lng != null &&
+      Number.isFinite(lat) &&
+      Number.isFinite(lng)
+    ) {
+      setAssetLocationRaw(asset.id, `${lat},${lng}`);
+      out[j] = refFromCoords(asset, lat, lng);
+      continue;
+    }
+    if (locOpts.networkFallback) {
+      needNetwork.push(j);
+      continue;
+    }
+    setAssetLocationRaw(asset.id, 'x');
+    out[j] = 'no-location';
+  }
+
+  if (needNetwork.length > 0) {
+    const recovered = await Promise.all(
+      needNetwork.map((j) => fetchLocation(chunk[j]!, locOpts)),
+    );
+    for (let k = 0; k < needNetwork.length; k++) {
+      out[needNetwork[k]!] = recovered[k] ?? null;
+    }
+  }
+
+  return out;
+}
+
 async function resolveUncachedLocations(
   uncached: Asset[],
   options: {
@@ -380,6 +420,7 @@ async function resolveUncachedLocations(
       located: PhotoRef[];
       failed: Asset[];
       examined: number;
+      noLocation: number;
     }) => void | Promise<void>;
   },
 ): Promise<{ located: PhotoRef[]; failed: Asset[] }> {
@@ -395,16 +436,17 @@ async function resolveUncachedLocations(
     }
     await pauseWhileBackgrounded(shouldContinue);
     const chunk = uncached.slice(i, i + batchSize);
-    const results = await Promise.all(
-      chunk.map((asset) => fetchLocation(asset, locOpts)),
-    );
+    const results = await resolveChunkLocations(chunk, locOpts);
     const batchLocated: PhotoRef[] = [];
     const batchFailed: Asset[] = [];
+    let noLocation = 0;
     for (let j = 0; j < results.length; j++) {
       const result = results[j];
       if (result != null && result !== 'no-location') {
         batchLocated.push(result);
         located.push(result);
+      } else if (result === 'no-location') {
+        noLocation += 1;
       } else if (result === null) {
         batchFailed.push(chunk[j]!);
         failed.push(chunk[j]!);
@@ -414,6 +456,7 @@ async function resolveUncachedLocations(
       located: batchLocated,
       failed: batchFailed,
       examined: chunk.length,
+      noLocation,
     });
     const remaining = uncached.length - (i + chunk.length);
     if (remaining > 0 && yieldMs > 0) {
@@ -472,12 +515,14 @@ export async function loadAllLocatedPhotos(
   const allFailed: Asset[] = [];
   let listed = 0;
   let scanned = 0;
+  /** Real album size from MediaLibrary (not a rolling page estimate). */
+  let assetTotal = 0;
   let after: string | undefined;
   let hasNextPage = true;
 
   const emit = () => {
     onScanProgress?.({
-      assetTotal: hasNextPage ? listed + LIBRARY_PAGE_SIZE : listed,
+      assetTotal: Math.max(assetTotal, listed),
       assetScanned: scanned,
       locatedCount: photos.length,
     });
@@ -494,6 +539,10 @@ export async function loadAllLocatedPhotos(
     hasNextPage = page.hasNextPage;
     after = page.endCursor;
     listed += page.assets.length;
+    // totalCount is available on the first page — show 0/18,000 immediately.
+    if (page.totalCount > assetTotal) {
+      assetTotal = page.totalCount;
+    }
 
     const uncached: Asset[] = [];
     let pageGrew = false;
@@ -540,11 +589,8 @@ export async function loadAllLocatedPhotos(
     allFailed.push(...failed);
   }
 
-  onScanProgress?.({
-    assetTotal: listed,
-    assetScanned: scanned,
-    locatedCount: photos.length,
-  });
+  assetTotal = Math.max(assetTotal, listed);
+  emit();
 
   if (retryFailedLocations && allFailed.length > 0) {
     await resolveUncachedLocations(allFailed, {
@@ -556,7 +602,7 @@ export async function loadAllLocatedPhotos(
       onBatch: async ({ located: batchLocated }) => {
         photos.push(...batchLocated);
         onScanProgress?.({
-          assetTotal: listed,
+          assetTotal,
           assetScanned: listed,
           locatedCount: photos.length,
         });
@@ -568,7 +614,7 @@ export async function loadAllLocatedPhotos(
   }
 
   onScanProgress?.({
-    assetTotal: listed,
+    assetTotal,
     assetScanned: listed,
     locatedCount: photos.length,
   });

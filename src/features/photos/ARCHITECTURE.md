@@ -74,10 +74,11 @@
 | 광역시 라벨은 **짧은 형태로 통일**: "서울 강남구". `toSiForm` 삭제 | 시트·몰아보기만 "서울시 강남구" | 같은 장소가 칩과 시트에서 다르게 보였음 | 2026-08-03 |
 | place resolve를 4개로 분리: `placeCache`(버킷키·2단 캐시) / `geocodeQueue`(권한·직렬 큐) / `visitPlaceBuild`(순수 조립) / `placeResolve`(네이밍 정책 + 공개 API). 외부는 계속 `placeResolve`만 import | 단일 456줄 파일 | 캐시·스로틀·조립이 한 파일에 섞여 원인 추적이 어려웠음 | 2026-08-03 |
 | 여정 칩: 디스크 hydrate 즉시 + GPS partial 중에도 geocode(캐시 우선). 빈 결과로 기존 칩을 지우지 않음. visit place 중복은 시+구+동 단위 | `!isFetching` 대기만 / 매 partial마다 wipe | 콜드스타트 "사진 n장"만 · 칩 소실 | 2026-08-02 |
+| GPS 핫패스: 로컬 모듈 `asset-locations`가 **배치로 PHAsset.location / Android EXIF latlng** 읽음. `getAssetInfoAsync`(원본·EXIF 전체)는 모듈 없거나 iCloud deep recheck일 때만 | 장마다 getAssetInfoAsync | expo가 파일까지 열어 발열·저속. 발자취식 메타만 읽기와 정렬 | 2026-08-05 |
 
 ## 경계
 
-- 이 feature가 의존하는 것: expo-media-library, expo-image-manipulator, expo-location, @mj-studio/react-native-naver-map, react-native-svg (카드/스플래시), react-native-gesture-handler, react-native-reanimated, assets/geo/*, lib/storage, shared/constants
+- 이 feature가 의존하는 것: `asset-locations` (로컬 네이티브), expo-media-library, expo-image-manipulator, expo-location, @mj-studio/react-native-naver-map, react-native-svg (카드/스플래시), react-native-gesture-handler, react-native-reanimated, assets/geo/*, lib/storage, shared/constants
 - 이 feature에 의존하는 것: cards (photoRefSchema, useMonthlyPhotos, useCurrentMonth를 import)
 
 ## 범위 제외

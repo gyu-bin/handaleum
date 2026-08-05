@@ -1,0 +1,23 @@
+{
+  "name": "asset-locations",
+  "version": "1.0.0",
+  "description": "Batch-read photo GPS without opening full image files",
+  "main": "src/index.ts",
+  "types": "index.d.ts",
+  "sideEffects": false,
+  "scripts": {},
+  "keywords": ["react-native", "expo", "asset-locations"],
+  "repository": "https://github.com/handaleum/handaleum",
+  "bugs": {
+    "url": "https://github.com/handaleum/handaleum/issues"
+  },
+  "author": "handaleum",
+  "license": "MIT",
+  "homepage": "https://github.com/handaleum/handaleum",
+  "devDependencies": {},
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

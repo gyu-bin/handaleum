@@ -3,6 +3,7 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
+    "asset-locations": "file:./modules/asset-locations",
     "@expo/metro-runtime": "~6.1.2",
     "@mj-studio/react-native-naver-map": "^2.9.0",
     "@tanstack/react-query": "^5.101.2",
