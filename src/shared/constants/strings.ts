@@ -146,54 +146,56 @@ export const strings = {
   },
   settings: {
     title: '설정',
-    homeSection: '집 위치',
-    homeDescription:
-      '집 근처에서 찍은 사진은 지도에 핀으로 뜨지 않습니다. 매일 같은 자리에 찍히는 핀은 알려주는 게 없으니까요. 카드를 만들 때는 그대로 고를 수 있습니다.',
-    homeUnset: '아직 지정하지 않았습니다',
+    /** Section labels (reference: grey header above a ruled list). */
+    albumSection: '앨범',
+    homeSection: '집',
+    albumSync: '사진 다시 담기',
+    albumSyncing: '불러오는 중…',
+    albumSyncModalTitle: '사진 다시 담기',
+    albumSyncModalBody:
+      '방금 찍은 하루부터, 아직 지도에 없는 장면까지.\n앨범을 다시 훑어 올려요.',
+    albumSyncModalConfirm: '담기',
+    albumSyncModalCancel: '나중에',
+    homeUnset: '미설정',
     homeSet: (radiusM: number) =>
       radiusM >= 1000
-        ? `지정됨 · 반경 ${(radiusM / 1000).toFixed(1)}km`
-        : `지정됨 · 반경 ${radiusM}m`,
-    useCurrentLocation: '지금 위치를 집으로 지정',
-    locating: '위치 확인 중',
-    clearHome: '집 위치 해제',
-    radiusLabel: '제외 반경',
-    radiusHint: '집이 아파트 단지 안이면 넓게, 골목이면 좁게 잡으세요.',
-    locationDenied: '위치 권한이 없어 집 위치를 지정할 수 없습니다',
-    locationFailed: '위치를 확인하지 못했습니다. 다시 시도해 주세요',
-    viewOnboarding: '앱 소개 다시 보기',
-    buildSection: '실행 중인 버전',
-    buildEmbedded: '내장 번들 (OTA 미적용)',
+        ? `${(radiusM / 1000).toFixed(1)}km`
+        : `${radiusM}m`,
+    useCurrentLocation: '현재 위치로 설정',
+    locating: '확인 중…',
+    clearHome: '해제',
+    locationDenied: '위치 권한이 필요해요',
+    locationFailed: '위치를 찾지 못했어요',
+    buildEmbedded: '내장',
     buildOta: (publishedAt: string, shortId: string) =>
       `OTA ${publishedAt} · ${shortId}`,
     diag: {
       section: '진단',
       queue: (i: number, b: number, backoff: number, done: number, failed: number) =>
-        `지오코딩 대기 화면 ${i} · 스캔 ${b} · 지연 ${backoff}ms · 완료 ${done} · 실패 ${failed}`,
-      monthIdle: '이번 달: 아직 조회 없음',
+        `geo ${i}/${b} · ${backoff}ms · ok ${done} · fail ${failed}`,
+      monthIdle: 'month —',
       month: (resolved: number, cached: number, total: number, failed: number, finished: boolean) =>
-        `이번 달 동네 ${resolved + cached}/${total}${failed > 0 ? ` · 실패 ${failed}` : ''}${finished ? ' · 완료' : ' · 진행 중'}`,
-      scanIdle: '발도장 스캔: 대기',
-      scanGps: (elapsedSec: number) => `발도장 스캔: GPS 읽는 중 · ${elapsedSec}초`,
+        `month ${resolved + cached}/${total}${failed > 0 ? ` · fail ${failed}` : ''}${finished ? '' : '…'}`,
+      scanIdle: 'scan —',
+      scanGps: (elapsedSec: number) => `scan gps ${elapsedSec}s`,
       scanGeocode: (done: number, total: number, elapsedSec: number) =>
-        `발도장 스캔: 동네 확인 ${done}/${total} · ${elapsedSec}초`,
-      scanDone: '발도장 스캔: 완료',
+        `scan place ${done}/${total} · ${elapsedSec}s`,
+      scanDone: 'scan ok',
     },
     proSection: '프로',
-    proDescription: (priceLabel: string) =>
-      `최근 3개월보다 지난 달을 열고, 인사이트 일부 지표를 잠금 해제합니다. ${priceLabel} · 일회 구매.`,
-    proOn: '프로 이용 중',
-    proOff: '무료 · 최근 3개월만',
-    proPurchase: '프로 구매',
-    proRestore: '구매 복원',
+    proOn: '이용 중',
+    proOff: '무료',
+    proPurchase: '구매',
+    proRestore: '복원',
     proToggleOn: '프로 켜기',
     proToggleOff: '프로 끄기',
-    /** __DEV__ only — Seoul/Gyeonggi sample pins instead of the camera roll. */
-    devDummySection: '개발용 샘플',
-    devDummyDescription: (count: number) =>
-      `서울·경기 ${count}장 샘플로 지도·카드를 확인합니다. 끄면 실제 앨범을 씁니다.`,
-    devDummyOn: '샘플 데이터 사용 중',
-    devDummyOff: '실제 앨범 사용 중',
+    /** Kept for paywall modal copy elsewhere. */
+    proDescription: (priceLabel: string) =>
+      `지난 달 전체와 인사이트. ${priceLabel} · 일회.`,
+    /** __DEV__ only */
+    devToggle: '개발',
+    devDummyOn: '샘플 켜짐',
+    devDummyOff: '샘플 꺼짐',
     devDummyEnable: '샘플 켜기',
     devDummyDisable: '샘플 끄기',
     proPaywall: {

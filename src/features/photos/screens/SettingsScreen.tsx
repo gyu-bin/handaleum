@@ -1,27 +1,41 @@
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import * as Location from 'expo-location';
 import * as Updates from 'expo-updates';
-import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/shared/components/Button';
-import { PaperGrain } from '@/shared/components/PaperGrain';
 import { ScreenHeader } from '@/shared/components/ScreenHeader';
 import { strings } from '@/shared/constants/strings';
 import { formatProPriceKrw, IS_MONETIZATION_LIVE } from '@/shared/constants/pricing';
 import { theme } from '@/shared/constants/theme';
-
-import { getStampScanDebug } from '@/features/stamps/services/stampBackfill';
+import {
+  isStampLibrarySyncing,
+  startStampLibrarySync,
+  subscribeStampLibrarySync,
+} from '@/features/stamps/services/stampLibrarySyncRunner';
+import {
+  getStampScanDebug,
+  type StampLibraryProgress,
+} from '@/features/stamps/services/stampBackfill';
+import { useStampLibraryProgress } from '@/features/stamps/hooks/useStampLibraryProgress';
+import { ProPaywallModal } from '@/features/insights/components/ProPaywallModal';
+import { useIsPro } from '@/features/insights/hooks/useIsPro';
 
 import { useHomeLocation } from '../hooks/useHomeLocation';
 import { useDevDummyPhotos } from '../hooks/useDevDummyPhotos';
+import { photosQueryKeys } from '../hooks/photosQueryKeys';
 import { geocodeQueueDebug } from '../services/geocodeQueue';
 import { getVisitResolveDebug } from '../services/placeResolve';
 import { DEFAULT_HOME_RADIUS_M } from '../services/homeLocationStorage';
-import { dummyPhotoCount } from '../services/dummyPhotos';
-import { ProPaywallModal } from '@/features/insights/components/ProPaywallModal';
-import { useIsPro } from '@/features/insights/hooks/useIsPro';
 
 const RADIUS_CHOICES = [100, 300, 500, 1000] as const;
 
@@ -29,47 +43,89 @@ function radiusLabel(radiusM: number): string {
   return radiusM >= 1000 ? `${radiusM / 1000}km` : `${radiusM}m`;
 }
 
-/** Live geocode/scan counters — settles "is it still loading or broken?" on device. */
-function diagLines(): string[] {
-  const q = geocodeQueueDebug();
-  const lines = [
-    strings.settings.diag.queue(q.interactive, q.background, q.backoffMs, q.done, q.failed),
-  ];
+function formatCount(n: number): string {
+  return n.toLocaleString('ko-KR');
+}
 
+function progressLine(progress: StampLibraryProgress): string {
+  if (progress.phase === 'gps') {
+    if (progress.assetTotal <= 0) {
+      return strings.map.indexingPreparing;
+    }
+    return `${strings.map.indexingPhotos}  ${strings.map.indexingPhotoCount(
+      formatCount(progress.assetScanned),
+      formatCount(progress.assetTotal),
+    )}`;
+  }
+  if (progress.phase === 'geocode') {
+    if (progress.chunkTotal > 0) {
+      return `${strings.map.indexingPlaces}  ${progress.chunkDone}/${progress.chunkTotal}`;
+    }
+    return strings.map.indexingPlacesEmpty;
+  }
+  if (progress.phase === 'done') {
+    return progress.photoCount > 0
+      ? `${strings.map.indexingDone}  ${strings.map.indexingDoneDetail(
+          formatCount(progress.photoCount),
+        )}`
+      : strings.map.indexingDone;
+  }
+  return strings.settings.albumSyncing;
+}
+
+function progressRatio(progress: StampLibraryProgress): number {
+  if (progress.phase === 'gps' && progress.assetTotal > 0) {
+    return Math.min(1, progress.assetScanned / progress.assetTotal);
+  }
+  if (progress.phase === 'geocode' && progress.chunkTotal > 0) {
+    return Math.min(1, progress.chunkDone / progress.chunkTotal);
+  }
+  if (progress.phase === 'done') {
+    return 1;
+  }
+  return 0.06;
+}
+
+function diagLine(): string {
+  const q = geocodeQueueDebug();
   const month = getVisitResolveDebug();
-  if (!month) {
-    lines.push(strings.settings.diag.monthIdle);
-  } else {
-    lines.push(
-      strings.settings.diag.month(
+  const scan = getStampScanDebug();
+  const elapsedSec =
+    scan.startedAt > 0 ? Math.round((Date.now() - scan.startedAt) / 1000) : 0;
+  const monthPart = !month
+    ? strings.settings.diag.monthIdle
+    : strings.settings.diag.month(
         month.resolvedBuckets,
         month.cachedBuckets,
         month.totalBuckets,
         month.failedBuckets,
         month.finished,
-      ),
-    );
-    lines.push(month.labels.join(' · '));
-  }
-
-  const scan = getStampScanDebug();
-  const elapsedSec =
-    scan.startedAt > 0 ? Math.round((Date.now() - scan.startedAt) / 1000) : 0;
-  if (scan.phase === 'idle') {
-    lines.push(strings.settings.diag.scanIdle);
-  } else if (scan.phase === 'gps') {
-    lines.push(strings.settings.diag.scanGps(elapsedSec));
-  } else if (scan.phase === 'geocode') {
-    lines.push(
-      strings.settings.diag.scanGeocode(scan.chunkDone, scan.chunkTotal, elapsedSec),
-    );
-  } else {
-    lines.push(strings.settings.diag.scanDone);
-  }
-  return lines;
+      );
+  const scanPart =
+    scan.phase === 'idle'
+      ? strings.settings.diag.scanIdle
+      : scan.phase === 'gps'
+        ? strings.settings.diag.scanGps(elapsedSec)
+        : scan.phase === 'geocode'
+          ? strings.settings.diag.scanGeocode(
+              scan.chunkDone,
+              scan.chunkTotal,
+              elapsedSec,
+            )
+          : strings.settings.diag.scanDone;
+  return [
+    strings.settings.diag.queue(
+      q.interactive,
+      q.background,
+      q.backoffMs,
+      q.done,
+      q.failed,
+    ),
+    monthPart,
+    scanPart,
+  ].join(' · ');
 }
 
-/** Which JS bundle is actually running — settles "did the OTA apply?" on device. */
 function runningBundleLabel(): string {
   if (Updates.isEmbeddedLaunch || !Updates.updateId) {
     return strings.settings.buildEmbedded;
@@ -82,20 +138,29 @@ function runningBundleLabel(): string {
 }
 
 export function SettingsScreen() {
-  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const { home, setHome, clearHome } = useHomeLocation();
   const { isPro, isBusy, error: proError, purchase, restore } = useIsPro();
   const { enabled: dummyEnabled, setEnabled: setDummyEnabled } = useDevDummyPhotos();
+  const indexing = useStampLibraryProgress();
   const [isLocating, setIsLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paywallOpen, setPaywallOpen] = useState(false);
-  const [diag, setDiag] = useState<string[]>(() => diagLines());
+  const [albumSyncOpen, setAlbumSyncOpen] = useState(false);
+  const [albumSyncing, setAlbumSyncing] = useState(isStampLibrarySyncing);
+  const [devOpen, setDevOpen] = useState(false);
+  const [diag, setDiag] = useState(diagLine);
 
-  // 1s poll only while this screen is mounted — cheap reads of module counters.
+  useEffect(() => subscribeStampLibrarySync(setAlbumSyncing), []);
+
   useEffect(() => {
-    const timer = setInterval(() => setDiag(diagLines()), 1000);
+    if (!__DEV__ || !devOpen) {
+      return;
+    }
+    const timer = setInterval(() => setDiag(diagLine()), 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [devOpen]);
 
   useEffect(() => {
     if (isPro) {
@@ -104,6 +169,11 @@ export function SettingsScreen() {
   }, [isPro]);
 
   const radius = home?.radiusM ?? DEFAULT_HOME_RADIUS_M;
+  const showProgress =
+    albumSyncing ||
+    indexing.phase === 'gps' ||
+    indexing.phase === 'geocode' ||
+    indexing.phase === 'done';
 
   const captureCurrentLocation = async () => {
     setError(null);
@@ -129,163 +199,229 @@ export function SettingsScreen() {
     }
   };
 
-  const pickRadius = (radiusM: number) => {
-    if (!home) {
-      return;
-    }
-    setHome({ ...home, radiusM });
+  const confirmAlbumSync = () => {
+    setAlbumSyncOpen(false);
+    void queryClient.invalidateQueries({ queryKey: photosQueryKeys.all });
+    void startStampLibrarySync({ force: true });
   };
+
+  const fill = progressRatio(indexing);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-      <PaperGrain style={styles.grain} />
       <ScreenHeader title={strings.settings.title} />
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{strings.settings.homeSection}</Text>
-          <Text style={styles.description}>{strings.settings.homeDescription}</Text>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          showProgress && { paddingBottom: 88 + insets.bottom },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* A: section labels + spacing only — no list rules */}
+        <View style={styles.group}>
+          <Text style={styles.sectionLabel}>{strings.settings.albumSection}</Text>
+          <Pressable
+            onPress={() => setAlbumSyncOpen(true)}
+            disabled={albumSyncing}
+            accessibilityRole="button"
+            style={({ pressed }) => [
+              styles.row,
+              pressed && !albumSyncing && styles.pressed,
+              albumSyncing && styles.rowDisabled,
+            ]}
+          >
+            <Text style={styles.rowTitle}>
+              {albumSyncing
+                ? strings.settings.albumSyncing
+                : strings.settings.albumSync}
+            </Text>
+            <Text style={styles.chevron}>›</Text>
+          </Pressable>
+        </View>
 
-          <Text style={[styles.status, home && styles.statusSet]}>
-            {home
-              ? strings.settings.homeSet(home.radiusM)
-              : strings.settings.homeUnset}
-          </Text>
-
-          <Button
-            title={
-              isLocating
-                ? strings.settings.locating
-                : strings.settings.useCurrentLocation
-            }
-            variant="accent"
-            size="md"
-            loading={isLocating}
+        <View style={styles.group}>
+          <Text style={styles.sectionLabel}>{strings.settings.homeSection}</Text>
+          <Pressable
             onPress={() => void captureCurrentLocation()}
-          />
-
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-
+            disabled={isLocating}
+            accessibilityRole="button"
+            style={({ pressed }) => [
+              styles.row,
+              pressed && !isLocating && styles.pressed,
+            ]}
+          >
+            <Text style={styles.rowTitle}>
+              {isLocating
+                ? strings.settings.locating
+                : strings.settings.useCurrentLocation}
+            </Text>
+            <View style={styles.rowTrailing}>
+              <Text style={styles.rowValue}>
+                {home
+                  ? strings.settings.homeSet(home.radiusM)
+                  : strings.settings.homeUnset}
+              </Text>
+              <Text style={styles.chevron}>›</Text>
+            </View>
+          </Pressable>
           {home ? (
-            <View style={styles.radiusBlock}>
-              <Text style={styles.radiusLabel}>{strings.settings.radiusLabel}</Text>
+            <>
               <View style={styles.radiusRow}>
                 {RADIUS_CHOICES.map((choice) => {
                   const active = choice === home.radiusM;
                   return (
                     <Pressable
                       key={choice}
-                      onPress={() => pickRadius(choice)}
+                      onPress={() => setHome({ ...home, radiusM: choice })}
                       accessibilityRole="button"
                       accessibilityState={{ selected: active }}
-                      style={({ pressed }) => [
-                        styles.radiusChip,
-                        active && styles.radiusChipActive,
-                        pressed && styles.radiusChipPressed,
-                      ]}
+                      style={[styles.chip, active && styles.chipOn]}
                     >
-                      <Text
-                        style={[
-                          styles.radiusChipText,
-                          active && styles.radiusChipTextActive,
-                        ]}
-                      >
+                      <Text style={[styles.chipText, active && styles.chipTextOn]}>
                         {radiusLabel(choice)}
                       </Text>
                     </Pressable>
                   );
                 })}
               </View>
-              <Text style={styles.hint}>{strings.settings.radiusHint}</Text>
-
-              <Button
-                title={strings.settings.clearHome}
-                variant="ghost"
-                size="md"
+              <Pressable
                 onPress={clearHome}
-              />
-            </View>
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+              >
+                <Text style={styles.rowMuted}>{strings.settings.clearHome}</Text>
+              </Pressable>
+            </>
           ) : null}
+          {error ? <Text style={styles.error}>{error}</Text> : null}
         </View>
 
         {IS_MONETIZATION_LIVE ? (
-          <View style={[styles.card, styles.cardSpaced]}>
-            <Text style={styles.sectionTitle}>{strings.settings.proSection}</Text>
-            <Text style={styles.description}>
-              {strings.settings.proDescription(formatProPriceKrw())}
-            </Text>
-            <Text style={[styles.status, isPro && styles.statusSet]}>
-              {isPro ? strings.settings.proOn : strings.settings.proOff}
-            </Text>
+          <View style={styles.group}>
+            <Text style={styles.sectionLabel}>{strings.settings.proSection}</Text>
+            <View style={styles.row}>
+              <Text style={styles.rowTitle}>{strings.settings.proSection}</Text>
+              <Text style={styles.rowValue}>
+                {isPro ? strings.settings.proOn : strings.settings.proOff}
+              </Text>
+            </View>
             {isPro ? null : (
-              <Button
-                title={strings.settings.proPurchase}
-                variant="accent"
-                size="md"
+              <Pressable
                 onPress={() => setPaywallOpen(true)}
-              />
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+              >
+                <Text style={styles.rowTitle}>
+                  {strings.settings.proPurchase}
+                </Text>
+                <Text style={styles.chevron}>›</Text>
+              </Pressable>
             )}
-            <Button
-              title={strings.settings.proRestore}
-              variant="ghost"
-              size="md"
-              loading={isBusy}
-              disabled={isBusy}
+            <Pressable
               onPress={() => void restore()}
-            />
+              disabled={isBusy}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+            >
+              <Text style={styles.rowMuted}>{strings.settings.proRestore}</Text>
+            </Pressable>
             {!paywallOpen && proError ? (
               <Text style={styles.error}>{proError}</Text>
             ) : null}
           </View>
         ) : null}
 
-        <View style={[styles.card, styles.cardSpaced]}>
-          <Button
-            title={strings.settings.viewOnboarding}
-            variant="secondary"
-            size="md"
-            onPress={() => router.push('/onboarding?replay=1')}
-          />
-        </View>
-
-        <View style={[styles.card, styles.cardSpaced]}>
-          <Text style={styles.sectionTitle}>{strings.settings.buildSection}</Text>
-          <Text style={styles.status}>{runningBundleLabel()}</Text>
-        </View>
-
-        <View style={[styles.card, styles.cardSpaced]}>
-          <Text style={styles.sectionTitle}>{strings.settings.diag.section}</Text>
-          {diag.map((line, i) => (
-            <Text key={i} style={styles.hint}>
-              {line}
-            </Text>
-          ))}
-        </View>
+        <Text style={styles.footer}>{runningBundleLabel()}</Text>
 
         {__DEV__ ? (
-          <View style={[styles.card, styles.cardSpaced]}>
-            <Text style={styles.sectionTitle}>{strings.settings.devDummySection}</Text>
-            <Text style={styles.description}>
-              {strings.settings.devDummyDescription(dummyPhotoCount())}
-            </Text>
-            <Text style={[styles.status, dummyEnabled && styles.statusSet]}>
-              {dummyEnabled
-                ? strings.settings.devDummyOn
-                : strings.settings.devDummyOff}
-            </Text>
-            <Button
-              title={
-                dummyEnabled
-                  ? strings.settings.devDummyDisable
-                  : strings.settings.devDummyEnable
-              }
-              variant={dummyEnabled ? 'secondary' : 'primary'}
-              size="md"
-              onPress={() => setDummyEnabled(!dummyEnabled)}
-            />
-          </View>
+          <>
+            <Pressable
+              onPress={() => setDevOpen((v) => !v)}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.devToggle, pressed && styles.pressed]}
+            >
+              <Text style={styles.rowMuted}>
+                {strings.settings.devToggle}
+                {devOpen ? ' ▾' : ' ▸'}
+              </Text>
+            </Pressable>
+            {devOpen ? (
+              <View style={styles.devBox}>
+                <Text style={styles.devMono} numberOfLines={3}>
+                  {diag}
+                </Text>
+                <Button
+                  title={
+                    dummyEnabled
+                      ? strings.settings.devDummyDisable
+                      : strings.settings.devDummyEnable
+                  }
+                  variant="ghost"
+                  size="md"
+                  onPress={() => setDummyEnabled(!dummyEnabled)}
+                />
+              </View>
+            ) : null}
+          </>
         ) : null}
       </ScrollView>
+
+      {showProgress ? (
+        <View
+          style={[
+            styles.progressDock,
+            { paddingBottom: Math.max(insets.bottom, theme.spacing.sm) },
+          ]}
+          accessibilityRole="progressbar"
+          accessibilityLabel={progressLine(indexing)}
+        >
+          <Text style={styles.progressLine} numberOfLines={1}>
+            {progressLine(indexing)}
+          </Text>
+          <View style={styles.progressTrack}>
+            <View
+              style={[styles.progressFill, { width: `${Math.round(fill * 100)}%` }]}
+            />
+          </View>
+        </View>
+      ) : null}
+
+      <Modal
+        visible={albumSyncOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAlbumSyncOpen(false)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setAlbumSyncOpen(false)}
+        >
+          <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.modalTitle}>
+              {strings.settings.albumSyncModalTitle}
+            </Text>
+            <Text style={styles.modalBody}>
+              {strings.settings.albumSyncModalBody}
+            </Text>
+            <Button
+              title={strings.settings.albumSyncModalConfirm}
+              variant="primary"
+              size="md"
+              onPress={confirmAlbumSync}
+            />
+            <Pressable
+              onPress={() => setAlbumSyncOpen(false)}
+              accessibilityRole="button"
+              style={({ pressed }) => pressed && styles.pressed}
+            >
+              <Text style={styles.modalCancel}>
+                {strings.settings.albumSyncModalCancel}
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <ProPaywallModal
         visible={paywallOpen}
@@ -305,92 +441,172 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background,
   },
-  grain: {
-    opacity: 0.28,
-  },
   content: {
-    padding: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: theme.spacing.xl,
+    paddingTop: theme.spacing.md,
   },
-  card: {
-    padding: theme.spacing.md,
-    gap: theme.spacing.sm,
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.hairline,
-    ...theme.shadows.card,
+  group: {
+    marginBottom: theme.spacing.xl,
   },
-  cardSpaced: {
-    marginTop: theme.spacing.md,
+  sectionLabel: {
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
+    fontWeight: '600',
+    color: theme.colors.subtle,
+    marginBottom: theme.spacing.sm,
   },
-  sectionTitle: {
-    ...theme.type.title,
-    fontFamily: theme.fonts.serif,
-    fontWeight: '700',
+  row: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing.md,
+  },
+  rowDisabled: {
+    opacity: 0.45,
+  },
+  rowTitle: {
+    ...theme.type.body,
+    fontFamily: theme.fonts.sans,
     color: theme.colors.ink,
+    fontWeight: '500',
+    flexShrink: 1,
   },
-  description: {
+  rowValue: {
     ...theme.type.label,
     fontFamily: theme.fonts.sans,
     color: theme.colors.inkSoft,
   },
-  status: {
+  rowTrailing: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  rowMuted: {
     ...theme.type.label,
     fontFamily: theme.fonts.sans,
-    fontWeight: '600',
     color: theme.colors.subtle,
-    paddingVertical: theme.spacing.xs,
   },
-  statusSet: {
-    color: theme.colors.terracotta,
-  },
-  error: {
-    ...theme.type.micro,
-    color: theme.colors.ink,
-  },
-  radiusBlock: {
-    gap: theme.spacing.sm,
-    paddingTop: theme.spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.hairline,
-  },
-  radiusLabel: {
-    ...theme.type.micro,
+  chevron: {
+    ...theme.type.title,
     fontFamily: theme.fonts.sans,
-    fontWeight: '600',
     color: theme.colors.subtle,
+    fontWeight: '300',
+    marginTop: -2,
   },
   radiusRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.xs,
   },
-  radiusChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.surfaceAlt,
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: theme.radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.colors.hairline,
   },
-  radiusChipActive: {
-    backgroundColor: theme.colors.terracottaSoft,
-    borderColor: theme.colors.terracotta,
+  chipOn: {
+    borderColor: theme.colors.ink,
+    backgroundColor: theme.tint.faint,
   },
-  radiusChipPressed: {
-    opacity: 0.7,
-  },
-  radiusChipText: {
+  chipText: {
     ...theme.type.label,
     fontFamily: theme.fonts.sans,
-    fontWeight: '600',
     color: theme.colors.inkSoft,
   },
-  radiusChipTextActive: {
-    color: theme.colors.terracotta,
+  chipTextOn: {
+    color: theme.colors.ink,
+    fontWeight: '600',
   },
-  hint: {
+  error: {
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.ink,
+    marginTop: theme.spacing.xs,
+  },
+  footer: {
     ...theme.type.micro,
     fontFamily: theme.fonts.sans,
     color: theme.colors.subtle,
+    marginTop: theme.spacing.sm,
+  },
+  pressed: {
+    opacity: 0.5,
+  },
+  devToggle: {
+    marginTop: theme.spacing.md,
+    minHeight: 36,
+    justifyContent: 'center',
+  },
+  devBox: {
+    gap: theme.spacing.sm,
+    paddingBottom: theme.spacing.md,
+  },
+  devMono: {
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.subtle,
+  },
+  progressDock: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingTop: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
+    gap: 8,
+    backgroundColor: theme.colors.surface,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.hairline,
+  },
+  progressLine: {
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
+    fontWeight: '500',
+    color: theme.colors.inkSoft,
+  },
+  progressTrack: {
+    height: 2,
+    backgroundColor: theme.colors.line,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: theme.colors.ink,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: theme.colors.overlayDark,
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing.lg,
+  },
+  modalCard: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.lg,
+    gap: theme.spacing.md,
+    ...theme.shadows.card,
+  },
+  modalTitle: {
+    ...theme.type.title,
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.ink,
+    fontWeight: '700',
+  },
+  modalBody: {
+    ...theme.type.body,
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.inkSoft,
+  },
+  modalCancel: {
+    ...theme.type.label,
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.subtle,
+    textAlign: 'center',
+    paddingVertical: theme.spacing.xs,
   },
 });
