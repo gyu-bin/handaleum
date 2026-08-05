@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
   backText: {
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     fontSize: 14,
     color: theme.colors.inkSoft,
     fontWeight: '500',

@@ -462,7 +462,7 @@ const styles = StyleSheet.create({
   },
   saveActionText: {
     ...theme.type.label,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     color: theme.colors.surface,
     fontWeight: '700',
   },
@@ -471,7 +471,7 @@ const styles = StyleSheet.create({
   },
   label: {
     ...theme.type.label,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     color: theme.colors.inkSoft,
     fontWeight: '700',
   },
@@ -488,7 +488,7 @@ const styles = StyleSheet.create({
   sortChip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: theme.radius.pill,
+    borderRadius: theme.radius.md,
     borderWidth: 1,
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface,
@@ -499,7 +499,7 @@ const styles = StyleSheet.create({
   },
   sortChipText: {
     ...theme.type.micro,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     color: theme.colors.inkSoft,
     fontWeight: '600',
   },
@@ -568,7 +568,7 @@ const styles = StyleSheet.create({
   },
   cardHero: { flex: 1, overflow: 'hidden' },
   cardTitle: {
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     color: theme.colors.ink,
     fontSize: 12.6,
     fontWeight: '700',
@@ -602,7 +602,7 @@ const styles = StyleSheet.create({
   meterCount: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
   meterNum: {
     ...theme.type.title,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     color: theme.colors.terracotta,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
@@ -619,7 +619,7 @@ const styles = StyleSheet.create({
   /** Fixed under the header (not in the scroll) so it's visible next to save. */
   error: {
     ...theme.type.label,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     color: theme.colors.terracotta,
     fontWeight: '600',
     paddingHorizontal: theme.spacing.lg,

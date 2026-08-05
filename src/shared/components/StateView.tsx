@@ -66,7 +66,7 @@ const styles = StyleSheet.create({
   },
   description: {
     ...theme.type.body,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     color: theme.colors.inkSoft,
     textAlign: 'center',
   },

@@ -24,33 +24,86 @@ export type StampLibrarySyncResult = {
   photoCount: number;
 };
 
-export type StampScanDebug = {
+export type StampLibraryProgress = {
   phase: 'idle' | 'gps' | 'geocode' | 'done';
-  photos: number;
+  /** Album assets total (GPS phase). */
+  assetTotal: number;
+  assetScanned: number;
+  /** Photos with GPS so far / after GPS phase. */
+  photoCount: number;
   chunkDone: number;
   chunkTotal: number;
   startedAt: number;
 };
 
-let scanDebug: StampScanDebug = {
+/** @deprecated Prefer StampLibraryProgress — kept for settings diag. */
+export type StampScanDebug = StampLibraryProgress;
+
+const IDLE_PROGRESS: StampLibraryProgress = {
   phase: 'idle',
-  photos: 0,
+  assetTotal: 0,
+  assetScanned: 0,
+  photoCount: 0,
   chunkDone: 0,
   chunkTotal: 0,
   startedAt: 0,
 };
 
-/** Live full-album scan state for the settings diagnostics panel. */
-export function getStampScanDebug(): StampScanDebug {
-  return scanDebug;
+let progress: StampLibraryProgress = IDLE_PROGRESS;
+type ProgressListener = (next: StampLibraryProgress) => void;
+const progressListeners = new Set<ProgressListener>();
+
+function emitProgress(): void {
+  for (const listener of progressListeners) {
+    listener(progress);
+  }
 }
 
-/** GPS-only phase — match month path (8). 24 melted the UI during map use. */
-const LIBRARY_GPS_BATCH = 8;
+let lastProgressEmitAt = 0;
+const PROGRESS_EMIT_MIN_MS = 120;
+
+function setProgress(next: StampLibraryProgress, force = false): void {
+  progress = next;
+  const now = Date.now();
+  if (
+    !force &&
+    next.phase === 'gps' &&
+    now - lastProgressEmitAt < PROGRESS_EMIT_MIN_MS
+  ) {
+    return;
+  }
+  lastProgressEmitAt = now;
+  emitProgress();
+}
+
+export function getStampLibraryProgress(): StampLibraryProgress {
+  return progress;
+}
+
+export function subscribeStampLibraryProgress(
+  listener: ProgressListener,
+): () => void {
+  progressListeners.add(listener);
+  listener(progress);
+  return () => {
+    progressListeners.delete(listener);
+  };
+}
+
+/** Live full-album scan state for the settings diagnostics panel. */
+export function getStampScanDebug(): StampScanDebug {
+  return progress;
+}
+
+/**
+ * Full-album GPS batch. Kickoff already waits for pin idle, so we can run
+ * hotter than the month path (8) without starving first paint.
+ */
+const LIBRARY_GPS_BATCH = 32;
 /** Geocode / stamp write chunks so the grid fills while the rest runs. */
-const GEOCODE_PHOTO_CHUNK = 200;
-/** Pause between geocode chunks so gestures / interactive place resolve breathe. */
-const GEOCODE_CHUNK_YIELD_MS = 250;
+const GEOCODE_PHOTO_CHUNK = 400;
+/** Short yield — keep UI alive without stalling 발자취-like pace. */
+const GEOCODE_CHUNK_YIELD_MS = 40;
 /** How often to re-check assets previously cached as no-GPS (iCloud etc.). */
 const DEEP_RECHECK_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -87,9 +140,8 @@ async function ingestPlaces(
     month: fallbackMonth,
     silent,
   });
-  if (result.added.length > 0 || result.pruned.length > 0) {
-    notifyStampsChanged();
-  }
+  // Defer UI notify — chunked geocode used to rebuild the stamp snapshot on
+  // every batch and re-render anything subscribed (map screen before badge move).
   return result.added.length;
 }
 
@@ -110,6 +162,7 @@ export async function syncStampsFromLibrary(): Promise<StampLibrarySyncResult> {
 
   if (!(await ensureGeocodePermission())) {
     console.warn('[stamps] library sync skipped — location permission denied');
+    setProgress(IDLE_PROGRESS);
     return { added: 0, photoCount: 0 };
   }
 
@@ -117,13 +170,18 @@ export async function syncStampsFromLibrary(): Promise<StampLibrarySyncResult> {
   const deepRecheck =
     wasEmpty || lastSync === 0 || Date.now() - lastSync >= DEEP_RECHECK_MS;
 
-  scanDebug = {
-    phase: 'gps',
-    photos: 0,
-    chunkDone: 0,
-    chunkTotal: 0,
-    startedAt: Date.now(),
-  };
+  setProgress(
+    {
+      phase: 'gps',
+      assetTotal: 0,
+      assetScanned: 0,
+      photoCount: 0,
+      chunkDone: 0,
+      chunkTotal: 0,
+      startedAt: Date.now(),
+    },
+    true,
+  );
 
   // Phase 1 — every album photo with GPS (all years). Geocode only after.
   // Deep recheck (iCloud / prior no-GPS) is weekly — every visit would take hours.
@@ -131,10 +189,21 @@ export async function syncStampsFromLibrary(): Promise<StampLibrarySyncResult> {
   const photos = await loadAllLocatedPhotos({
     forceRealLibrary: true,
     locationBatchSize: LIBRARY_GPS_BATCH,
+    batchYieldMs: 0,
+    yieldToPinExports: false,
     retryFailedLocations: true,
     networkLocationFallback: deepRecheck,
     recheckCachedNoLocation: deepRecheck,
     shouldContinue: isAppForeground,
+    onScanProgress: (scan) => {
+      setProgress({
+        ...progress,
+        phase: 'gps',
+        assetTotal: scan.assetTotal,
+        assetScanned: scan.assetScanned,
+        photoCount: scan.locatedCount,
+      });
+    },
   });
 
   console.warn(
@@ -145,19 +214,37 @@ export async function syncStampsFromLibrary(): Promise<StampLibrarySyncResult> {
   );
 
   // Phase 2 — places → stamps for the entire set (month picker never stamps).
-  const chunkTotal = Math.ceil(photos.length / GEOCODE_PHOTO_CHUNK);
-  scanDebug = {
-    ...scanDebug,
-    phase: 'geocode',
-    photos: photos.length,
-    chunkTotal,
-  };
+  const chunkTotal = Math.max(1, Math.ceil(photos.length / GEOCODE_PHOTO_CHUNK));
+  setProgress(
+    {
+      ...progress,
+      phase: 'geocode',
+      photoCount: photos.length,
+      assetScanned: progress.assetTotal || progress.assetScanned,
+      chunkDone: 0,
+      chunkTotal: photos.length === 0 ? 0 : chunkTotal,
+    },
+    true,
+  );
   let totalAdded = 0;
+  let lastNotifyAt = 0;
   for (let i = 0; i < photos.length; i += GEOCODE_PHOTO_CHUNK) {
     await waitForAppForeground();
     const chunk = photos.slice(i, i + GEOCODE_PHOTO_CHUNK);
-    totalAdded += await ingestPlaces(chunk, fallbackMonth, silent);
-    scanDebug = { ...scanDebug, chunkDone: scanDebug.chunkDone + 1 };
+    const added = await ingestPlaces(chunk, fallbackMonth, silent);
+    totalAdded += added;
+    setProgress(
+      {
+        ...progress,
+        chunkDone: progress.chunkDone + 1,
+      },
+      true,
+    );
+    const now = Date.now();
+    if (added > 0 && now - lastNotifyAt > 2000) {
+      notifyStampsChanged();
+      lastNotifyAt = now;
+    }
     if (i + GEOCODE_PHOTO_CHUNK < photos.length) {
       await new Promise((r) => setTimeout(r, GEOCODE_CHUNK_YIELD_MS));
     }
@@ -165,6 +252,8 @@ export async function syncStampsFromLibrary(): Promise<StampLibrarySyncResult> {
 
   if (wasEmpty) {
     markAllStampsSeen();
+  }
+  if (totalAdded > 0 || wasEmpty) {
     notifyStampsChanged();
   }
 
@@ -176,6 +265,11 @@ export async function syncStampsFromLibrary(): Promise<StampLibrarySyncResult> {
     totalAdded,
   );
 
-  scanDebug = { ...scanDebug, phase: 'done' };
+  setProgress({ ...progress, phase: 'done' }, true);
   return { added: totalAdded, photoCount: photos.length };
+}
+
+/** Reset banner state after the runner tears down syncing. */
+export function resetStampLibraryProgress(): void {
+  setProgress(IDLE_PROGRESS, true);
 }

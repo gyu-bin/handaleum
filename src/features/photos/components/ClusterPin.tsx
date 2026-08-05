@@ -54,8 +54,8 @@ export function ClusterPin({
   const displayAssetId = display?.assetId;
   const count = cluster.photos.length;
   const size = CARD_BY_DETAIL[detail];
-  const frame = selected ? theme.colors.accent : theme.colors.background;
-  const tipFill = selected ? theme.colors.accent : theme.colors.ink;
+  const frame = theme.colors.ink;
+  const tipFill = theme.colors.ink;
 
   useEffect(() => {
     if (!displayAssetId) {

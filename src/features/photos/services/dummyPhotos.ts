@@ -47,7 +47,13 @@ function iosAddr(
  * Fixed Seoul + Gyeonggi demo set — enough for map pins, journey chips,
  * and card “위치별” sections. Coordinates stay near the named 법정동 so
  * jitter (~0.012°) still resolves to the same hub address.
+ *
+ * Stress: `DUMMY_STRESS_MULT` multiplies per-hub counts (1 ≈ 55장, 50 ≈ 2.7k).
+ * Image URIs reuse a small pool so picsum/network doesn't mask JS jank.
  */
+/** __DEV__ map/CPU stress. Set back to 1 after stress testing. */
+export const DUMMY_STRESS_MULT = 1;
+
 const HUBS: DummyHub[] = [
   // —— Seoul (region/city both 서울특별시; 구 in district; 동 in street) ——
   {
@@ -291,7 +297,7 @@ const HUBS: DummyHub[] = [
 ];
 
 /** Match jittered pins (~0.012°) back to their hub. */
-const HUB_MATCH_DEG = 0.03;
+const HUB_MATCH_DEG = DUMMY_STRESS_MULT > 1 ? 0.06 : 0.03;
 
 /**
  * Dev demo photos. On in __DEV__ unless Settings turns them off.
@@ -310,8 +316,13 @@ export function setDevDummyPhotosEnabled(enabled: boolean): void {
 
 /** Small deterministic scatter so pins don't stack on one pixel. */
 function jitter(i: number, axis: 0 | 1): number {
-  const a = ((i * 17 + axis * 9) % 7) - 3;
-  return a * 0.004;
+  const a = ((i * 17 + axis * 9) % 11) - 5;
+  // Wider scatter under stress so clustering / remount paths get exercise.
+  return a * (DUMMY_STRESS_MULT > 1 ? 0.008 : 0.004);
+}
+
+function hubCount(hub: DummyHub): number {
+  return hub.count * Math.max(1, DUMMY_STRESS_MULT);
 }
 
 export function buildDummyMonthlyPhotos(month: MonthKey): MonthlyPhotos {
@@ -322,7 +333,8 @@ export function buildDummyMonthlyPhotos(month: MonthKey): MonthlyPhotos {
   let i = 0;
 
   for (const hub of HUBS) {
-    for (let k = 0; k < hub.count; k += 1) {
+    const n = hubCount(hub);
+    for (let k = 0; k < n; k += 1) {
       const t = startMs + Math.floor(((i + 1) / (total + 1)) * span);
       photos.push({
         assetId: `${DUMMY_ASSET_PREFIX}${month}:${i}`,
@@ -342,7 +354,9 @@ export function buildDummyMonthSummaries(): MonthSummary[] {
   const now = new Date();
   const out: MonthSummary[] = [];
   const total = dummyPhotoCount();
-  for (let i = 0; i < 6; i += 1) {
+  // More months under stress → stamp library path + month warmup contend.
+  const months = DUMMY_STRESS_MULT > 1 ? 18 : 6;
+  for (let i = 0; i < months; i += 1) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const month =
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` as MonthKey;
@@ -356,13 +370,17 @@ export function isDummyAssetId(assetId: string): boolean {
 }
 
 export function dummyPhotoCount(): number {
-  return HUBS.reduce((sum, h) => sum + h.count, 0);
+  return HUBS.reduce((sum, h) => sum + hubCount(h), 0);
 }
 
 /** Deterministic remote placeholder for expo-image / Naver httpUri. */
 export function dummyAssetImageUri(assetId: string): string {
-  const seed = encodeURIComponent(assetId);
-  return `https://picsum.photos/seed/${seed}/600/800`;
+  // Reuse a small seed pool — unique URLs per photo would make stress tests
+  // measure picsum, not our map/cluster/geocode path.
+  const tail = assetId.split(':').pop() ?? '0';
+  const n = Number.parseInt(tail, 10);
+  const pool = Number.isFinite(n) ? Math.abs(n) % 32 : 0;
+  return `https://picsum.photos/seed/handaleum-${pool}/128/128`;
 }
 
 /**

@@ -45,7 +45,7 @@ function PaperKorea({ height }: { height: number }) {
       <Path
         d={d}
         fill="none"
-        stroke={theme.colors.accent}
+        stroke={theme.colors.ink}
         strokeWidth={0.7}
         opacity={0.28}
       />

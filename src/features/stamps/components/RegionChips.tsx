@@ -11,7 +11,7 @@ export interface RegionChipsProps {
 const CHIP_H = 40;
 
 /**
- * Horizontal 시·도 chip row. Selected chip fills with terracotta.
+ * Horizontal 시·도 chip row. Selected chip fills with ink (Plan A).
  * Fixed chip height + generous scroll padding so Hangul is not clipped.
  */
 export function RegionChips({ sidos, selected, onSelect }: RegionChipsProps) {
@@ -65,21 +65,21 @@ const styles = StyleSheet.create({
   },
   chip: {
     height: CHIP_H,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     marginRight: theme.spacing.sm,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.surfaceAlt,
+    borderRadius: 4,
+    backgroundColor: theme.colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.colors.panelBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
   chipActive: {
-    backgroundColor: theme.colors.terracotta,
-    borderColor: theme.colors.terracotta,
+    backgroundColor: theme.colors.ink,
+    borderColor: theme.colors.ink,
   },
   label: {
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     fontSize: 14,
     // Match chip inner box — avoid theme.label lineHeight which clips Hangul.
     lineHeight: 20,

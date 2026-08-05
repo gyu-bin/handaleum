@@ -10,16 +10,17 @@ import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
 import { useOnboarding } from '@/features/onboarding/hooks/useOnboarding';
-import { useStamps } from '@/features/stamps/hooks/useStamps';
+import { IndexingBanner } from '@/features/stamps/components/IndexingBanner';
+import { useStampLibraryProgress } from '@/features/stamps/hooks/useStampLibraryProgress';
 import { scheduleStampLibrarySyncFromMap } from '@/features/stamps/services/stampLibrarySyncRunner';
 
 import { DEFAULT_MAP_ZOOM, MapCanvas } from '../components/MapCanvas';
+import { clusterSeedId } from '../components/MapClusterMarker';
 import { HomeNavBar } from '../components/HomeNavBar';
 import { PhotoPreviewSheet } from '../components/PhotoPreviewSheet';
 import { TimeSlider, type TimeRange } from '../components/TimeSlider';
 import { VisitChipRow } from '../components/VisitChipRow';
 import { useCurrentMonth } from '../hooks/useCurrentMonth';
-import { useMapTheme } from '../hooks/useMapTheme';
 import { useMonthJourney } from '../hooks/useMonthJourney';
 import { useMonthlyPhotos } from '../hooks/useMonthlyPhotos';
 import { usePhotoPermission } from '../hooks/usePhotoPermission';
@@ -49,6 +50,18 @@ function formatMonthLabel(month: MonthKey): string {
   return `${year}. ${mon}`;
 }
 
+/** Stable dock items — stamp badge is owned by HomeNavBar. */
+const MAP_NAV_ITEMS = [
+  { href: '/months' as const, label: strings.months.title, icon: 'calendar' as const },
+  { href: '/playback' as const, label: strings.playback.title, icon: 'play' as const },
+  { href: '/cards' as const, label: strings.cards.listTitle, icon: 'card' as const },
+  {
+    href: '/stamps' as Href,
+    label: strings.stamps.title,
+    icon: 'stamp' as const,
+  },
+];
+
 export function MonthlyMapScreen() {
   const router = useRouter();
   const { seen: onboardingSeen } = useOnboarding();
@@ -56,8 +69,8 @@ export function MonthlyMapScreen() {
   const hasLibraryAccess = status === 'granted' || status === 'limited';
   const hasAccess = hasLibraryAccess || isDevDummyPhotosEnabled();
   const { month } = useCurrentMonth();
-  const { themeId } = useMapTheme();
   const { covers, setCover } = usePinCovers(month);
+  const indexingProgress = useStampLibraryProgress();
   const { data, isPending, isFetching, isError, refetch, isRefetching } = useMonthlyPhotos(month, {
     enabled: isReady && hasAccess,
   });
@@ -110,7 +123,6 @@ export function MonthlyMapScreen() {
     enabled: Boolean(data) && !isFetching,
     resetKey: month,
   });
-  const { unseenCount } = useStamps();
 
   // Full-album stamp sync — session-once, after first month GPS finishes.
   useEffect(() => {
@@ -120,42 +132,57 @@ export function MonthlyMapScreen() {
     scheduleStampLibrarySyncFromMap();
   }, [hasLibraryAccess, isReady, isFetching]);
 
-  // Warm pin covers + a stable photo sample — not cluster list (zoom reclusters
-  // used to re-enqueue Image.prefetch on every idle tick).
-  const imageWarmKey = useMemo(() => {
-    const photos = data?.allPhotos;
-    if (!photos || photos.length === 0) {
-      return null;
-    }
-    const first = photos[0]!;
-    const last = photos[photos.length - 1]!;
-    return `${month}:${photos.length}:${first.assetId}:${last.assetId}`;
-  }, [month, data?.allPhotos]);
+  // Warm cover thumbs only on the map. Sheet/playback warm their own window —
+  // sampling ~80 album images here was fighting pin exports while panning.
+  const coverWarmKey = useMemo(
+    () => Object.values(covers).sort().join(','),
+    [covers],
+  );
 
   useEffect(() => {
     resetClusterCellCache();
   }, [month]);
 
   useEffect(() => {
-    if (!imageWarmKey || !data?.allPhotos) {
+    const assetIds = Object.values(covers);
+    if (assetIds.length === 0) {
       return;
-    }
-    const priority: string[] = [...Object.values(covers)];
-    const sample = data.allPhotos;
-    const step = Math.max(1, Math.floor(sample.length / 40));
-    for (let i = 0; i < sample.length && priority.length < 80; i += step) {
-      priority.push(sample[i]!.assetId);
     }
     startMonthImageWarmup({
       month,
-      assetIds: priority,
+      assetIds,
     });
-  }, [imageWarmKey, covers, month, data?.allPhotos]);
+  }, [coverWarmKey, covers, month]);
 
+  // Keep the open pin across zoom: cluster.id includes grain and changes, but
+  // the seed asset usually survives. Drop selection only if the seed is gone.
+  useEffect(() => {
+    if (!selected) {
+      return;
+    }
+    const seed = clusterSeedId(selected);
+    const match =
+      clusters.find((c) => clusterSeedId(c) === seed) ??
+      clusters.find((c) => c.photos.some((p) => p.assetId === seed));
+    if (!match) {
+      setSelected(null);
+      return;
+    }
+    if (
+      match.id !== selected.id ||
+      match.photos.length !== selected.photos.length
+    ) {
+      setSelected(match);
+    }
+  }, [clusters, selected]);
 
   const onSelectCluster = useCallback((cluster: PlaceCluster) => {
-    setSelected((prev) => (prev?.id === cluster.id ? null : cluster));
+    setSelected((prev) =>
+      prev && clusterSeedId(prev) === clusterSeedId(cluster) ? null : cluster,
+    );
   }, []);
+
+  const selectedSeedId = selected ? clusterSeedId(selected) : null;
 
   const selectedPlaceKey = selected
     ? placeBucketKey(selected.centerLat, selected.centerLng)
@@ -199,17 +226,6 @@ export function MonthlyMapScreen() {
   const monthLabel = formatMonthLabel(month);
   // Content destinations live in the thumb-reachable bottom bar; settings is a
   // low-frequency config, so it sits as a quiet link in the header instead.
-  const navItems = [
-    { href: '/months' as const, label: strings.months.title, icon: 'calendar' as const },
-    { href: '/playback' as const, label: strings.playback.title, icon: 'play' as const },
-    { href: '/cards' as const, label: strings.cards.listTitle, icon: 'card' as const },
-    {
-      href: '/stamps' as Href,
-      label: strings.stamps.title,
-      icon: 'stamp' as const,
-      badge: unseenCount > 0,
-    },
-  ];
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
@@ -217,9 +233,6 @@ export function MonthlyMapScreen() {
         <View style={styles.header}>
           <View style={styles.hero}>
             <Text style={styles.wordmark}>{strings.brand}</Text>
-            <Text style={styles.tagline} numberOfLines={1}>
-              {strings.tagline}
-            </Text>
             <Text style={styles.monthMeta} numberOfLines={1}>
               {(isFetching || isResolving) && data
                 ? strings.map.resolvingLocations
@@ -269,6 +282,8 @@ export function MonthlyMapScreen() {
           </View>
         </View>
 
+        <IndexingBanner progress={indexingProgress} />
+
         {showNotices && (data.noLocationCount > 0 || data.homeExcludedCount > 0) ? (
           <View style={styles.noticeRow}>
             {data.noLocationCount > 0 ? (
@@ -307,8 +322,7 @@ export function MonthlyMapScreen() {
             frameKey={month}
             onZoomChange={onZoomChange}
             onSelectCluster={onSelectCluster}
-            selectedClusterId={selected?.id ?? null}
-            themeId={themeId}
+            selectedClusterId={selectedSeedId}
             pinCovers={covers}
           />
           {data.photos.length === 0 ? (
@@ -328,14 +342,14 @@ export function MonthlyMapScreen() {
           ) : null}
           <Button
             title={strings.cards.createTitle}
-            variant="accent"
+            variant="primary"
             style={styles.createBtn}
             onPress={() => router.push('/cards/create')}
           />
         </View>
       </View>
 
-      <HomeNavBar items={navItems} />
+      <HomeNavBar items={MAP_NAV_ITEMS} />
 
       <PhotoPreviewSheet
         cluster={selected}
@@ -350,19 +364,19 @@ export function MonthlyMapScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: theme.colors.canvas,
+    backgroundColor: theme.colors.background,
   },
   body: {
     flex: 1,
-    paddingHorizontal: theme.spacing.md,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
     paddingTop: 2,
-    paddingBottom: theme.spacing.sm,
+    paddingBottom: theme.spacing.xs,
   },
   headerActions: {
     flexDirection: 'row',
@@ -379,7 +393,7 @@ const styles = StyleSheet.create({
   },
   actionLabel: {
     ...theme.type.micro,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     color: theme.colors.inkSoft,
     fontWeight: '600',
   },
@@ -390,24 +404,16 @@ const styles = StyleSheet.create({
     paddingRight: theme.spacing.sm,
   },
   wordmark: {
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     color: theme.colors.ink,
-    fontSize: 26,
-    lineHeight: 30,
-    letterSpacing: -0.5,
+    fontSize: 22,
+    lineHeight: 26,
+    letterSpacing: -0.4,
     fontWeight: '700',
-  },
-  tagline: {
-    ...theme.type.micro,
-    fontFamily: theme.fonts.serif,
-    color: theme.colors.inkSoft,
-    letterSpacing: -0.2,
-    fontSize: 11,
-    lineHeight: 14,
   },
   monthMeta: {
     ...theme.type.micro,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     color: theme.colors.subtle,
     marginTop: 1,
   },
@@ -422,8 +428,8 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.hairline,
   },
   infoDotActive: {
-    backgroundColor: theme.colors.terracotta,
-    borderColor: theme.colors.terracotta,
+    backgroundColor: theme.colors.ink,
+    borderColor: theme.colors.ink,
   },
   infoDotText: {
     ...theme.type.micro,
@@ -436,14 +442,16 @@ const styles = StyleSheet.create({
   },
 
   journeyChips: {
-    paddingBottom: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    paddingBottom: theme.spacing.xs,
   },
   noticeRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
     justifyContent: 'flex-start',
-    paddingBottom: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    paddingBottom: theme.spacing.xs,
   },
   noticeChipPressed: {
     backgroundColor: theme.colors.terracottaSoft,
@@ -462,6 +470,7 @@ const styles = StyleSheet.create({
   mapBlock: {
     flex: 1,
     position: 'relative',
+    marginTop: theme.spacing.xs,
   },
   emptyOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -477,15 +486,16 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.overlay,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.sm,
-    borderRadius: theme.radius.md,
+    borderRadius: theme.radius.sm,
     overflow: 'hidden',
   },
   footer: {
+    paddingHorizontal: theme.spacing.md,
     paddingTop: theme.spacing.sm,
-    paddingBottom: theme.spacing.sm,
+    paddingBottom: theme.spacing.xs,
     gap: theme.spacing.sm,
   },
   createBtn: {
-    borderRadius: theme.radius.pill,
+    borderRadius: theme.radius.sm,
   },
 });

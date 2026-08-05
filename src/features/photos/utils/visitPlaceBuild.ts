@@ -40,7 +40,10 @@ export function collectBuckets(photos: PhotoRef[]): PlaceBucket[] {
         firstTakenAt: photo.takenAt,
       });
     } else if (photo.takenAt < existing.firstTakenAt) {
+      // Geocode the earliest photo's real coordinates (not just its timestamp).
       existing.firstTakenAt = photo.takenAt;
+      existing.lat = photo.lat;
+      existing.lng = photo.lng;
     }
   }
   return [...map.values()].sort((a, b) =>

@@ -190,13 +190,13 @@ const styles = StyleSheet.create({
   },
   benefitTitle: {
     ...theme.type.label,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     fontWeight: '700',
     color: theme.colors.ink,
   },
   benefitBody: {
     ...theme.type.body,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     color: theme.colors.inkSoft,
   },
 

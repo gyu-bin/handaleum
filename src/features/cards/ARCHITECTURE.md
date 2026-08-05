@@ -17,7 +17,7 @@
 
 | 결정 | 대안 | 선택 이유 | 날짜 |
 |---|---|---|---|
-| 카드 **UI 크롬**=journal (terracotta/serif). Feed/Story **템플릿 캔버스**는 pixel 고정 — 레이아웃·sand tick 최소 변경 | 템플릿까지 전면 저널화 | 사용자 2-B + 내보내기 구도 보존 | 2026-08-02 |
+| 카드 **UI 크롬**=Plan A (ink/serif 히어로). Feed/Story **템플릿 캔버스**는 pixel 고정 — 레이아웃·sand tick 최소 변경 | 템플릿까지 전면 저널화 | 사용자 Plan A + 내보내기 구도 보존 | 2026-08-05 |
 | MMKV CRUD를 async 시그니처로 | 동기 API 직접 노출 | TanStack Query 일관성. 소스 교체 여지 | 2026-07-17 |
 | 저장 백엔드 expo-sqlite/kv-store로 교체 | MMKV 유지(dev build 필요) / AsyncStorage(비동기라 구조 변경 필요) | 사용자 결정(Expo Go 워크플로우). 동기 API라 기존 파사드·호출부 무변경 | 2026-07-18 |
 | 캡처는 react-native-view-shot 우선 | @shopify/react-native-skia | spec 확정. 품질 미달 시에만 skia 재검토 | 2026-07-17 |

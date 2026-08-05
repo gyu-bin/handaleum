@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
   },
   proText: {
     ...theme.type.label,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     color: theme.colors.terracotta,
     fontWeight: '800',
     fontSize: 11,

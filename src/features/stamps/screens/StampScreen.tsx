@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Path } from 'react-native-svg';
 
 import {
   getStampsScanIntroSeen,
@@ -16,6 +17,7 @@ import { theme } from '@/shared/constants/theme';
 import { useCurrentMonth } from '@/features/photos/hooks/useCurrentMonth';
 import { usePhotoPermission } from '@/features/photos/hooks/usePhotoPermission';
 
+import { CityList, type CityRow } from '../components/CityList';
 import {
   CityStampSections,
   type CityStampSection,
@@ -23,16 +25,16 @@ import {
 import { MascotPin } from '../components/MascotPin';
 import { RegionChips } from '../components/RegionChips';
 import { StampEarnOverlay } from '../components/StampEarnOverlay';
+import { StampMapModal } from '../components/StampMapModal';
 import { StampScanIntroModal } from '../components/StampScanIntroModal';
 import { useStampLibrarySync } from '../hooks/useStampLibrarySync';
 import { useStamps } from '../hooks/useStamps';
 import {
   SIDO_ORDER,
   cityListForSido,
-  isGeneralGuParentCity,
+  dongListForCity,
   stampId,
-  unitsForCity,
-} from '../services/sigunguIndex';
+} from '../services/dongIndex';
 import {
   countCollectedInCity,
   countCollectedInSido,
@@ -47,8 +49,27 @@ function tiltForName(name: string): number {
   return h - 8;
 }
 
+function MapIcon({ color }: { color: string }) {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M9 4.5l-5.2 1.7A1 1 0 003 7.1v11.3a1 1 0 001.3.95L9 17.5l6 2 5.2-1.7A1 1 0 0021 16.9V5.6a1 1 0 00-1.3-.95L15 6.5l-6-2z"
+        stroke={color}
+        strokeWidth={1.7}
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M9 4.5v13M15 6.5v13"
+        stroke={color}
+        strokeWidth={1.7}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
 /**
- * 발도장 — lifetime accumulate from all GPS photos (not current month only).
+ * 발도장 — 시·도 → 시 → 동 (방문/미방문).
  */
 export function StampScreen() {
   const { month } = useCurrentMonth();
@@ -60,13 +81,14 @@ export function StampScreen() {
 
   const { collected, unseen, collectedCount, markAllSeen } = useStamps();
   const [sido, setSido] = useState(SIDO_ORDER[0] ?? '서울');
+  const [city, setCity] = useState<string | null>(null);
   const [celebrate, setCelebrate] = useState<string[] | null>(null);
   const [animateIds, setAnimateIds] = useState<Set<string>>(() => new Set());
   const [replayNonce, setReplayNonce] = useState<Record<string, number>>({});
   const [showScanIntro, setShowScanIntro] = useState(
     () => !getStampsScanIntroSeen(),
   );
-  /** Stamp ids already shown in the earn overlay this session (once each). */
+  const [mapOpen, setMapOpen] = useState(false);
   const celebratedIds = useRef(new Set<string>());
   const celebrating = useRef(false);
 
@@ -75,7 +97,10 @@ export function StampScreen() {
     setShowScanIntro(false);
   }, []);
 
-  // Earn popup only for unseen (new) stamps — once per id, never on re-entry.
+  useEffect(() => {
+    setCity(null);
+  }, [sido]);
+
   useEffect(() => {
     if (celebrating.current || unseen.length === 0) {
       return;
@@ -104,7 +129,6 @@ export function StampScreen() {
       }
     }
 
-    // Clear badge immediately so remount / re-sync cannot re-queue the same ids.
     markAllSeen();
 
     if (ids.size > 0) {
@@ -114,6 +138,9 @@ export function StampScreen() {
       const first = firstId ? collected[firstId] : undefined;
       if (first?.sido) {
         setSido(first.sido);
+      }
+      if (first?.city) {
+        setCity(first.city);
       }
     } else {
       celebrating.current = false;
@@ -128,75 +155,64 @@ export function StampScreen() {
   const onReplayStamp = useCallback((id: string) => {
     setReplayNonce((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
   }, []);
+
   const cities = useMemo(() => cityListForSido(sido), [sido]);
   const collectedInSido = countCollectedInSido(collected, sido);
   const monthFirsts = firstsInMonth(collected, month);
 
-  const sections: CityStampSection[] = useMemo(() => {
-    const groups: CityStampSection[] = [];
-    let leafUnits: CityStampSection['units'] = [];
-    let leafCollected = 0;
-    let leafTotal = 0;
-
-    for (const city of cities) {
-      const units = unitsForCity(sido, city);
-      const collectedCountInCity = countCollectedInCity(
-        collected,
-        sido,
-        city,
-        units,
-      );
-      const mapped = units.map((name) => {
-        const id = stampId(sido, name);
+  const cityRows: CityRow[] = useMemo(
+    () =>
+      cities.map((c) => {
+        const total = dongListForCity(sido, c).length;
         return {
-          id,
-          name,
-          collected: Boolean(collected[id]),
-          animateIn: animateIds.has(id),
-          tiltDeg: tiltForName(name),
+          city: c,
+          collected: countCollectedInCity(collected, sido, c),
+          total,
         };
-      });
-
-      if (isGeneralGuParentCity(city) && units.length > 1) {
-        groups.push({
-          city,
-          grouped: true,
-          showHeader: true,
-          collected: collectedCountInCity,
-          total: units.length,
-          units: mapped,
-        });
-      } else {
-        leafUnits = leafUnits.concat(mapped);
-        leafCollected += collectedCountInCity;
-        leafTotal += units.length;
-      }
-    }
-
-    leafUnits.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
-
-    const out = [...groups];
-    if (leafUnits.length > 0) {
-      out.push({
-        city: '__leaves__',
-        grouped: false,
-        showHeader: false,
-        collected: leafCollected,
-        total: leafTotal,
-        units: leafUnits,
-      });
-    }
-    return out;
-  }, [animateIds, cities, collected, sido]);
+      }),
+    [cities, collected, sido],
+  );
 
   const progressTotal = useMemo(
-    () => cities.reduce((n, c) => n + unitsForCity(sido, c).length, 0),
+    () => cities.reduce((n, c) => n + dongListForCity(sido, c).length, 0),
     [cities, sido],
   );
   const progressPct =
     progressTotal === 0
       ? 0
       : Math.min(100, (collectedInSido / progressTotal) * 100);
+
+  const dongSection: CityStampSection | null = useMemo(() => {
+    if (!city) {
+      return null;
+    }
+    const dongs = dongListForCity(sido, city);
+    const units = dongs.map((name) => {
+      const id = stampId(sido, city, name);
+      return {
+        id,
+        name,
+        collected: Boolean(collected[id]),
+        animateIn: animateIds.has(id),
+        tiltDeg: tiltForName(name),
+      };
+    });
+    // Visited first so progress is obvious at a glance.
+    units.sort((a, b) => {
+      if (a.collected !== b.collected) {
+        return a.collected ? -1 : 1;
+      }
+      return a.name.localeCompare(b.name, 'ko');
+    });
+    return {
+      city,
+      grouped: true,
+      showHeader: false,
+      collected: countCollectedInCity(collected, sido, city),
+      total: dongs.length,
+      units,
+    };
+  }, [animateIds, city, collected, sido]);
 
   if (!isReady) {
     return (
@@ -222,33 +238,80 @@ export function StampScreen() {
 
       <ScreenHeader
         title={strings.stamps.title}
+        onBack={city ? () => setCity(null) : undefined}
         trailing={
-          monthFirsts > 0 ? (
-            <View style={styles.pill}>
-              <Text style={styles.pillText}>
-                {strings.stamps.newThisMonth(monthFirsts)}
-              </Text>
-            </View>
-          ) : undefined
+          <View style={styles.trailing}>
+            {monthFirsts > 0 ? (
+              <View style={styles.pill}>
+                <Text style={styles.pillText}>
+                  {strings.stamps.newThisMonth(monthFirsts)}
+                </Text>
+              </View>
+            ) : null}
+            <Pressable
+              onPress={() => setMapOpen(true)}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={strings.stamps.mapOpen}
+              style={({ pressed }) => [
+                styles.mapBtn,
+                pressed && styles.mapBtnPressed,
+              ]}
+            >
+              <MapIcon color={theme.colors.ink} />
+            </Pressable>
+          </View>
         }
       />
 
-      <RegionChips sidos={SIDO_ORDER} selected={sido} onSelect={setSido} />
+      <StampMapModal
+        visible={mapOpen}
+        collected={collected}
+        onClose={() => setMapOpen(false)}
+        onSelectSido={(next) => {
+          setSido(next);
+          setCity(null);
+        }}
+      />
+
+      {!city ? (
+        <RegionChips sidos={SIDO_ORDER} selected={sido} onSelect={setSido} />
+      ) : null}
 
       <View style={styles.progressBlock}>
         <Text style={styles.progressLabel}>
-          {strings.stamps.progressLabel(sido)}
-          {strings.stamps.progress(collectedInSido, progressTotal)}
+          {city
+            ? strings.stamps.cityProgressLabel(city)
+            : strings.stamps.progressLabel(sido)}
+          {city && dongSection
+            ? strings.stamps.progress(dongSection.collected, dongSection.total)
+            : strings.stamps.progress(collectedInSido, progressTotal)}
         </Text>
         <View style={styles.track}>
-          <View style={[styles.fill, { width: `${progressPct}%` }]} />
+          <View
+            style={[
+              styles.fill,
+              {
+                width: `${
+                  city && dongSection
+                    ? dongSection.total === 0
+                      ? 0
+                      : Math.min(
+                          100,
+                          (dongSection.collected / dongSection.total) * 100,
+                        )
+                    : progressPct
+                }%`,
+              },
+            ]}
+          />
         </View>
         {syncing ? (
           <Text style={styles.syncHint}>{strings.stamps.backfilling}</Text>
         ) : null}
       </View>
 
-      {empty ? (
+      {empty && !city ? (
         <View style={styles.emptyWrap}>
           <MascotPin size={48} />
           <StateView
@@ -260,12 +323,16 @@ export function StampScreen() {
             }
           />
         </View>
-      ) : (
+      ) : city && dongSection ? (
         <CityStampSections
-          sections={sections}
+          sections={[dongSection]}
           replayNonce={replayNonce}
           onReplay={onReplayStamp}
         />
+      ) : (
+        <ScrollView>
+          <CityList cities={cityRows} onSelect={setCity} />
+        </ScrollView>
       )}
     </SafeAreaView>
   );
@@ -279,44 +346,60 @@ const styles = StyleSheet.create({
   grain: {
     opacity: 0.3,
   },
+  trailing: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  mapBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: theme.colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.surface,
+  },
+  mapBtnPressed: {
+    opacity: 0.7,
+  },
   pill: {
-    backgroundColor: theme.colors.terracotta,
+    backgroundColor: theme.colors.ink,
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: 4,
-    borderRadius: theme.radius.pill,
+    borderRadius: 4,
   },
   pillText: {
     ...theme.type.micro,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     color: theme.colors.surface,
     fontWeight: '700',
   },
   progressBlock: {
     paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.sm,
+    gap: 6,
   },
   progressLabel: {
-    ...theme.type.label,
-    fontFamily: theme.fonts.serif,
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
     color: theme.colors.inkSoft,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   syncHint: {
     ...theme.type.micro,
-    fontFamily: theme.fonts.serif,
-    color: theme.colors.terracotta,
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.subtle,
   },
   track: {
-    height: 4,
-    borderRadius: 2,
+    height: 1,
     backgroundColor: theme.colors.line,
     overflow: 'hidden',
   },
   fill: {
     height: '100%',
-    backgroundColor: theme.colors.terracotta,
-    borderRadius: 2,
+    backgroundColor: theme.colors.ink,
   },
   emptyWrap: {
     flex: 1,
@@ -326,4 +409,3 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
   },
 });
-

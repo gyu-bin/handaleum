@@ -9,9 +9,7 @@ export interface VisitChipRowProps {
 }
 
 /**
- * Horizontally scrolling place chips. Shared by the header (this month's
- * places) and the bottom scope bar so both read as the same object at
- * different grains.
+ * Place labels as hairline ticks — not lifestyle pills (Plan A).
  */
 export function VisitChipRow({ labels, tone = 'accent' }: VisitChipRowProps) {
   if (labels.length === 0) {
@@ -50,24 +48,24 @@ const styles = StyleSheet.create({
   },
   chip: {
     paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: theme.radius.pill,
-    backgroundColor: theme.colors.terracottaSoft,
+    paddingVertical: 6,
+    borderRadius: 4,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.panelBorder,
   },
   chipQuiet: {
     backgroundColor: theme.colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.hairline,
+    borderColor: theme.colors.panelBorder,
   },
   chipText: {
     ...theme.type.label,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     fontWeight: '600',
-    color: theme.colors.terracotta,
+    color: theme.colors.ink,
   },
   chipTextQuiet: {
-    fontFamily: theme.fonts.serif,
     fontWeight: '500',
-    color: theme.colors.ink,
+    color: theme.colors.inkSoft,
   },
 });

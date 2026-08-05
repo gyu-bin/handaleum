@@ -3,6 +3,7 @@ import { usePathname, useRouter, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
+import { useStamps } from '@/features/stamps/hooks/useStamps';
 import { theme } from '@/shared/constants/theme';
 
 export interface HomeNavItem {
@@ -32,7 +33,7 @@ function NavIcon({
   name: HomeNavItem['icon'];
   active: boolean;
 }) {
-  const color = active ? theme.colors.terracotta : theme.colors.inkSoft;
+  const color = active ? theme.colors.ink : theme.colors.inkSoft;
   const stroke = 1.6;
   if (name === 'calendar') {
     return (
@@ -125,8 +126,17 @@ function NavIcon({
 }
 
 /**
- * Floating journal dock — cream paper, terracotta active tab.
+ * Bottom dock — flat hairline bar, ink weight for active (Plan A).
+ * Stamp badge subscribes here so sync notifyStampsChanged doesn't re-render the map.
  */
+function StampBadge() {
+  const { unseenCount } = useStamps();
+  if (unseenCount <= 0) {
+    return null;
+  }
+  return <View style={styles.badge} />;
+}
+
 export function HomeNavBar({ items }: HomeNavBarProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -157,7 +167,11 @@ export function HomeNavBar({ items }: HomeNavBarProps) {
               <View style={[styles.itemInner, active && styles.itemInnerActive]}>
                 <View style={styles.iconWrap}>
                   <NavIcon name={item.icon} active={active} />
-                  {item.badge ? <View style={styles.badge} /> : null}
+                  {item.icon === 'stamp' ? (
+                    <StampBadge />
+                  ) : item.badge ? (
+                    <View style={styles.badge} />
+                  ) : null}
                 </View>
                 <Text
                   style={[styles.label, active && styles.labelActive]}
@@ -176,23 +190,22 @@ export function HomeNavBar({ items }: HomeNavBarProps) {
 
 const styles = StyleSheet.create({
   wrap: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.xs,
   },
   bar: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    borderRadius: theme.radius.pill,
+    borderRadius: theme.radius.sm,
     backgroundColor: theme.colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.colors.hairline,
-    paddingVertical: 6,
-    paddingHorizontal: 6,
-    ...theme.shadows.raised,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
   },
   item: {
     flex: 1,
-    borderRadius: theme.radius.lg,
+    borderRadius: theme.radius.sm,
   },
   itemPressed: {
     opacity: 0.85,
@@ -200,13 +213,13 @@ const styles = StyleSheet.create({
   itemInner: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 8,
+    gap: 2,
+    paddingVertical: 6,
     paddingHorizontal: 2,
-    borderRadius: theme.radius.md,
+    borderRadius: theme.radius.sm,
   },
   itemInnerActive: {
-    backgroundColor: theme.colors.terracottaSoft,
+    // Weight via ink label/icon only — no soft fill capsule.
   },
   iconWrap: {
     width: 22,
@@ -225,13 +238,13 @@ const styles = StyleSheet.create({
   },
   label: {
     ...theme.type.micro,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     color: theme.colors.inkSoft,
-    fontWeight: '600',
+    fontWeight: '500',
     letterSpacing: -0.2,
   },
   labelActive: {
-    color: theme.colors.terracotta,
+    color: theme.colors.ink,
     fontWeight: '700',
   },
 });

@@ -16,7 +16,6 @@ import {
 
 import type { MonthKey, MonthlyPhotos, MonthSummary, PhotoRef } from '../types';
 import { monthBounds, monthKeyFromTimestamp } from '../utils/month';
-import { waitForAppForeground } from './appForeground';
 import {
   buildDummyMonthSummaries,
   buildDummyMonthlyPhotos,
@@ -53,8 +52,8 @@ const PIN_EXPORT_CONCURRENCY = 2;
 const ANDROID_URI_CONCURRENCY = 6;
 /** Bound in-memory URI maps so multi-month sessions don't grow forever. */
 const URI_CACHE_MAX = 400;
-/** Above overview pin soft-cap (~116) so visible markers stay cached. */
-const FILE_URI_CACHE_MAX = 140;
+/** Visible pins + zoom backlog — keep warm so remounts don't re-export. */
+const FILE_URI_CACHE_MAX = 220;
 
 
 const limitPinExport = createConcurrencyLimiter(PIN_EXPORT_CONCURRENCY);
@@ -185,22 +184,29 @@ function snapshot(
   return { month, photos: list, noLocationCount };
 }
 
+/**
+ * Pause until `shouldContinue` is true again (or forever if omitted = no gate).
+ * Not just "app foreground" — callers also gate on album-scan busy so two
+ * MediaLibrary owners never overlap.
+ */
 async function pauseWhileBackgrounded(shouldContinue?: () => boolean): Promise<void> {
-  if (!shouldContinue || shouldContinue()) {
+  if (!shouldContinue) {
     return;
   }
-  await waitForAppForeground();
+  while (!shouldContinue()) {
+    await new Promise((r) => setTimeout(r, 400));
+  }
 }
 
 /** Min gap between progressive UI updates — avoids re-clustering every batch. */
-const PARTIAL_MIN_MS = 900;
+const PARTIAL_MIN_MS = 1400;
 
 /** Soft-retry assets once cached as no-GPS (iCloud metadata catch-up). */
 const softRecheckedNoLoc = new Set<string>();
 /** Unbounded soft-recheck of every "x" stalls month open on screenshot-heavy libraries. */
 const SOFT_RECHECK_CAP = 120;
 /** Yield to the UI between GPS batches so map gestures stay responsive. */
-const BATCH_YIELD_MS = 48;
+const BATCH_YIELD_MS = 64;
 
 /**
  * Load all camera-roll photos for a month via expo-media-library.
@@ -316,12 +322,23 @@ export async function loadMonthSummaries(): Promise<MonthSummary[]> {
     .sort((a, b) => b.month.localeCompare(a.month));
 }
 
+export type AlbumScanProgress = {
+  /** Total assets in the album (or batch universe). */
+  assetTotal: number;
+  /** Assets already examined (cache hit or native lookup). */
+  assetScanned: number;
+  /** Photos that currently have GPS. */
+  locatedCount: number;
+};
+
 export type LoadAllLocatedPhotosOptions = {
   /**
    * Called as GPS cache + native batches fill in (for progressive stamp sync).
    * Awaited so consumers can geocode/ingest before the next GPS batch.
    */
   onPartial?: (photos: PhotoRef[]) => void | Promise<void>;
+  /** Lightweight counters for home indexing banner (not awaited). */
+  onScanProgress?: (progress: AlbumScanProgress) => void;
   shouldContinue?: () => boolean;
   /**
    * Skip __DEV__ dummy set — always scan the real MediaLibrary.
@@ -330,6 +347,13 @@ export type LoadAllLocatedPhotosOptions = {
   forceRealLibrary?: boolean;
   /** Override LOCATION_BATCH for long full-library scans (default 8). */
   locationBatchSize?: number;
+  /** Gap between GPS batches (default BATCH_YIELD_MS). 0 = back-to-back. */
+  batchYieldMs?: number;
+  /**
+   * When false, skip waiting on pin thumb exports (full-album scan after map settle).
+   * Default true so month map pins stay responsive.
+   */
+  yieldToPinExports?: boolean;
   /** Re-read assets that failed getAssetInfoAsync once (transient native errors). */
   retryFailedLocations?: boolean;
   /** Try iCloud download when local metadata has no GPS (발도장 only). */
@@ -351,9 +375,12 @@ export async function loadAllLocatedPhotos(
 ): Promise<PhotoRef[]> {
   const {
     onPartial,
+    onScanProgress,
     shouldContinue,
     forceRealLibrary,
     locationBatchSize,
+    batchYieldMs,
+    yieldToPinExports = true,
     retryFailedLocations,
     networkLocationFallback,
     recheckCachedNoLocation,
@@ -362,6 +389,8 @@ export async function loadAllLocatedPhotos(
     locationBatchSize != null && locationBatchSize > 0
       ? locationBatchSize
       : LOCATION_BATCH;
+  const yieldMs =
+    batchYieldMs != null && batchYieldMs >= 0 ? batchYieldMs : BATCH_YIELD_MS;
   const locOpts = { networkFallback: networkLocationFallback === true };
 
   if (!forceRealLibrary && isDevDummyPhotosEnabled()) {
@@ -371,6 +400,11 @@ export async function loadAllLocatedPhotos(
       const monthPhotos = await buildDummyMonthlyPhotos(month);
       photos.push(...monthPhotos.photos);
     }
+    onScanProgress?.({
+      assetTotal: photos.length,
+      assetScanned: photos.length,
+      locatedCount: photos.length,
+    });
     await onPartial?.(photos);
     return photos;
   }
@@ -392,16 +426,25 @@ export async function loadAllLocatedPhotos(
     }
   }
 
+  const cachedDone = assets.length - uncached.length;
+  onScanProgress?.({
+    assetTotal: assets.length,
+    assetScanned: cachedDone,
+    locatedCount: photos.length,
+  });
+
   if (photos.length > 0) {
     await onPartial?.(photos.slice());
   }
 
   const failed: Asset[] = [];
+  let uncachedScanned = 0;
 
   for (let i = 0; i < uncached.length; i += batchSize) {
     await pauseWhileBackgrounded(shouldContinue);
-    // Yield MediaLibrary to map pin thumb exports (otherwise stamps starve pins).
-    await waitWhilePinExportBusy();
+    if (yieldToPinExports) {
+      await waitWhilePinExportBusy();
+    }
     await pauseWhileBackgrounded(shouldContinue);
     const chunk = uncached.slice(i, i + batchSize);
     const results = await Promise.all(
@@ -417,21 +460,27 @@ export async function loadAllLocatedPhotos(
         failed.push(chunk[j]!);
       }
     }
+    uncachedScanned += chunk.length;
+    onScanProgress?.({
+      assetTotal: assets.length,
+      assetScanned: cachedDone + uncachedScanned,
+      locatedCount: photos.length,
+    });
     if (grew) {
       await onPartial?.(photos.slice());
     }
-    // Full-album scans used to run batches back-to-back and melt the device
-    // while the user was still on the map. Same yield as the month path.
     const remaining = uncached.length - (i + chunk.length);
-    if (remaining > 0) {
-      await new Promise((r) => setTimeout(r, BATCH_YIELD_MS));
+    if (remaining > 0 && yieldMs > 0) {
+      await new Promise((r) => setTimeout(r, yieldMs));
     }
   }
 
   if (retryFailedLocations && failed.length > 0) {
     for (let i = 0; i < failed.length; i += batchSize) {
       await pauseWhileBackgrounded(shouldContinue);
-      await waitWhilePinExportBusy();
+      if (yieldToPinExports) {
+        await waitWhilePinExportBusy();
+      }
       await pauseWhileBackgrounded(shouldContinue);
       const chunk = failed.slice(i, i + batchSize);
       const results = await Promise.all(
@@ -444,12 +493,17 @@ export async function loadAllLocatedPhotos(
           grew = true;
         }
       }
+      onScanProgress?.({
+        assetTotal: assets.length,
+        assetScanned: assets.length,
+        locatedCount: photos.length,
+      });
       if (grew) {
         await onPartial?.(photos.slice());
       }
       const remaining = failed.length - (i + chunk.length);
-      if (remaining > 0) {
-        await new Promise((r) => setTimeout(r, BATCH_YIELD_MS));
+      if (remaining > 0 && yieldMs > 0) {
+        await new Promise((r) => setTimeout(r, yieldMs));
       }
     }
   }
@@ -634,6 +688,14 @@ async function exportPinThumbFileUri(assetId: string): Promise<string | null> {
   }
 
   return null;
+}
+
+/**
+ * Sync memory peek for pin thumbs. Map markers use this on first paint so a
+ * remount after zoom doesn't flash the placeholder when the URI is already warm.
+ */
+export function peekAssetFileUri(assetId: string): string | null {
+  return fileUriCache.get(assetId) ?? null;
 }
 
 /**

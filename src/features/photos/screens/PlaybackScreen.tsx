@@ -472,7 +472,7 @@ const styles = StyleSheet.create({
   playBtn: {
     width: 34,
     height: 34,
-    borderRadius: theme.radius.pill,
+    borderRadius: theme.radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.colors.terracottaSoft,
@@ -487,7 +487,7 @@ const styles = StyleSheet.create({
   },
   counter: {
     ...theme.type.body,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     color: theme.colors.inkSoft,
     fontWeight: '700',
   },
@@ -516,14 +516,14 @@ const styles = StyleSheet.create({
   },
   place: {
     ...theme.type.title,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     marginTop: theme.spacing.md,
     color: theme.colors.ink,
     fontWeight: '800',
   },
   meta: {
     ...theme.type.label,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     marginTop: 4,
     color: theme.colors.inkSoft,
     fontWeight: '600',

@@ -177,7 +177,8 @@ export function setStampsScanIntroSeen(): void {
 const STAMPS_LIBRARY_SYNC_AT_KEY = 'stampsLibrarySyncAt';
 /** Bump when place→구 parse changes so cooldown cannot hide new stamps. */
 const STAMPS_PLACE_PARSE_REV_KEY = 'stampsPlaceParseRev';
-export const STAMPS_PLACE_PARSE_REV = 12;
+/** Bump forces one full-album stamp rescan (dong grain 2026-08-05). */
+export const STAMPS_PLACE_PARSE_REV = 13;
 
 /** Epoch ms of last finished full-album stamp sync (0 if never). */
 export function getStampsLibrarySyncAt(): number {

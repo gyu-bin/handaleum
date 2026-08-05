@@ -19,7 +19,7 @@
 
 | 결정 | 대안 | 선택 이유 | 날짜 |
 |---|---|---|---|
-| 온보딩·권한 UI = **journal** (크림·terracotta 도트/CTA). MapPinArt 실루엣 stroke는 dawn `accent` 유지 | 온보딩 아트까지 전면 terracotta | 사용자 2-B. 맵 일러스트 정체성 보존 | 2026-08-02 |
+| 온보딩·권한 UI = **Plan A** (크림·ink 도트/CTA). MapPinArt 실루엣 stroke는 dawn `accent` 유지 | 온보딩 아트까지 전면 terracotta | photos Plan A. 맵 일러스트 정체성 보존 | 2026-08-05 |
 | 온보딩이 권한 요청을 **흡수** (마지막 슬라이드 CTA가 `request()`) | 온보딩 → /permission 별도 화면 이동 | 탭 수↓, 가치→허용 매끄러움. `PermissionScreen`은 거부 후 재요청·설정 유도 폴백으로 축소 | 2026-07-23 |
 | 라우팅 게이트를 `MonthlyMapScreen`에 (`!seen → <Redirect href="/onboarding">`), 권한 게이트 앞 | app/ 라우트나 _layout에 게이트 | 기존 권한 redirect가 이미 이 화면에 있어 대칭. `seen`은 kv 동기 조회라 first-run에서 즉시 표시 | 2026-07-23 |
 | `schema.ts`/`types.ts` 없음 | 플래그에도 zod 스키마 | 상태가 boolean 하나 → `lastViewedMonth`처럼 kv 문자열('1'). 과설계 회피 | 2026-07-23 |

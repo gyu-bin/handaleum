@@ -36,6 +36,8 @@ function countWord(n: number): string {
  */
 export const strings = {
   brand: '한달음',
+  /** Splash editorial line under the wordmark (sample D). */
+  splashTagline: '사진과 지도',
   /** Home hero line under the wordmark. */
   tagline: '사진과 지도, 그리고 나의 이야기',
   common: {
@@ -62,26 +64,23 @@ export const strings = {
     openSettings: '설정에서 허용하기',
   },
   onboarding: {
-    // Shown once on first launch. The last slide's CTA requests photo access,
-    // so the value is explained before the permission is asked.
+    /** Single first-run screen (발자취-style). */
+    headline: '사진으로 모은 발자국이\n내가 살아온 지도가 됩니다.',
+    subhead: '한 달의 기록을 지도 위에 남겨보세요.',
+    photoToggle: '사진으로 지나온 동을 채워요',
+    photoToggleHint: '지금 가져오거나 설정에서 언제든 다시 할 수 있어요.',
+    start: '시작',
+    ageNote: '만 14세 이상만 이용할 수 있습니다.',
+    /** Kept for settings replay / legacy callers. */
     slides: [
       {
         title: '한 달을 지도 위에',
-        body: '카메라롤 사진의 위치와 시간을 새벽 종이지도에 펼쳐,\n지난 한 달을 돌아봐요.',
-      },
-      {
-        title: '한 장의 카드로',
-        body: '마음에 든 순간을 골라 인스타 피드·스토리용\n카드로 남기고 공유해요.',
-      },
-      {
-        title: '사진을 볼 수 있게',
-        body: '지도를 그리려면 사진의 위치 정보가 필요해요.\n사진은 기기 밖으로 나가지 않아요.',
+        body: '카메라롤 사진의 위치와 시간을 지도에 펼쳐,\n지난 한 달을 돌아봐요.',
       },
     ],
     next: '다음',
     skip: '건너뛰기',
     grant: '사진 허용하고 시작',
-    /** Replay from Settings — no permission prompt. */
     close: '닫기',
   },
   map: {
@@ -113,6 +112,17 @@ export const strings = {
       steps > 0 ? `${monthLabel} · ${countWord(steps)} 걸음` : monthLabel,
     /** Shown while GPS for this month is still resolving in the background. */
     resolvingLocations: '위치 확인 중…',
+    /** Full-album stamp indexing banner (home map). */
+    indexingPreparing: '인덱싱 준비 중',
+    indexingPhotos: '사진 읽는 중',
+    indexingPhotoCount: (scanned: string, total: string) =>
+      `${scanned}/${total}`,
+    indexingPlaces: '동 맞추는 중',
+    indexingPlaceCount: (done: number, total: number, _photos: string) =>
+      `${done}/${total}`,
+    indexingPlacesEmpty: '위치 사진 없음',
+    indexingDone: '완료',
+    indexingDoneDetail: (photos: string) => `${photos}장`,
     /**
      * Headline above the visit chips. Count-based so the line height stays
      * fixed no matter how many places the month holds — the places themselves
@@ -300,10 +310,11 @@ export const strings = {
     title: '발도장',
     progress: (a: number, b: number) => `${a}/${b}`,
     progressLabel: (sido: string) => `${sido} · `,
+    cityProgressLabel: (city: string) => `${city} · `,
     newThisMonth: (n: number) => `이번 달 +${n}`,
     earned: (name: string) => `${name} 도장 획득!`,
     emptyTitle: '첫 도장을 찍어보세요',
-    empty: '사진에 위치가 있으면 시군구 도장이 쌓여요',
+    empty: '사진에 위치가 있으면 동 도장이 쌓여요',
     uncollected: '미수집',
     slotUnknown: '?',
     errorTitle: '도장을 불러오지 못했어요',
@@ -314,5 +325,13 @@ export const strings = {
     scanIntroBody:
       '지금까지 찍은 사진의 위치를 모두 살펴봐요. 사진이 많으면 시간이 걸릴 수 있어요. 확인을 눌러도 백그라운드에서 계속 찾고, 다른 화면도 그대로 쓸 수 있어요.',
     scanIntroConfirm: '확인',
+    mapA11y: '방문한 동이 칠해진 한반도 지도',
+    mapEyebrow: '발도장',
+    mapTitle: '방문 지도',
+    mapHint: '두 손가락으로 확대 · 색칠된 동을 누르면 그 시·도로 이동해요',
+    mapClose: '닫기',
+    mapOpen: '방문 지도 열기',
+    mapVisitCount: (n: number) => `${n}곳이 색으로 남았어요`,
+    mapEmpty: '아직 칠해진 곳이 없어요',
   },
 } as const;

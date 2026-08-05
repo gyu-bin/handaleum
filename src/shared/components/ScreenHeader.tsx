@@ -13,7 +13,7 @@ export interface ScreenHeaderProps {
 }
 
 /**
- * Journal top bar — serif title, soft back chip.
+ * Journal top bar — serif title only; back control is sans ink.
  */
 export function ScreenHeader({ title, trailing, onBack }: ScreenHeaderProps) {
   const router = useRouter();
@@ -71,15 +71,15 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   chevron: {
-    fontFamily: theme.fonts.serif,
-    color: theme.colors.terracotta,
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.ink,
     fontSize: 22,
     lineHeight: 24,
     marginTop: -1,
   },
   backLabel: {
     ...theme.type.label,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     color: theme.colors.inkSoft,
     fontWeight: '600',
   },

@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
   },
   headerAction: {
     ...theme.type.label,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     color: theme.colors.terracotta,
     fontWeight: '700',
   },

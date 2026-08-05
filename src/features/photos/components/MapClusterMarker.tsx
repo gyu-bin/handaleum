@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 
 import { NaverMapMarkerOverlay } from '@mj-studio/react-native-naver-map';
 import type { MapImageProp } from '@mj-studio/react-native-naver-map';
 
 import { theme } from '@/shared/constants/theme';
 
-import { resolveAssetFileUri } from '../services/mediaLibrary';
+import {
+  peekAssetFileUri,
+  resolveAssetFileUri,
+} from '../services/mediaLibrary';
 import { requestMapPinBake } from '../services/mapPinBake';
 import type { PlaceCluster } from '../types';
 
@@ -20,6 +23,11 @@ const PLACEHOLDER_IMAGE: MapImageProp = {
   reuseIdentifier: 'handaleum-pin-placeholder',
 };
 
+/** Earliest photo in the cluster — stable React key across zoom grain changes. */
+export function clusterSeedId(cluster: PlaceCluster): string {
+  return cluster.photos[0]?.assetId ?? cluster.id;
+}
+
 export interface MapClusterMarkerProps {
   cluster: PlaceCluster;
   selected: boolean;
@@ -27,11 +35,7 @@ export interface MapClusterMarkerProps {
   onSelect: (cluster: PlaceCluster) => void;
 }
 
-/**
- * Photo map pin. Placeholder symbol paints immediately; thumb file then paper
- * bake upgrade in the background (never hide the marker while exporting).
- */
-export function MapClusterMarker({
+function MapClusterMarkerInner({
   cluster,
   selected,
   coverAssetId,
@@ -57,27 +61,36 @@ export function MapClusterMarker({
     return next;
   }, [cover?.assetId, cluster.photos]);
 
-
   const cardSize = selected ? CARD_SELECTED : CARD;
   const markerW = cardSize + BORDER * 2;
   const markerH = markerW + CARET_H;
 
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [resolved, setResolved] = useState<{
+    id: string;
+    uri: string;
+  } | null>(null);
   /** Framed bake when ready; until then we show the raw thumb file. */
   const [framedUri, setFramedUri] = useState<string | null>(null);
   const lastHttpRef = useRef<MapImageProp | null>(null);
-  const loadedAssetRef = useRef<string | null>(null);
+
+  // Prefer async result, else sync memory cache — first paint after zoom remount.
+  const photoUri =
+    (resolved?.id === displayAssetId ? resolved.uri : null) ??
+    (displayAssetId ? peekAssetFileUri(displayAssetId) : null);
 
   useEffect(() => {
     if (!displayAssetId) {
-      setPhotoUri(null);
+      setResolved(null);
       setFramedUri(null);
       lastHttpRef.current = null;
-      loadedAssetRef.current = null;
+      return;
+    }
+    const peek = peekAssetFileUri(displayAssetId);
+    if (peek) {
+      setResolved({ id: displayAssetId, uri: peek });
       return;
     }
     let cancelled = false;
-
     const load = async () => {
       try {
         for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -86,9 +99,7 @@ export function MapClusterMarker({
             return;
           }
           if (next) {
-            loadedAssetRef.current = displayAssetId;
-            setPhotoUri(next);
-            // Immediate pin: raw thumb. Do not wait for view-shot bake.
+            setResolved({ id: displayAssetId, uri: next });
             setFramedUri(null);
             return;
           }
@@ -98,24 +109,23 @@ export function MapClusterMarker({
         console.warn('MapClusterMarker load failed', displayAssetId, error);
       }
     };
-
     void load();
     return () => {
       cancelled = true;
     };
   }, [displayAssetId]);
 
-  // Bake only the selected pin. Framing every visible marker via view-shot
-  // was a major heat source during pan/zoom; raw thumbs already look fine.
+  // Paper frame on every pin (ink border). Selected uses map accent.
+  // Bake is cached by uri|selected|size — remounts after zoom hit memory.
   useEffect(() => {
-    if (!selected || !photoUri || !displayAssetId) {
+    if (!photoUri || !displayAssetId) {
       setFramedUri(null);
       return;
     }
     let cancelled = false;
-    void requestMapPinBake(photoUri, true, cardSize)
+    void requestMapPinBake(photoUri, selected, cardSize)
       .then((baked) => {
-        if (!cancelled && baked && loadedAssetRef.current === displayAssetId) {
+        if (!cancelled && baked) {
           setFramedUri(baked);
         }
       })
@@ -132,8 +142,10 @@ export function MapClusterMarker({
     if (uri && displayAssetId) {
       const next: MapImageProp = {
         httpUri: uri,
+        // Size in the id so selected grow doesn't reuse the wrong bitmap.
+        // Asset id only — not cluster grain — so Naver can keep the texture.
         reuseIdentifier: framedUri
-          ? `framed-${displayAssetId}-${selected ? 1 : 0}-${cardSize}`
+          ? `framed-${displayAssetId}-${cardSize}`
           : `thumb-${displayAssetId}-${cardSize}`,
       };
       lastHttpRef.current = next;
@@ -141,7 +153,7 @@ export function MapClusterMarker({
     }
     // Keep previous photo while the next asset loads; else show symbol now.
     return lastHttpRef.current ?? PLACEHOLDER_IMAGE;
-  }, [framedUri, photoUri, displayAssetId, selected, cardSize]);
+  }, [framedUri, photoUri, displayAssetId, cardSize]);
 
   const count = cluster.photos.length;
 
@@ -170,3 +182,19 @@ export function MapClusterMarker({
     />
   );
 }
+
+/**
+ * Skip re-render when seed/center/count/selection unchanged — progressive GPS
+ * creates new cluster objects every partial.
+ */
+export const MapClusterMarker = memo(
+  MapClusterMarkerInner,
+  (a, b) =>
+    clusterSeedId(a.cluster) === clusterSeedId(b.cluster) &&
+    a.selected === b.selected &&
+    a.coverAssetId === b.coverAssetId &&
+    a.cluster.centerLat === b.cluster.centerLat &&
+    a.cluster.centerLng === b.cluster.centerLng &&
+    a.cluster.photos.length === b.cluster.photos.length &&
+    a.onSelect === b.onSelect,
+);

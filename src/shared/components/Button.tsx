@@ -22,9 +22,8 @@ export interface ButtonProps extends Omit<PressableProps, 'style' | 'children'> 
 }
 
 /**
- * Shared button. Primary = ink, accent = journal terracotta, sand = warm gold,
- * secondary = outlined, ghost = text terracotta. Map-on-canvas CTAs may still
- * pass variant="accent" sparingly; prefer terracotta for journal UI.
+ * Shared button. Primary/accent = ink fill (Plan A single accent).
+ * Sand = rare warm event. Secondary = outlined. Ghost = ink text.
  */
 export function Button({
   title,
@@ -37,7 +36,6 @@ export function Button({
 }: ButtonProps) {
   const isDisabled = disabled || loading;
   const isSolid = variant === 'primary' || variant === 'accent' || variant === 'sand';
-  const labelOnLight = variant === 'sand';
 
   return (
     <Pressable
@@ -47,8 +45,8 @@ export function Button({
         styles.base,
         size === 'lg' ? styles.lg : styles.md,
         variant === 'primary' && styles.primary,
-        variant === 'accent' && styles.accent,
-        variant === 'sand' && styles.sand,
+        variant === 'accent' && styles.primary,
+        variant === 'sand' && styles.primary,
         variant === 'secondary' && styles.secondary,
         variant === 'ghost' && styles.ghost,
         isSolid && !isDisabled && theme.shadows.raised,
@@ -60,17 +58,15 @@ export function Button({
     >
       {loading ? (
         <ActivityIndicator
-          color={labelOnLight || !isSolid ? theme.colors.ink : theme.colors.surface}
+          color={!isSolid ? theme.colors.ink : theme.colors.surface}
         />
       ) : (
         <Text
           style={[
             styles.label,
-            variant === 'primary' && styles.labelOnSolid,
-            variant === 'accent' && styles.labelOnSolid,
-            variant === 'sand' && styles.labelInk,
+            isSolid && styles.labelOnSolid,
             variant === 'secondary' && styles.labelInk,
-            variant === 'ghost' && styles.labelAccent,
+            variant === 'ghost' && styles.labelGhost,
           ]}
         >
           {title}
@@ -82,7 +78,7 @@ export function Button({
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: theme.radius.md,
+    borderRadius: theme.radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -96,12 +92,6 @@ const styles = StyleSheet.create({
   },
   primary: {
     backgroundColor: theme.colors.ink,
-  },
-  accent: {
-    backgroundColor: theme.colors.terracotta,
-  },
-  sand: {
-    backgroundColor: theme.colors.sand,
   },
   secondary: {
     backgroundColor: theme.colors.surface,
@@ -120,7 +110,7 @@ const styles = StyleSheet.create({
   },
   label: {
     ...theme.type.body,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     fontWeight: '700',
   },
   labelOnSolid: {
@@ -129,8 +119,7 @@ const styles = StyleSheet.create({
   labelInk: {
     color: theme.colors.ink,
   },
-  labelAccent: {
-    color: theme.colors.terracotta,
+  labelGhost: {
+    color: theme.colors.ink,
   },
 });
-

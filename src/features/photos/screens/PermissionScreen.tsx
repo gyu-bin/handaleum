@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
   },
   bodyText: {
     ...theme.type.body,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     color: theme.colors.inkSoft,
     textAlign: 'center',
     paddingHorizontal: theme.spacing.sm,

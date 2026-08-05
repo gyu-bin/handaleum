@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   NaverMapPolylineOverlay,
@@ -9,10 +9,10 @@ import {
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
-import type { MapThemeId, PlaceCluster } from '../types';
+import type { PlaceCluster } from '../types';
 import { journeyPathCoords } from '../utils/journeyPath';
 import { placeBucketKey } from '../utils/placeJourney';
-import { MapClusterMarker } from './MapClusterMarker';
+import { clusterSeedId, MapClusterMarker } from './MapClusterMarker';
 import { MapPinBakeHost } from './MapPinBakeHost';
 
 /** Approximate zoom from latitude span (clustering grain). */
@@ -96,8 +96,8 @@ export interface MapCanvasProps {
   onZoomChange: (zoom: number) => void;
   onScaleChange?: (scale: number) => void;
   onSelectCluster: (cluster: PlaceCluster) => void;
+  /** Seed assetId of the selected pin (stable across zoom grain changes). */
   selectedClusterId?: string | null;
-  themeId?: MapThemeId;
   pinCovers?: Record<string, string>;
   /**
    * Identity of the photo set the camera should frame — the month key.
@@ -109,8 +109,9 @@ export interface MapCanvasProps {
 /**
  * Home map: Naver Dynamic Map + photo cluster markers.
  * Requires a development build (not Expo Go).
+ * Memoized so header chips / stamp badge updates don't rebuild native markers.
  */
-export function MapCanvas({
+export const MapCanvas = memo(function MapCanvas({
   clusters,
   onZoomChange,
   onScaleChange,
@@ -302,12 +303,15 @@ export function MapCanvas({
           />
         ) : null}
         {clusters.map((cluster) => {
+          const seedId = clusterSeedId(cluster);
           const placeKey = placeBucketKey(cluster.centerLat, cluster.centerLng);
           return (
             <MapClusterMarker
-              key={cluster.id}
+              // Seed survives zoom grain changes — remounting every pin on
+              // zoom was the flicker + native overlay churn.
+              key={seedId}
               cluster={cluster}
-              selected={selectedClusterId === cluster.id}
+              selected={selectedClusterId === seedId}
               coverAssetId={pinCovers[placeKey]}
               onSelect={onSelectCluster}
             />
@@ -346,7 +350,7 @@ export function MapCanvas({
       <MapPinBakeHost />
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   wrap: {

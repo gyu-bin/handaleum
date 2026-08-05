@@ -28,7 +28,7 @@
 
 | 결정 | 대안 | 선택 이유 | 날짜 |
 |---|---|---|---|
-| **UI=journal** (크림·terracotta·serif 크롬) / **Map=dawn-blue** (land/water/accent·핀·Naver 스타일 유지). `theme.colors.terracotta`는 UI만, 맵 팔레트는 교체 금지 | 전면 저널 맵 리틴트 / UI도 dawn 유지 | 사용자 1-B. 맵 정체성 보존 + 리스트·내비만 시안 맞춤 | 2026-08-02 |
+| **UI=Dawn Survey / Plan A** (크림 + 단일 ink·serif 히어로만) / **Map=dawn-blue** (land/water/accent·핀 유지). `terracotta` 토큰은 ink alias. 맵 팔레트 교체 금지 | 전면 저널 맵 리틴트 / UI terracotta 복귀 | 사용자 A안 2026-08-05. philosophy 정렬 | 2026-08-05 |
 | 월 선택 = **저널 UI: 연도 스테퍼 + 1–12월 2열** (0장 비활성) | 전체 월 스크롤 / 연도 칩 | 사용자 시안(옵션 C) | 2026-08-02 |
 | GPS 없는 사진 완전 제외, 카운트만 표시 | lat/lng optional로 카드 포함 허용 | 사용자 결정. "위치 있는 사진만 표시" 안내로 처리 | 2026-07-17 |
 | 몰아보기 수동 스와이프 우선 | 자동 재생 | 가정. 자동 재생은 이후 추가 비용이 쌈 | 2026-07-17 |
@@ -68,6 +68,8 @@
 | geocode 큐 **우선순위 2단**: interactive(90ms — 칩·시트·몰아보기) > background(300ms — 발도장 전체 스캔). interactive는 부분 실패 시 **1회 재패스** | 단일 FIFO | 전체 앨범 스캔이 이번 달과 1:1 경합 + 스로틀 창에 걸린 리가 세션 내내 누락 | 2026-08-03 |
 | 버킷 지오코딩은 **실제 사진 좌표**로 (캐시 키만 110m 반올림). place cache v17 — 발도장 rev는 유지(시·군 단위는 78m 무관) | 반올림 좌표로 조회 | ±78m가 리 경계를 넘어 교항리→주문리로 병합. Apple 사진과 결과가 달라진 원인 | 2026-08-03 |
 | 사용감: 전체앨범 GPS에 **배치 yield** + foreground 게이트, 배치 8, 월워밍업↔앨범스캔 배타(`fullAlbumScanBusy`), 발도장 탭 즉시스캔→12s 지연, 핀 bake는 **선택 핀만**, 줌 recluster 180ms debounce, background geocode 500ms + 백그라운드 시 pause | 동시 스캐너 / 전 핀 bake / 즉시 앨범 스캔 | 지도 사용 중 발열·버벅 | 2026-08-04 |
+| 지도 핀: React key=**seed assetId** (grain 아님) + `peekAssetFileUri` 첫 페인트. 맵 워밍은 cover만. grain sticky ±1줌 | key=`grain:cell` 리마운트 → 캐시 있어도 placeholder 깜빡 + 네이티브 churn | 확대 시 이미지 깜빡·쓰다 보면 버벅 | 2026-08-04 |
+| 맵 격리: `memo(MapCanvas)` + `memo(MapClusterMarker)` 비교, 스탬프 뱃지는 HomeNavBar 구독, sync notify 2s throttle, GPS partial 1.4s | 칩/스탬프 setState가 네이티브 마커 전부 재평가 | 사용 중 지도 버벅 | 2026-08-04 |
 | 디스크 miss를 메모리에 기억(`diskMissCache`), 동일 버킷 in-flight 합치기. `resolveVisitPlaces`는 캐시분 즉시 emit 후 점진 갱신 | 리페인트마다 버킷당 동기 SQLite read | 칩 스크롤 끊김 | 2026-08-03 |
 | 광역시 라벨은 **짧은 형태로 통일**: "서울 강남구". `toSiForm` 삭제 | 시트·몰아보기만 "서울시 강남구" | 같은 장소가 칩과 시트에서 다르게 보였음 | 2026-08-03 |
 | place resolve를 4개로 분리: `placeCache`(버킷키·2단 캐시) / `geocodeQueue`(권한·직렬 큐) / `visitPlaceBuild`(순수 조립) / `placeResolve`(네이밍 정책 + 공개 API). 외부는 계속 `placeResolve`만 import | 단일 456줄 파일 | 캐시·스로틀·조립이 한 파일에 섞여 원인 추적이 어려웠음 | 2026-08-03 |

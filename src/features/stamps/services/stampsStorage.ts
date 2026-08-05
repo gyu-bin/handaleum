@@ -1,5 +1,5 @@
 import type { MonthKey, VisitPlace } from '@/features/photos/types';
-import { isEupMyonName } from '@/features/photos/utils/adminNames';
+import { legalDongFromAdmin } from '@/features/photos/utils/placeLabels';
 import { monthKeyFromTimestamp } from '@/features/photos/utils/month';
 import {
   getStampsRaw,
@@ -11,13 +11,14 @@ import {
 import { stampsCollectedSchema, stampsUnseenSchema } from '../schema';
 import type { StampEntry, StampsCollected } from '../types';
 import {
-  inferSidoForUnit,
-  isGeneralGuParentCity,
-  isKnownSigungu,
-  isMetroStampParent,
+  dongListForCity,
+  inferCityForDong,
+  isKnownDong,
   normalizeSido,
+  parseStampId,
+  resolveCityForVisit,
   stampId,
-} from './sigunguIndex';
+} from './dongIndex';
 
 export function readStampsCollected(): StampsCollected {
   const raw = getStampsRaw();
@@ -27,10 +28,30 @@ export function readStampsCollected(): StampsCollected {
   try {
     const parsed: unknown = JSON.parse(raw);
     const result = stampsCollectedSchema.safeParse(parsed);
-    return result.success ? result.data : {};
+    if (!result.success) {
+      // Legacy 시군구 keys (sido/name) fail the new schema — start fresh.
+      return {};
+    }
+    return pruneLegacyKeys(result.data);
   } catch {
     return {};
   }
+}
+
+/** Drop pre-dong keys (`sido/name` two-part) if any slipped through. */
+function pruneLegacyKeys(map: StampsCollected): StampsCollected {
+  let dirty = false;
+  const next: StampsCollected = { ...map };
+  for (const id of Object.keys(next)) {
+    if (!parseStampId(id) || !next[id]?.city) {
+      delete next[id];
+      dirty = true;
+    }
+  }
+  if (dirty) {
+    writeCollected(next);
+  }
+  return next;
 }
 
 export function readStampsUnseen(): string[] {
@@ -41,7 +62,7 @@ export function readStampsUnseen(): string[] {
   try {
     const parsed: unknown = JSON.parse(raw);
     const result = stampsUnseenSchema.safeParse(parsed);
-    return result.success ? result.data : [];
+    return result.success ? result.data.filter((id) => parseStampId(id)) : [];
   } catch {
     return [];
   }
@@ -56,48 +77,51 @@ function writeUnseen(ids: string[]): void {
 }
 
 /**
- * 시군구 grain from a visit place.
- * - 구 있으면 구
- * - 강화군 등 군·일반 시·군은 city
- * - 일반구 모시 / 광역시 부모명만 있고 구 없음 → null (슬롯 안 맞는 가짜 도장 방지)
+ * Dong grain from a visit place. 읍·면·리 / 구 alone → null.
  */
-export function sigunguFromVisit(place: VisitPlace): string | null {
-  const gu = place.gu?.trim() || null;
-  const city = place.city?.trim() || null;
-  if (gu) {
-    return gu;
-  }
-  if (!city) {
+export function dongFromVisit(place: VisitPlace): string | null {
+  const raw = place.dong?.trim() || null;
+  if (!raw || !raw.endsWith('동')) {
     return null;
   }
-  // Legacy bad parse "강화군시" → treat as 강화군
-  const normalized = city.endsWith('군시') ? city.slice(0, -1) : city;
-  if (isGeneralGuParentCity(normalized) || isMetroStampParent(normalized)) {
+  return raw;
+}
+
+/** Match geocoded dong string to an index slot (admin 숫자동 허용). */
+export function matchIndexedDong(
+  sido: string,
+  city: string,
+  rawDong: string,
+): string | null {
+  if (isKnownDong(sido, city, rawDong)) {
+    return rawDong;
+  }
+  const legal = legalDongFromAdmin(rawDong);
+  const candidates = dongListForCity(sido, city);
+  if (legal && candidates.includes(legal)) {
+    return legal;
+  }
+  // 역삼동 → 역삼1동/2동: unique → that slot; many → first sorted (deterministic).
+  const base = (legal ?? rawDong).replace(/동$/, '');
+  if (!base) {
     return null;
   }
-  // 주문진읍 등 — stamp grain is parent 시/군 only (lift happens in placeResolve).
-  if (isEupMyonName(normalized)) {
-    return null;
-  }
-  return normalized;
+  const escaped = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const prefixed = candidates
+    .filter((d) => d === `${base}동` || new RegExp(`^${escaped}\\d+동$`).test(d))
+    .sort((a, b) => a.localeCompare(b, 'ko'));
+  return prefixed[0] ?? null;
 }
 
 export type StampSyncResult = {
   collected: StampsCollected;
   unseen: string[];
-  /** Newly added stamp ids this call. */
   added: string[];
-  /** Orphan parent-city stamps removed. */
   pruned: string[];
 };
 
 export type StampSyncOptions = {
-  /** When true, new stamps are not added to unseen (no badge / slam). */
   silent?: boolean;
-  /**
-   * Fallback firstMonth when a place has no usable firstTakenAt.
-   * Per-place month is preferred from firstTakenAt.
-   */
   month: MonthKey;
 };
 
@@ -110,35 +134,7 @@ function monthForPlace(place: VisitPlace, fallback: MonthKey): MonthKey {
 }
 
 /**
- * Drop collected entries that can never fill a grid slot:
- * 일반구 parent cities, metro parents (서울/대전…), legacy "○○군시".
- */
-export function pruneGeneralGuParentStamps(
-  collected: StampsCollected,
-  unseen: string[],
-): { collected: StampsCollected; unseen: string[]; pruned: string[] } {
-  const next = { ...collected };
-  const pruned: string[] = [];
-  for (const [id, entry] of Object.entries(next)) {
-    const name = entry.name;
-    const badGunSi = /군시$/.test(name);
-    if (
-      isGeneralGuParentCity(name) ||
-      isMetroStampParent(name) ||
-      badGunSi
-    ) {
-      delete next[id];
-      pruned.push(id);
-    }
-  }
-  const prunedSet = new Set(pruned);
-  const nextUnseen = unseen.filter((id) => !prunedSet.has(id));
-  return { collected: next, unseen: nextUnseen, pruned };
-}
-
-/**
- * Idempotent: add stamps for visit places.
- * Batches one write. Does not reverse-geocode.
+ * Idempotent: add dong stamps for visit places.
  */
 export function syncStampsFromVisits(
   places: VisitPlace[],
@@ -146,38 +142,52 @@ export function syncStampsFromVisits(
 ): StampSyncResult {
   let collected = { ...readStampsCollected() };
   let unseen = [...readStampsUnseen()];
-  const prune = pruneGeneralGuParentStamps(collected, unseen);
-  collected = prune.collected;
-  unseen = prune.unseen;
   const unseenSet = new Set(unseen);
   const added: string[] = [];
+  const pruned: string[] = [];
   const silent = options.silent === true;
 
   for (const place of places) {
-    const name = sigunguFromVisit(place);
-    if (!name) {
+    const rawDong = dongFromVisit(place);
+    if (!rawDong) {
       continue;
     }
-    const sido =
-      normalizeSido(place.province ?? null) ??
-      inferSidoForUnit(name) ??
-      (place.city ? inferSidoForUnit(place.city) : null);
+    const sido = normalizeSido(place.province ?? null);
     if (!sido) {
       continue;
     }
-    if (isGeneralGuParentCity(name)) {
+    let city = resolveCityForVisit(
+      sido,
+      place.city?.trim() || null,
+      place.gu?.trim() || null,
+    );
+    if (!city) {
+      city = inferCityForDong(sido, rawDong);
+    }
+    if (!city) {
+      city = inferCityForDong(sido, legalDongFromAdmin(rawDong) ?? rawDong);
+    }
+    let dong: string | null = null;
+    if (city) {
+      dong = matchIndexedDong(sido, city, rawDong);
+    } else {
+      // City unknown — unique dong name across the sido.
+      const inferred = inferCityForDong(sido, rawDong);
+      if (inferred) {
+        city = inferred;
+        dong = matchIndexedDong(sido, inferred, rawDong);
+      }
+    }
+    if (!city || !dong) {
       continue;
     }
-    // Domestic index only — foreign / unknown admin names never collect.
-    if (!isKnownSigungu(sido, name)) {
-      continue;
-    }
-    const id = stampId(sido, name);
+    const id = stampId(sido, city, dong);
     if (collected[id]) {
       continue;
     }
     const entry: StampEntry = {
-      name,
+      name: dong,
+      city,
       sido,
       firstMonth: monthForPlace(place, options.month),
     };
@@ -189,12 +199,12 @@ export function syncStampsFromVisits(
     }
   }
 
-  if (added.length > 0 || prune.pruned.length > 0) {
+  if (added.length > 0 || pruned.length > 0) {
     writeCollected(collected);
     writeUnseen(unseen);
   }
 
-  return { collected, unseen, added, pruned: prune.pruned };
+  return { collected, unseen, added, pruned };
 }
 
 export function markAllStampsSeen(): string[] {
@@ -223,18 +233,16 @@ export function countCollectedInCity(
   collected: StampsCollected,
   sido: string,
   city: string,
-  units: string[],
 ): number {
   let n = 0;
-  for (const unit of units) {
-    if (collected[stampId(sido, unit)]) {
+  for (const entry of Object.values(collected)) {
+    if (entry.sido === sido && entry.city === city) {
       n += 1;
     }
   }
   return n;
 }
 
-/** Stamp ids whose firstMonth is the given month. */
 export function firstsInMonth(
   collected: StampsCollected,
   month: MonthKey,

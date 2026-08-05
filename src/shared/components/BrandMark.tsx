@@ -16,7 +16,7 @@ export interface BrandMarkProps {
  * is one shape everywhere. Pins/ripples are layered on top by the caller (see
  * `pinOffset` for the Seoul anchor).
  */
-export function BrandMark({ height, color = theme.colors.accent }: BrandMarkProps) {
+export function BrandMark({ height, color = theme.colors.ink }: BrandMarkProps) {
   const width = height * KOREA_SILHOUETTE.aspect;
   return (
     <Svg width={width} height={height} viewBox={KOREA_SILHOUETTE.viewBox}>
@@ -44,7 +44,7 @@ export interface PinGlyphProps {
 /** Classic map pin (teardrop). Tip is at the bottom-center for anchoring. */
 export function PinGlyph({
   size,
-  color = theme.colors.sand,
+  color = theme.colors.ink,
   dotColor = theme.colors.white,
 }: PinGlyphProps) {
   const width = size * (24 / 32);

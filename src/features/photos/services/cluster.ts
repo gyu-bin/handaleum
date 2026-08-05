@@ -45,7 +45,10 @@ function gridCluster(photos: PhotoRef[], cellDeg: number): PlaceCluster[] {
   // time-slider updates must not remount markers or cancel in-flight thumbs.
   const grain = cellDeg.toFixed(6);
   for (const [cellKey, members] of cells.entries()) {
-    members.sort((a, b) => a.takenAt.localeCompare(b.takenAt));
+    // Seed = earliest takenAt — only sort when there is something to order.
+    if (members.length > 1) {
+      members.sort((a, b) => a.takenAt.localeCompare(b.takenAt));
+    }
     const centerLat =
       members.reduce((sum, p) => sum + p.lat, 0) / members.length;
     const centerLng =
@@ -90,12 +93,22 @@ export function clusterPhotos(photos: PhotoRef[], zoom: number): PlaceCluster[] 
     guard += 1;
   }
 
-  // If the ideal grain matches last time (within ~5%), reuse it so marker
-  // ids stay stable across tiny photo-set churn without blocking refine.
-  const prev = lastGrainByZoom.get(zKey);
-  if (prev != null && Math.abs(prev - cellDeg) / cellDeg < 0.05) {
-    cellDeg = prev;
-    clusters = gridCluster(photos, cellDeg);
+  // Prefer the previous zoom step's grain when it still fits under the pin
+  // cap — avoids splitting/merging every integer zoom tick (marker churn).
+  const prev =
+    lastGrainByZoom.get(zKey) ??
+    lastGrainByZoom.get(zKey - 1) ??
+    lastGrainByZoom.get(zKey + 1);
+  if (prev != null && Math.abs(prev - cellDeg) / cellDeg < 0.35) {
+    if (Math.abs(prev - cellDeg) < 1e-12) {
+      // Same grain already computed — keep it.
+    } else {
+      const withPrev = gridCluster(photos, prev);
+      if (withPrev.length <= maxPins) {
+        cellDeg = prev;
+        clusters = withPrev;
+      }
+    }
   }
 
   lastGrainByZoom.set(zKey, cellDeg);

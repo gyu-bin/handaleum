@@ -12,6 +12,7 @@ import {
 } from '@/lib/storage';
 
 import {
+  resetStampLibraryProgress,
   syncStampsFromLibrary,
   type StampLibrarySyncResult,
 } from './stampBackfill';
@@ -21,7 +22,7 @@ type Listener = (syncing: boolean) => void;
 /** Skip restarting a full-album scan if one finished within this window. */
 const SYNC_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
 /** Let the open month paint + pin thumbs settle before album GPS. */
-const MAP_KICKOFF_DELAY_MS = 8_000;
+const MAP_KICKOFF_DELAY_MS = 4_000;
 const MAP_PIN_IDLE_WAIT_MS = 40_000;
 
 let inflight: Promise<StampLibrarySyncResult> | null = null;
@@ -124,6 +125,12 @@ export function startStampLibrarySync(
       syncing = false;
       setFullAlbumScanBusy(false);
       emit();
+      // Keep "done" visible briefly, then clear the home banner.
+      setTimeout(() => {
+        if (!isStampLibrarySyncing()) {
+          resetStampLibraryProgress();
+        }
+      }, 1600);
     });
   inflight = run;
   return run;

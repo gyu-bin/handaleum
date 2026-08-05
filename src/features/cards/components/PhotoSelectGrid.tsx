@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
     right: 7,
     width: 22,
     height: 22,
-    borderRadius: theme.radius.pill,
+    borderRadius: theme.radius.md,
     backgroundColor: theme.colors.terracotta,
     alignItems: 'center',
     justifyContent: 'center',

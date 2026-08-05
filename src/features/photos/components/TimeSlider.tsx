@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     height: 4,
-    backgroundColor: theme.colors.accent,
+    backgroundColor: theme.colors.ink,
     borderRadius: 2,
   },
   thumb: {
@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     backgroundColor: theme.colors.surface,
     borderWidth: 2,
-    borderColor: theme.colors.accent,
+    borderColor: theme.colors.ink,
     top: 11,
     ...theme.shadows.card,
   },

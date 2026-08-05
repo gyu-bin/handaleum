@@ -78,6 +78,7 @@ export function useMonthJourney(
   const photosKey = photosFingerprint(photos);
 
   // Immediate disk/memory hydrate — do not wait for isFetching / geocode.
+  // MapCanvas is memoized so chip updates do not churn native markers.
   useEffect(() => {
     if (photos.length === 0) {
       setVisitPlaces([]);

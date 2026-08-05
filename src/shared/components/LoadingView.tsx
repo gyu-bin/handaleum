@@ -1,8 +1,6 @@
-import { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
-  cancelAnimation,
   Easing,
   ReduceMotion,
   useAnimatedStyle,
@@ -10,96 +8,51 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
+import { useEffect } from 'react';
 
-import { KOREA_SILHOUETTE } from '@/shared/constants/brandMark';
-import { SPLASH_MAP_H, SPLASH_STAMP } from '@/shared/constants/splashPins';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
-import { BrandMark } from './BrandMark';
 import { PaperGrain } from './PaperGrain';
-import { SplashStampPin } from './SplashStampPin';
 
 export interface LoadingViewProps {
   /** Optional line under the mark. Defaults to the common loading string. */
   message?: string;
 }
 
-// Same size as the splash mark so the splash → loading handoff is seamless:
-// the loading screen IS the splash's final frame, with the ping kept alive.
-const MAP_H = SPLASH_MAP_H;
-const PIN_W = SPLASH_STAMP.frameW;
-const PIN_H = SPLASH_STAMP.totalH;
-const RIPPLE = 40;
-/** One ping per city, hopping 서울→강릉→부산→광주→제주 on a loop. */
-const PING_MS = 900;
-
-const CITY_COUNT = KOREA_SILHOUETTE.pins.length;
+const ICON = require('../../../assets/images/icon.png');
+const ICON_SIZE = 96;
 
 /**
- * Brand loading screen: the fully-stamped map from the splash, with a locator
- * ping that hops from city to city while we wait. Shared across screens so
- * every "불러오는 중" state looks the same.
+ * Brand loading — same clay icon as splash/app icon, soft breath.
  */
 export function LoadingView({ message = strings.common.loading }: LoadingViewProps) {
-  const mapW = MAP_H * KOREA_SILHOUETTE.aspect;
-  const xs = KOREA_SILHOUETTE.pins.map((p) => p.fx * mapW);
-  const ys = KOREA_SILHOUETTE.pins.map((p) => p.fy * MAP_H);
-
-  // 0..CITY_COUNT, integer part = which city pings, fraction = ping progress.
-  const cycle = useSharedValue(0);
+  const breath = useSharedValue(0);
 
   useEffect(() => {
-    cycle.value = withRepeat(
-      withTiming(CITY_COUNT, {
-        duration: PING_MS * CITY_COUNT,
-        easing: Easing.linear,
+    breath.value = withRepeat(
+      withTiming(1, {
+        duration: 1400,
+        easing: Easing.inOut(Easing.quad),
         reduceMotion: ReduceMotion.Never,
       }),
       -1,
-      false,
-      undefined,
-      ReduceMotion.Never,
+      true,
     );
-    return () => {
-      cancelAnimation(cycle);
-    };
-  }, [cycle]);
+  }, [breath]);
 
-  const pingStyle = useAnimatedStyle(() => {
-    const idx = Math.min(Math.floor(cycle.value), CITY_COUNT - 1);
-    const t = cycle.value - idx;
-    return {
-      left: xs[idx]! - RIPPLE / 2,
-      top: ys[idx]! - RIPPLE / 2,
-      opacity: 0.45 * (1 - t),
-      transform: [{ scale: 0.3 + t * 1.7 }],
-    };
-  });
+  const iconStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: 0.96 + breath.value * 0.04 }],
+    opacity: 0.88 + breath.value * 0.12,
+  }));
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <PaperGrain />
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <PaperGrain style={styles.grain} />
       <View style={styles.center}>
-        <View style={{ width: mapW, height: MAP_H }}>
-          <BrandMark height={MAP_H} color={theme.colors.splashMark} />
-          <Animated.View style={[styles.ping, pingStyle]} />
-          {KOREA_SILHOUETTE.pins.map((pin) => (
-            <View
-              key={pin.name}
-              style={[
-                styles.pin,
-                {
-                  left: pin.fx * mapW - PIN_W / 2,
-                  top: pin.fy * MAP_H - PIN_H,
-                },
-              ]}
-            >
-              <SplashStampPin name={pin.name} showRipples />
-            </View>
-          ))}
-        </View>
-        <Text style={styles.wordmark}>{strings.brand}</Text>
+        <Animated.View style={[styles.iconWrap, iconStyle]}>
+          <Image source={ICON} style={styles.icon} accessibilityIgnoresInvertColors />
+        </Animated.View>
         <Text style={styles.message}>{message}</Text>
       </View>
     </SafeAreaView>
@@ -109,38 +62,32 @@ export function LoadingView({ message = strings.common.loading }: LoadingViewPro
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: theme.colors.canvas,
+    backgroundColor: theme.colors.background,
+  },
+  grain: {
+    opacity: 0.35,
   },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: theme.spacing.lg,
+    gap: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
   },
-  ping: {
-    position: 'absolute',
-    width: RIPPLE,
-    height: RIPPLE,
-    borderRadius: RIPPLE / 2,
-    borderWidth: 2,
-    borderColor: theme.colors.white,
+  iconWrap: {
+    width: ICON_SIZE,
+    height: ICON_SIZE,
+    borderRadius: ICON_SIZE * 0.2237,
+    overflow: 'hidden',
   },
-  pin: {
-    position: 'absolute',
-  },
-  /** The loading screen has no content to compete with — the brand is the one loud thing here. */
-  wordmark: {
-    ...theme.type.display,
-    fontSize: 38,
-    lineHeight: 44,
-    fontFamily: theme.fonts.serif,
-    fontWeight: '700',
-    color: theme.colors.splashMark,
-    letterSpacing: 2,
+  icon: {
+    width: ICON_SIZE,
+    height: ICON_SIZE,
   },
   message: {
-    ...theme.type.micro,
-    color: theme.colors.subtle,
-    letterSpacing: 1,
+    ...theme.type.body,
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.inkSoft,
+    textAlign: 'center',
   },
 });

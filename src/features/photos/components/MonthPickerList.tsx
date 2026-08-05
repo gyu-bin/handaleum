@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   heroSubtitle: {
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     fontSize: 12,
     lineHeight: 18,
     color: theme.colors.inkSoft,
@@ -265,10 +265,10 @@ const styles = StyleSheet.create({
     opacity: 0.25,
   },
   yearChevron: {
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     fontSize: 30,
     lineHeight: 34,
-    color: theme.colors.terracotta,
+    color: theme.colors.ink,
     fontWeight: '400',
   },
   yearLabel: {
@@ -301,20 +301,20 @@ const styles = StyleSheet.create({
     opacity: 0.65,
   },
   monthName: {
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     fontSize: 18,
     lineHeight: 24,
     color: theme.colors.ink,
     fontWeight: '600',
   },
   sepDot: {
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     fontSize: 18,
     lineHeight: 24,
     color: theme.colors.inkSoft,
   },
   count: {
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     fontSize: 18,
     lineHeight: 24,
     color: theme.colors.terracotta,
@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   proInline: {
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     fontSize: 16,
     lineHeight: 24,
     color: theme.colors.terracotta,

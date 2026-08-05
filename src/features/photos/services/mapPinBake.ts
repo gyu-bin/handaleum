@@ -115,7 +115,7 @@ export function requestMapPinBake(
   }
 
   const work = new Promise<string | null>((resolve) => {
-    queue.push({
+    const pending: Pending = {
       key,
       photoUri,
       selected,
@@ -124,7 +124,13 @@ export function requestMapPinBake(
         inflight.delete(key);
         resolve(uri);
       },
-    });
+    };
+    // Selected pins jump the queue so the open pin frames first.
+    if (selected) {
+      queue.unshift(pending);
+    } else {
+      queue.push(pending);
+    }
     pump();
   });
   inflight.set(key, work);

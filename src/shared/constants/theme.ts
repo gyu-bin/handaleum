@@ -1,7 +1,7 @@
 /**
- * Design tokens — dual system (2026-08-02):
- * - UI chrome / list screens: travel journal (cream paper, terracotta, serif titles)
- * - Map canvas / pins: dawn-blue paper map (land / water / accent) — do not retint for UI
+ * Design tokens — dual system:
+ * - UI chrome: Dawn Survey (cream paper + single slate ink). Plan A 2026-08-05.
+ * - Map canvas / pins: dawn-blue paper map (land / water / accent) — do not retint for UI.
  * All colors in the app must come from this file. No hardcoded colors elsewhere.
  */
 export const theme = {
@@ -12,7 +12,7 @@ export const theme = {
     surfaceAlt: '#EFE6DA',
     canvas: '#EFEAE2',
 
-    // Ink / type
+    // Ink / type — the only UI accent (philosophy: no second accent)
     ink: '#2C3E50',
     inkSoft: '#5A6B7A',
     subtle: '#93A1AD',
@@ -24,8 +24,7 @@ export const theme = {
     splashMark: '#33475B',
 
     /**
-     * Map / dawn-blue accent (pins, map chrome CTAs that sit on the map).
-     * UI journal accents use `terracotta` instead.
+     * Map land/water system only — journal UI uses `ink`, not this.
      */
     accent: '#3A5A78',
     accentSoft: 'rgba(58,90,120,0.12)',
@@ -47,24 +46,22 @@ export const theme = {
 
     white: '#FFFFFF',
     /**
-     * Warm gold — map / splash budget. Do not mix with terracotta on one view.
+     * Legacy warm tokens — Plan A / single navy theme: alias to ink.
+     * Prefer `ink` / `tint.*` in new code.
      */
-    sand: '#C9A961',
+    sand: '#2C3E50',
+    terracotta: '#2C3E50',
+    terracottaSoft: 'rgba(44,62,80,0.10)',
     /**
-     * Journal UI accent: chips, progress, nav active, links, month counts.
+     * Unseen badge — same navy family (no second brand hue).
      */
-    terracotta: '#D4784A',
-    terracottaSoft: 'rgba(212,120,74,0.14)',
-    /**
-     * Tab badge only (발도장 unseen).
-     */
-    notify: '#CB5A47',
+    notify: '#2C3E50',
     /** Progress track / empty stamp outline. */
     line: '#E8E4DC',
     overlay: 'rgba(251,249,244,0.88)',
     overlayDark: 'rgba(44,62,80,0.45)',
     labelBg: 'rgba(251,249,244,0.9)',
-    selectedGlow: 'rgba(58,90,120,0.22)',
+    selectedGlow: 'rgba(44,62,80,0.18)',
     shadow: 'rgba(44,62,80,0.10)',
   },
   /**
@@ -80,9 +77,9 @@ export const theme = {
     faint: 'rgba(44,62,80,0.10)',
   },
   fonts: {
-    // Pretendard / MaruBuri 도입 전까지 시스템 대체 (폰트 파일 추가 시 교체)
-    // Hero titles on journal UI screens use `serif`.
-    serif: 'Georgia',
+    // Single clean system sans for all UI (Plan A follow-up).
+    // `serif` kept as an alias so old call sites stay valid.
+    serif: 'System',
     sans: 'System',
   },
   /**
@@ -97,8 +94,7 @@ export const theme = {
    * 3. TextInput takes `type.<step>.fontSize` only. Spreading the whole token
    *    adds lineHeight, which mis-centers input text vertically on Android.
    *
-   * Journal heroes: spread `type.display` / `type.title` and set
-   * `fontFamily: theme.fonts.serif`.
+   * Prefer `theme.fonts.sans`. `serif` is an alias of System (no Georgia).
    */
   type: {
     /** The single loud thing on a screen. */

@@ -331,12 +331,12 @@ const styles = StyleSheet.create({
   },
   description: {
     ...theme.type.label,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     color: theme.colors.inkSoft,
   },
   status: {
     ...theme.type.label,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     fontWeight: '600',
     color: theme.colors.subtle,
     paddingVertical: theme.spacing.xs,
@@ -356,7 +356,7 @@ const styles = StyleSheet.create({
   },
   radiusLabel: {
     ...theme.type.micro,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     fontWeight: '600',
     color: theme.colors.subtle,
   },
@@ -367,7 +367,7 @@ const styles = StyleSheet.create({
   radiusChip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: theme.radius.pill,
+    borderRadius: theme.radius.md,
     backgroundColor: theme.colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.colors.hairline,
@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
   },
   radiusChipText: {
     ...theme.type.label,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     fontWeight: '600',
     color: theme.colors.inkSoft,
   },
@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
   },
   hint: {
     ...theme.type.micro,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     color: theme.colors.subtle,
   },
 });

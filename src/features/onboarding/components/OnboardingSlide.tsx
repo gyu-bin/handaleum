@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
   },
   body: {
     ...theme.type.body,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     color: theme.colors.inkSoft,
     textAlign: 'center',
     lineHeight: 24,

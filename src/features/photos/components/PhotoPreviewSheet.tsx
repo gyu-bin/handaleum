@@ -271,12 +271,12 @@ const styles = StyleSheet.create({
   },
   meta: {
     ...theme.type.micro,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     color: theme.colors.inkSoft,
   },
   close: {
     ...theme.type.body,
-    fontFamily: theme.fonts.serif,
+    fontFamily: theme.fonts.sans,
     color: theme.colors.terracotta,
     fontWeight: '600',
     marginTop: 2,

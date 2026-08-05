@@ -1,118 +1,79 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
+  LayoutChangeEvent,
   Pressable,
   StyleSheet,
+  Switch,
   Text,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import Animated, {
-  Extrapolation,
-  interpolate,
-  interpolateColor,
-  runOnJS,
-  useAnimatedScrollHandler,
-  useAnimatedStyle,
-  useSharedValue,
-  type SharedValue,
-} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Path } from 'react-native-svg';
 
+import koreaGeo from '@/assets/geo/korea.json';
+import {
+  bboxOf,
+  createProjection,
+  geometryToPath,
+  type PackedGeometry,
+} from '@/features/photos/utils/geo';
+import { usePhotoPermission } from '@/features/photos/hooks/usePhotoPermission';
 import { Button } from '@/shared/components/Button';
-import { PaperGrain } from '@/shared/components/PaperGrain';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
-import { usePhotoPermission } from '@/features/photos/hooks/usePhotoPermission';
-
-import { AccessArt, CardArt, MapPinArt } from '../components/OnboardingArt';
-import { OnboardingSlide } from '../components/OnboardingSlide';
 import { useOnboarding } from '../hooks/useOnboarding';
 
-/** Dot that stretches and tints smoothly as the pager scrolls past it. */
-function PagerDot({
-  index,
-  scrollX,
-  width,
-}: {
-  index: number;
-  scrollX: SharedValue<number>;
-  width: number;
-}) {
-  const style = useAnimatedStyle(() => {
-    const pos = scrollX.value / width;
-    return {
-      width: interpolate(
-        pos,
-        [index - 1, index, index + 1],
-        [7, 20, 7],
-        Extrapolation.CLAMP,
-      ),
-      backgroundColor: interpolateColor(
-        pos,
-        [index - 1, index, index + 1],
-        [theme.colors.border, theme.colors.terracotta, theme.colors.border],
-      ),
-    };
-  });
-  return <Animated.View style={[styles.dot, style]} />;
+function KoreaSilhouette() {
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  const southKorea = koreaGeo.korea as unknown as PackedGeometry;
+
+  const onLayout = (e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    if (Math.abs(width - size.width) < 1 && Math.abs(height - size.height) < 1) {
+      return;
+    }
+    setSize({ width, height });
+  };
+
+  const path = useMemo(() => {
+    if (size.width <= 0 || size.height <= 0) {
+      return '';
+    }
+    const projection = createProjection(
+      bboxOf(southKorea),
+      size.width,
+      size.height,
+      10,
+    );
+    return geometryToPath(southKorea, projection.project);
+  }, [size.height, size.width, southKorea]);
+
+  return (
+    <View style={styles.mapWrap} onLayout={onLayout}>
+      {path ? (
+        <Svg width={size.width} height={size.height}>
+          <Path
+            d={path}
+            fill={theme.colors.ink}
+            fillOpacity={0.92}
+          />
+        </Svg>
+      ) : null}
+    </View>
+  );
 }
 
+/** Minimal first-run — brand, line, peninsula, photo toggle, start. */
 export function OnboardingScreen() {
   const router = useRouter();
-  const { width } = useWindowDimensions();
   const params = useLocalSearchParams<{ replay?: string }>();
   const isReplay = params.replay === '1';
   const { markSeen } = useOnboarding();
   const { request } = usePhotoPermission();
-  const scrollRef = useRef<Animated.ScrollView>(null);
-  const scrollX = useSharedValue(0);
-  const [index, setIndex] = useState(0);
   const [busy, setBusy] = useState(false);
-
-  const slides = strings.onboarding.slides;
-  const isLast = index === slides.length - 1;
-
-  // Stable art nodes — must not recreate on page index changes (causes swipe hitch).
-  const slideArts = useMemo(
-    () => [<MapPinArt key="map" />, <CardArt key="card" />, <AccessArt key="access" />],
-    [],
-  );
-
-  const pages = useMemo(
-    () =>
-      slides.map((slide, i) => (
-        <OnboardingSlide
-          key={slide.title}
-          width={width}
-          index={i}
-          scrollX={scrollX}
-          art={slideArts[i]}
-          title={slide.title}
-          body={slide.body}
-        />
-      )),
-    [slides, width, slideArts, scrollX],
-  );
-
-  const scrollHandler = useAnimatedScrollHandler({
-    onScroll: (e) => {
-      scrollX.value = e.contentOffset.x;
-    },
-    onMomentumEnd: (e) => {
-      const next = Math.round(e.contentOffset.x / width);
-      runOnJS(setIndex)(next);
-    },
-  });
-
-  const goTo = useCallback(
-    (next: number) => {
-      scrollRef.current?.scrollTo({ x: next * width, animated: true });
-      setIndex(next);
-    },
-    [width],
-  );
+  const [importPhotos, setImportPhotos] = useState(true);
 
   const leaveReplay = useCallback(() => {
     if (router.canGoBack()) {
@@ -122,84 +83,80 @@ export function OnboardingScreen() {
     }
   }, [router]);
 
-  const onFinish = async () => {
+  const onStart = async () => {
     if (isReplay) {
       leaveReplay();
       return;
     }
     setBusy(true);
     markSeen();
+    if (!importPhotos) {
+      router.replace('/permission');
+      return;
+    }
     const next = await request();
     const granted = next === 'granted' || next === 'limited';
     router.replace(granted ? '/' : '/permission');
   };
 
-  const onPrimary = () => {
-    if (isLast) {
-      void onFinish();
-    } else {
-      goTo(index + 1);
-    }
-  };
-
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
-      <PaperGrain style={styles.grain} />
-      <View style={styles.topRow}>
-        {isReplay ? (
+      {isReplay ? (
+        <View style={styles.topRow}>
           <Pressable
             onPress={leaveReplay}
             hitSlop={8}
             accessibilityRole="button"
-            style={({ pressed }) => [styles.skip, pressed && styles.skipPressed]}
+            style={({ pressed }) => pressed && styles.pressed}
           >
             <Text style={styles.skipText}>{strings.onboarding.close}</Text>
           </Pressable>
-        ) : isLast ? null : (
-          <Pressable
-            onPress={() => goTo(slides.length - 1)}
-            hitSlop={8}
-            accessibilityRole="button"
-            style={({ pressed }) => [styles.skip, pressed && styles.skipPressed]}
-          >
-            <Text style={styles.skipText}>{strings.onboarding.skip}</Text>
-          </Pressable>
-        )}
+        </View>
+      ) : (
+        <View style={styles.topPad} />
+      )}
+
+      <View style={styles.body}>
+        <Text style={styles.brand}>{strings.brand}</Text>
+        <Text style={styles.headline}>{strings.onboarding.headline}</Text>
+        <Text style={styles.subhead}>{strings.onboarding.subhead}</Text>
+
+        <KoreaSilhouette />
+
+        {!isReplay ? (
+          <>
+            <View style={styles.toggleRow}>
+              <Text style={styles.toggleLabel}>
+                {strings.onboarding.photoToggle}
+              </Text>
+              <Switch
+                value={importPhotos}
+                onValueChange={setImportPhotos}
+                trackColor={{
+                  false: theme.colors.line,
+                  true: theme.colors.ink,
+                }}
+                thumbColor={theme.colors.surface}
+              />
+            </View>
+            <Text style={styles.toggleHint}>
+              {strings.onboarding.photoToggleHint}
+            </Text>
+          </>
+        ) : null}
       </View>
 
-      <Animated.ScrollView
-        ref={scrollRef}
-        style={styles.list}
-        horizontal
-        pagingEnabled
-        bounces={false}
-        overScrollMode="never"
-        showsHorizontalScrollIndicator={false}
-        onScroll={scrollHandler}
-        scrollEventThrottle={16}
-        decelerationRate="fast"
-      >
-        {pages}
-      </Animated.ScrollView>
-
       <View style={styles.footer}>
-        <View style={styles.dots}>
-          {slides.map((slide, i) => (
-            <PagerDot key={slide.title} index={i} scrollX={scrollX} width={width} />
-          ))}
-        </View>
         <Button
           title={
-            isLast
-              ? isReplay
-                ? strings.onboarding.close
-                : strings.onboarding.grant
-              : strings.onboarding.next
+            isReplay ? strings.onboarding.close : strings.onboarding.start
           }
-          variant="accent"
+          variant="primary"
           loading={busy}
-          onPress={onPrimary}
+          onPress={() => void onStart()}
+          style={styles.startBtn}
         />
+        <Text style={styles.ageNote}>{strings.onboarding.ageNote}</Text>
       </View>
     </SafeAreaView>
   );
@@ -210,46 +167,98 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background,
   },
-  grain: {
-    opacity: 0.3,
-  },
-  list: {
-    flex: 1,
-  },
-
   topRow: {
-    height: 44,
+    height: 40,
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
     paddingHorizontal: theme.spacing.lg,
   },
-  skip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+  topPad: {
+    height: theme.spacing.lg,
   },
-  skipPressed: {
-    opacity: 0.6,
+  pressed: {
+    opacity: 0.5,
   },
   skipText: {
     ...theme.type.label,
-    fontFamily: theme.fonts.serif,
-    color: theme.colors.terracotta,
-    fontWeight: '600',
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.inkSoft,
+    fontWeight: '500',
   },
-
+  body: {
+    flex: 1,
+    paddingHorizontal: theme.spacing.lg,
+    alignItems: 'center',
+  },
+  brand: {
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.subtle,
+    fontWeight: '500',
+    letterSpacing: 1,
+    marginBottom: theme.spacing.md,
+  },
+  headline: {
+    fontSize: 24,
+    lineHeight: 32,
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.ink,
+    fontWeight: '700',
+    textAlign: 'center',
+    letterSpacing: -0.6,
+  },
+  subhead: {
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.inkSoft,
+    textAlign: 'center',
+    marginTop: theme.spacing.sm,
+  },
+  mapWrap: {
+    width: '70%',
+    aspectRatio: 0.72,
+    maxHeight: 280,
+    marginTop: theme.spacing.xl,
+    marginBottom: theme.spacing.lg,
+  },
+  toggleRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing.md,
+    paddingTop: theme.spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.hairline,
+  },
+  toggleLabel: {
+    ...theme.type.label,
+    flex: 1,
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.ink,
+    fontWeight: '500',
+  },
+  toggleHint: {
+    ...theme.type.micro,
+    width: '100%',
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.subtle,
+    marginTop: 8,
+  },
   footer: {
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: theme.spacing.md,
-    gap: theme.spacing.lg,
+    alignItems: 'center',
+    gap: theme.spacing.sm,
   },
-  dots: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 7,
+  startBtn: {
+    alignSelf: 'stretch',
   },
-  dot: {
-    height: 7,
-    borderRadius: 4,
+  ageNote: {
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.subtle,
+    textAlign: 'center',
   },
 });

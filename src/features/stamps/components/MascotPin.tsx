@@ -18,7 +18,7 @@ export function MascotPin({ size = 36 }: MascotPinProps) {
       <Svg width={width} height={size} viewBox="0 0 24 32">
         <Path
           d="M12 1 C6 1 1.5 5.6 1.5 11.5 C1.5 19 12 31 12 31 C12 31 22.5 19 22.5 11.5 C22.5 5.6 18 1 12 1 Z"
-          fill={theme.colors.accent}
+          fill={theme.colors.ink}
         />
         <Circle cx={12} cy={11} r={6.2} fill={theme.colors.white} />
         <Circle cx={9.6} cy={10.2} r={1.05} fill={theme.colors.ink} />
@@ -35,16 +35,16 @@ export function MascotPin({ size = 36 }: MascotPinProps) {
           cy={12.4}
           rx={1.3}
           ry={0.85}
-          fill={theme.colors.sand}
-          opacity={0.85}
+          fill={theme.colors.ink}
+          opacity={0.12}
         />
         <Ellipse
           cx={15.8}
           cy={12.4}
           rx={1.3}
           ry={0.85}
-          fill={theme.colors.sand}
-          opacity={0.85}
+          fill={theme.colors.ink}
+          opacity={0.12}
         />
       </Svg>
     </View>
