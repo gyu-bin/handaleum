@@ -37,9 +37,9 @@ function countWord(n: number): string {
 export const strings = {
   brand: '한달음',
   /** Splash editorial line under the wordmark (sample D). */
-  splashTagline: '사진과 지도',
+  splashTagline: '한 달의 사진',
   /** Home hero line under the wordmark. */
-  tagline: '사진과 지도, 그리고 나의 이야기',
+  tagline: '한 달의 사진을 지도로',
   common: {
     loading: '불러오는 중',
     error: '문제가 발생했습니다',
@@ -64,12 +64,12 @@ export const strings = {
     openSettings: '설정에서 허용하기',
   },
   onboarding: {
-    /** Single first-run screen (발자취-style). */
-    headline: '사진으로 모은 발자국이\n내가 살아온 지도가 됩니다.',
-    subhead: '한 달의 기록을 지도 위에 남겨보세요.',
-    photoToggle: '사진으로 지나온 동을 채워요',
-    photoToggleHint: '지금 가져오거나 설정에서 언제든 다시 할 수 있어요.',
-    start: '시작',
+    /** First-run — monthly photo journal, not walk-tracking. */
+    headline: '한 달 동안 찍은 사진이\n지도 위 이야기로 모입니다.',
+    subhead: '카메라롤만으로 이번 달을 다시 걸어봐요.',
+    photoToggle: '앨범에서 이번 달·지난 기록을 불러와요',
+    photoToggleHint: '사진은 기기에만 두고, 위치만 읽어 지도를 그립니다.',
+    start: '시작하기',
     ageNote: '만 14세 이상만 이용할 수 있습니다.',
     /** Kept for settings replay / legacy callers. */
     slides: [
@@ -106,23 +106,23 @@ export const strings = {
      * The one loud line on the map screen. Everything else about the month —
      * the year, the step count — is evidence and belongs in `monthMeta`.
      */
-    monthTitle: (monthNumber: number) => `${MONTH_NAMES[monthNumber - 1]}의 기록`,
-    /** Evidence line under the title: reads as an instrument, not a sentence. */
-    monthMeta: (monthLabel: string, steps: number) =>
-      steps > 0 ? `${monthLabel} · ${countWord(steps)} 걸음` : monthLabel,
+    monthTitle: (monthNumber: number) => `${MONTH_NAMES[monthNumber - 1]}의 지도`,
+    /** Evidence line under the title — cluster count, not walk steps. */
+    monthMeta: (monthLabel: string, places: number) =>
+      places > 0 ? `${monthLabel} · ${countWord(places)}곳` : monthLabel,
     /** Shown while GPS for this month is still resolving in the background. */
-    resolvingLocations: '위치 확인 중…',
+    resolvingLocations: '이번 달 위치 확인 중…',
     /** Full-album stamp indexing banner (home map). */
-    indexingPreparing: '인덱싱 준비 중',
-    indexingPhotos: '사진 읽는 중',
+    indexingPreparing: '앨범 준비 중',
+    indexingPhotos: '앨범 훑는 중',
     indexingPhotoCount: (scanned: string, total: string) =>
       `${scanned}/${total}`,
-    indexingPlaces: '동 맞추는 중',
+    indexingPlaces: '동네 정리 중',
     indexingPlaceCount: (done: number, total: number, _photos: string) =>
       `${done}/${total}`,
     indexingPlacesEmpty: '위치 사진 없음',
-    indexingDone: '완료',
-    indexingDoneDetail: (photos: string) => `${photos}장`,
+    indexingDone: '앨범 정리 완료',
+    indexingDoneDetail: (photos: string) => `위치 ${photos}장`,
     /**
      * Headline above the visit chips. Count-based so the line height stays
      * fixed no matter how many places the month holds — the places themselves
@@ -307,31 +307,31 @@ export const strings = {
       `${month}월 ${day}일 · ${count}장`,
   },
   stamps: {
-    title: '발도장',
+    title: '동네 도장',
     progress: (a: number, b: number) => `${a}/${b}`,
     progressLabel: (sido: string) => `${sido} · `,
     cityProgressLabel: (city: string) => `${city} · `,
     newThisMonth: (n: number) => `이번 달 +${n}`,
-    earned: (name: string) => `${name} 도장 획득!`,
-    emptyTitle: '첫 도장을 찍어보세요',
-    empty: '사진에 위치가 있으면 동 도장이 쌓여요',
+    earned: (name: string) => `${name} 도장!`,
+    emptyTitle: '아직 모은 동네가 없어요',
+    empty: '위치가 있는 사진이 있으면 동 단위로 도장이 생겨요',
     uncollected: '미수집',
     slotUnknown: '?',
     errorTitle: '도장을 불러오지 못했어요',
     errorRetry: '다시 시도',
     loading: '도장 준비 중…',
-    backfilling: '앨범 전체에서 간 곳 찾는 중…',
-    scanIntroTitle: '앨범에서 도장을 모아요',
+    backfilling: '앨범에서 동네를 모으는 중…',
+    scanIntroTitle: '사진으로 동네 도장 모으기',
     scanIntroBody:
-      '지금까지 찍은 사진의 위치를 모두 살펴봐요. 사진이 많으면 시간이 걸릴 수 있어요. 확인을 눌러도 백그라운드에서 계속 찾고, 다른 화면도 그대로 쓸 수 있어요.',
+      '앨범 속 위치 사진으로 동 도장을 모아요. 확인을 눌러도 백그라운드에서 이어지고, 홈의 이번 달 지도는 그대로 쓸 수 있어요.',
     scanIntroConfirm: '확인',
-    mapA11y: '방문한 동이 칠해진 한반도 지도',
-    mapEyebrow: '발도장',
-    mapTitle: '방문 지도',
-    mapHint: '두 손가락으로 확대 · 색칠된 동을 누르면 그 시·도로 이동해요',
+    mapA11y: '모은 동이 칠해진 한반도 지도',
+    mapEyebrow: '동네 도장',
+    mapTitle: '모은 동네',
+    mapHint: '확대하면 동이 보여요 · 색을 누르면 그 시·도로 이동',
     mapClose: '닫기',
-    mapOpen: '방문 지도 열기',
-    mapVisitCount: (n: number) => `${n}곳이 색으로 남았어요`,
-    mapEmpty: '아직 칠해진 곳이 없어요',
+    mapOpen: '모은 동네 보기',
+    mapVisitCount: (n: number) => `${n}개 동을 모았어요`,
+    mapEmpty: '아직 모은 동이 없어요',
   },
 } as const;

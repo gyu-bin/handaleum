@@ -224,6 +224,7 @@ export function MonthlyMapScreen() {
   }
 
   const monthLabel = formatMonthLabel(month);
+  const monthNumber = Number(month.split('-')[1] ?? 0);
   // Content destinations live in the thumb-reachable bottom bar; settings is a
   // low-frequency config, so it sits as a quiet link in the header instead.
 
@@ -232,7 +233,10 @@ export function MonthlyMapScreen() {
       <View style={styles.body}>
         <View style={styles.header}>
           <View style={styles.hero}>
-            <Text style={styles.wordmark}>{strings.brand}</Text>
+            <Text style={styles.brandEyebrow}>{strings.brand}</Text>
+            <Text style={styles.wordmark} numberOfLines={1}>
+              {strings.map.monthTitle(monthNumber)}
+            </Text>
             <Text style={styles.monthMeta} numberOfLines={1}>
               {(isFetching || isResolving) && data
                 ? strings.map.resolvingLocations
@@ -400,8 +404,15 @@ const styles = StyleSheet.create({
   hero: {
     flex: 1,
     alignItems: 'flex-start',
-    gap: 2,
+    gap: 1,
     paddingRight: theme.spacing.sm,
+  },
+  brandEyebrow: {
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.subtle,
+    fontWeight: '500',
+    letterSpacing: 0.4,
   },
   wordmark: {
     fontFamily: theme.fonts.sans,

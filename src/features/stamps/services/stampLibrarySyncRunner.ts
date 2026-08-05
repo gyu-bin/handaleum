@@ -21,9 +21,9 @@ type Listener = (syncing: boolean) => void;
 
 /** Skip restarting a full-album scan if one finished within this window. */
 const SYNC_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
-/** Let the open month paint + pin thumbs settle before album GPS. */
-const MAP_KICKOFF_DELAY_MS = 4_000;
-const MAP_PIN_IDLE_WAIT_MS = 40_000;
+/** Brief settle before album GPS — long waits made first indexing feel stuck. */
+const MAP_KICKOFF_DELAY_MS = 1_200;
+const MAP_PIN_IDLE_WAIT_MS = 8_000;
 
 let inflight: Promise<StampLibrarySyncResult> | null = null;
 let syncing = false;

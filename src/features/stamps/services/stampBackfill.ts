@@ -96,14 +96,14 @@ export function getStampScanDebug(): StampScanDebug {
 }
 
 /**
- * Full-album GPS batch. Kickoff already waits for pin idle, so we can run
- * hotter than the month path (8) without starving first paint.
+ * Full-album GPS batch — local EXIF only on the hot path.
+ * (Network/iCloud fallback is a separate weekly pass; it destroys throughput.)
  */
-const LIBRARY_GPS_BATCH = 32;
+const LIBRARY_GPS_BATCH = 64;
 /** Geocode / stamp write chunks so the grid fills while the rest runs. */
-const GEOCODE_PHOTO_CHUNK = 400;
+const GEOCODE_PHOTO_CHUNK = 500;
 /** Short yield — keep UI alive without stalling 발자취-like pace. */
-const GEOCODE_CHUNK_YIELD_MS = 40;
+const GEOCODE_CHUNK_YIELD_MS = 16;
 /** How often to re-check assets previously cached as no-GPS (iCloud etc.). */
 const DEEP_RECHECK_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -167,8 +167,11 @@ export async function syncStampsFromLibrary(): Promise<StampLibrarySyncResult> {
   }
 
   const lastSync = getStampsLibrarySyncAt();
+  // Weekly iCloud recheck only — never on first fill. First open must stay
+  // local-metadata-fast (~발자취). wasEmpty||lastSync===0 used to force
+  // network downloads and capped scan at ~tens of assets/sec.
   const deepRecheck =
-    wasEmpty || lastSync === 0 || Date.now() - lastSync >= DEEP_RECHECK_MS;
+    lastSync > 0 && Date.now() - lastSync >= DEEP_RECHECK_MS;
 
   setProgress(
     {
