@@ -14,8 +14,11 @@ import { theme } from '@/shared/constants/theme';
 
 import type { StampsCollected } from '../types';
 import {
-  getStampMapRegions,
-  isStampMapRegionVisited,
+  getStampMapProvinces,
+  getStampMapUnits,
+  selectionFromUnit,
+  visitedL1Keys,
+  type StampMapSelection,
 } from '../services/stampMapIndex';
 
 const MAP_PAD = 18;
@@ -26,38 +29,18 @@ const FOCUS_BBOX = {
   maxLat: 38.6,
 };
 
-/** Minimal ink ladder — one family, readable on cream land. */
-const FILL_PALETTE = [
-  '#2C3E50',
-  '#3A4F63',
-  '#455A6E',
-  '#51657A',
-  '#5A6B7A',
-  '#667889',
-  '#718294',
-  '#4A5C6E',
-] as const;
-
-function colorForKey(id: string): string {
-  let h = 0;
-  for (let i = 0; i < id.length; i += 1) {
-    h = (h + id.charCodeAt(i) * (i + 3)) % 997;
-  }
-  return FILL_PALETTE[h % FILL_PALETTE.length]!;
-}
-
 export interface StampKoreaMapProps {
   collected: StampsCollected;
-  onSelectSido: (sido: string) => void;
+  onSelect: (selection: StampMapSelection) => void;
   style?: ViewStyle;
 }
 
 /**
- * Visit atlas at 동 grain — paint visited dongs only (full quilt is too heavy).
+ * Coloring-book atlas: empty 구·시·군 cells + ink fill when any leaf visited.
  */
 export const StampKoreaMap = memo(function StampKoreaMap({
   collected,
-  onSelectSido,
+  onSelect,
   style,
 }: StampKoreaMapProps) {
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -74,7 +57,9 @@ export const StampKoreaMap = memo(function StampKoreaMap({
   };
 
   const southKorea = koreaGeo.korea as unknown as PackedGeometry;
-  const regions = getStampMapRegions();
+  const units = getStampMapUnits();
+  const provinces = getStampMapProvinces();
+  const visited = useMemo(() => visitedL1Keys(collected), [collected]);
 
   const projection = useMemo(() => {
     if (size.width <= 0 || size.height <= 0) {
@@ -95,17 +80,26 @@ export const StampKoreaMap = memo(function StampKoreaMap({
     [projection, southKorea],
   );
 
-  const drawn = useMemo(() => {
+  const unitDrawn = useMemo(() => {
     if (!projection) {
       return [];
     }
-    return regions.map((r) => ({
-      ...r,
-      d: geometryToPath(r.geometry, projection.project),
-      visited: isStampMapRegionVisited(collected, r),
-      color: colorForKey(r.key),
+    return units.map((u) => ({
+      ...u,
+      d: geometryToPath(u.geometry, projection.project),
+      filled: visited.has(u.key),
     }));
-  }, [collected, projection, regions]);
+  }, [projection, units, visited]);
+
+  const provinceOutlines = useMemo(() => {
+    if (!projection) {
+      return [];
+    }
+    return provinces.map((p) => ({
+      name: p.name,
+      d: geometryToPath(p.geometry, projection.project),
+    }));
+  }, [projection, provinces]);
 
   return (
     <View
@@ -118,30 +112,45 @@ export const StampKoreaMap = memo(function StampKoreaMap({
         <Svg width={size.width} height={size.height}>
           <Defs>
             <Mask id="koreaMask" x="0" y="0" width="100%" height="100%">
-              <Path d={koreaPath} fill="#FFFFFF" />
+              <Path d={koreaPath} fill={theme.colors.white} />
             </Mask>
           </Defs>
+
           <Path d={koreaPath} fill={theme.colors.land} />
+
           <G mask="url(#koreaMask)">
-            {drawn.map((r) =>
-              r.visited ? (
-                <Path
-                  key={`fill-${r.key}`}
-                  d={r.d}
-                  fill={r.color}
-                  fillOpacity={0.9}
-                  onPress={() => onSelectSido(r.sido)}
-                  accessibilityLabel={r.name}
-                />
-              ) : null,
-            )}
+            {unitDrawn.map((u) => (
+              <Path
+                key={u.key}
+                d={u.d}
+                fill={u.filled ? theme.tint.strong : theme.colors.landLight}
+                stroke={theme.colors.ink}
+                strokeWidth={u.filled ? 0.55 : 0.7}
+                strokeOpacity={u.filled ? 0.2 : 0.22}
+                onPress={() => onSelect(selectionFromUnit(u))}
+                accessibilityLabel={u.label}
+              />
+            ))}
           </G>
+
+          {/* Soft 시·도 outlines for national structure */}
+          {provinceOutlines.map((p) => (
+            <Path
+              key={`prov-${p.name}`}
+              d={p.d}
+              fill="none"
+              stroke={theme.colors.ink}
+              strokeWidth={1.15}
+              strokeOpacity={0.32}
+            />
+          ))}
+
           <Path
             d={koreaPath}
             fill="none"
             stroke={theme.colors.ink}
-            strokeWidth={1.25}
-            strokeOpacity={0.22}
+            strokeWidth={1.4}
+            strokeOpacity={0.38}
           />
         </Svg>
       ) : null}

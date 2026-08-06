@@ -15,21 +15,22 @@ import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
 import type { StampsCollected } from '../types';
+import type { StampMapSelection } from '../services/stampMapIndex';
 import { StampKoreaMap } from './StampKoreaMap';
 
 export interface StampMapModalProps {
   visible: boolean;
   collected: StampsCollected;
   onClose: () => void;
-  onSelectSido: (sido: string) => void;
+  onSelect: (selection: StampMapSelection) => void;
 }
 
-/** Minimal full-screen visit map. */
+/** Full-screen coloring-book visit map. */
 export function StampMapModal({
   visible,
   collected,
   onClose,
-  onSelectSido,
+  onSelect,
 }: StampMapModalProps) {
   const insets = useSafeAreaInsets();
   const [mapSize, setMapSize] = useState({ width: 0, height: 0 });
@@ -93,7 +94,7 @@ export function StampMapModal({
                 maxScale={6}
                 pinchEnabled
                 panEnabled
-                tapsEnabled
+                tapsEnabled={false}
               >
                 <View style={{ width: mapSize.width, height: mapSize.height }}>
                   <StampKoreaMap
@@ -102,8 +103,8 @@ export function StampMapModal({
                       width: mapSize.width,
                       height: mapSize.height,
                     }}
-                    onSelectSido={(next) => {
-                      onSelectSido(next);
+                    onSelect={(selection) => {
+                      onSelect(selection);
                       onClose();
                     }}
                   />

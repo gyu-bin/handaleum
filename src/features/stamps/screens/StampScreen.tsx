@@ -96,6 +96,8 @@ export function StampScreen() {
   );
   const celebratedIds = useRef(new Set<string>());
   const celebrating = useRef(false);
+  /** Map tap sets sido + L1 together — skip the chip-driven L1 reset once. */
+  const keepL1OnSidoChange = useRef(false);
 
   const onScanIntroConfirm = useCallback(() => {
     setStampsScanIntroSeen();
@@ -103,6 +105,10 @@ export function StampScreen() {
   }, []);
 
   useEffect(() => {
+    if (keepL1OnSidoChange.current) {
+      keepL1OnSidoChange.current = false;
+      return;
+    }
     setL1Key(null);
   }, [sido]);
 
@@ -325,9 +331,12 @@ export function StampScreen() {
         visible={mapOpen}
         collected={collected}
         onClose={() => setMapOpen(false)}
-        onSelectSido={(next) => {
-          setSido(next);
-          setL1Key(null);
+        onSelect={({ sido: nextSido, l1Key: nextL1 }) => {
+          if (nextSido !== sido) {
+            keepL1OnSidoChange.current = nextL1 != null;
+            setSido(nextSido);
+          }
+          setL1Key(nextL1);
         }}
       />
 

@@ -7,6 +7,7 @@
 | StampEntry | name(동), city, sido(short), firstMonth | kv `stampsCollected` |
 | StampId | `${sido}/${city}/${dong}` | 맵 키 (동명 충돌 방지) |
 | DongsIndex | sido → city → leaf[] (동 + 군 읍·면) | `assets/geo/dongs-by-sido-city.json` |
+| StampMapUnit | L1 구·시·군 MultiPolygon | `assets/geo/stamp-map-units.json` (pack script) |
 | StampsUnseen | stampId[] | kv `stampsUnseen` — 탭 배지 |
 | CitiesIndex | sido → city → units[] | `assets/geo/cities-by-sido.json` |
 | AdminDongGu | stampCity → 행정동 → 구 | `assets/geo/admin-dong-gu.json` |
@@ -68,6 +69,8 @@ Grain = **시군구** (서울·광역 구, 도 시·군, 일반구 시 → 구�
 | 방문 동 탭 → 큰 사진 팝업. 소스=GPS 스냅샷 + PIP (스키마에 assetId 없음) | 수집 시 assetId 저장 | 사용자 B 확정 | 2026-08-06 |
 | 발도장 헤더 타이틀 **화면 중앙** (절대 배치) | flex 균형만 | 사용자 요청 | 2026-08-06 |
 | 군 **읍·면** PIP 수집 (`dongs.json`에 군 leaf 포함). 도농복합 시 읍·면은 제외 | 동만 / 시 읍면까지 | 사용자 Q=군만 | 2026-08-06 |
+| 방문 지도 = **시·도 빈칸 색칠북** + 방문 동 ink 채우기. 탭→시·도/L1. 줌 taps off | 동만 blob / 사용자 색 선택 | 사용자 A 확정 | 2026-08-06 |
+| 방문 지도 grain = **L1 구·시·군** (`stamp-map-units.json`, dongs dissolve-pack). 1동만 있어도 구 전체 칠함 | 동 단위 칠 / 시·도만 | 후속: 색칠북 가독성 | 2026-08-06 |
 
 ## 경계
 
@@ -80,4 +83,6 @@ Grain = **시군구** (서울·광역 구, 도 시·군, 일반구 시 → 구�
 - 온보딩 마스코트 재사용
 - 인사이트 화면 파일 삭제(라우트만 제거)
 - 백필 OS background-fetch
-- 맵 공유/저장 이미지, 핀치 줌, 전국 시군구 geo 전수 (점 fallback)
+- 맵 공유/저장 이미지
+- 사용자 커스텀 지도 색
+- 연간 회고 지도 (12월 로드맵)
