@@ -72,6 +72,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   side: {
+    flex: 1,
     minWidth: SIDE_MIN,
     minHeight: HIT,
     zIndex: 1,
@@ -92,6 +93,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.colors.hairline,
+    alignSelf: 'flex-start',
   },
   backPressed: {
     opacity: 0.7,
@@ -113,10 +115,12 @@ const styles = StyleSheet.create({
     ...theme.type.title,
     fontFamily: theme.fonts.serif,
     position: 'absolute',
-    left: theme.spacing.md,
-    right: theme.spacing.md,
+    left: 0,
+    right: 0,
+    paddingHorizontal: SIDE_MIN + theme.spacing.md,
     textAlign: 'center',
     color: theme.colors.ink,
     fontWeight: '700',
+    zIndex: 0,
   },
 });
