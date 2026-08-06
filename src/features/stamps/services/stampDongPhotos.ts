@@ -5,9 +5,6 @@ import { stampId } from './dongIndex';
 import { lookupDong } from './dongLookup';
 import { readLocatedPhotosSnapshot } from './locatedPhotosSnapshot';
 
-/** Cap UI grid — enough to feel rich, not a full album dump. */
-const MAX_PHOTOS_PER_LEAF = 60;
-
 let indexedAt = 0;
 let indexByStampId: Map<string, PhotoRef[]> | null = null;
 let indexPromise: Promise<void> | null = null;
@@ -15,9 +12,7 @@ let indexPromise: Promise<void> | null = null;
 function pushPhoto(map: Map<string, PhotoRef[]>, id: string, photo: PhotoRef): void {
   const list = map.get(id);
   if (list) {
-    if (list.length < MAX_PHOTOS_PER_LEAF) {
-      list.push(photo);
-    }
+    list.push(photo);
     return;
   }
   map.set(id, [photo]);

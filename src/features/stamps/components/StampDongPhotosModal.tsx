@@ -25,11 +25,25 @@ import {
 const COLS = 2;
 const GAP = 8;
 
+function formatTakenAt(iso: string): string {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) {
+    return '';
+  }
+  return new Date(t).toLocaleDateString('ko-KR', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
 function Thumb({
   assetId,
+  takenAt,
   size,
 }: {
   assetId: string;
+  takenAt: string;
   size: number;
 }) {
   const [uri, setUri] = useState<string | null>(null);
@@ -51,18 +65,27 @@ function Thumb({
     };
   }, [assetId]);
 
+  const dateLabel = formatTakenAt(takenAt);
+
   return (
-    <View style={[styles.thumb, { width: size, height: size }]}>
-      {uri ? (
-        <Image
-          source={{ uri }}
-          style={{ width: size, height: size }}
-          contentFit="cover"
-          recyclingKey={assetId}
-        />
-      ) : (
-        <View style={[styles.thumbPlaceholder, { width: size, height: size }]} />
-      )}
+    <View style={{ width: size }}>
+      <View style={[styles.thumb, { width: size, height: size }]}>
+        {uri ? (
+          <Image
+            source={{ uri }}
+            style={{ width: size, height: size }}
+            contentFit="cover"
+            recyclingKey={assetId}
+          />
+        ) : (
+          <View style={[styles.thumbPlaceholder, { width: size, height: size }]} />
+        )}
+      </View>
+      {dateLabel ? (
+        <Text style={styles.takenAt} numberOfLines={1}>
+          {dateLabel}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -171,7 +194,11 @@ export function StampDongPhotosModal({
                 contentContainerStyle={styles.grid}
                 showsVerticalScrollIndicator={false}
                 renderItem={({ item }) => (
-                  <Thumb assetId={item.assetId} size={cell} />
+                  <Thumb
+                    assetId={item.assetId}
+                    takenAt={item.takenAt}
+                    size={cell}
+                  />
                 )}
               />
             )}
@@ -255,6 +282,13 @@ const styles = StyleSheet.create({
   },
   thumbPlaceholder: {
     backgroundColor: theme.colors.surfaceAlt,
+  },
+  takenAt: {
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.inkSoft,
+    marginTop: 6,
+    textAlign: 'center',
   },
   closeBtn: {
     alignItems: 'center',
