@@ -107,8 +107,10 @@ export function getStampScanDebug(): StampScanDebug {
  * banner by hundreds and can jetsam while the map is open.
  */
 const LIBRARY_GPS_BATCH = 32;
-/** Yield between batches so the banner paints and the OS can reclaim. */
-const LIBRARY_GPS_YIELD_MS = 24;
+/** Slightly longer yield so map gestures stay ahead of album GPS. */
+const LIBRARY_GPS_YIELD_MS = 40;
+/** Cap pin-export wait — infinite wait made the map feel stuck while baking. */
+const LIBRARY_PIN_YIELD_MAX_MS = 2500;
 /** Local PIP buckets per UI tick — no network, so larger than geocode chunks. */
 const DONG_MATCH_CHUNK = 128;
 const DONG_MATCH_YIELD_MS = 8;
@@ -174,7 +176,7 @@ export async function syncStampsFromLibrary(
         locationBatchSize: LIBRARY_GPS_BATCH,
         batchYieldMs: LIBRARY_GPS_YIELD_MS,
         yieldToPinExports: true,
-        pinExportYieldMaxMs: Number.POSITIVE_INFINITY,
+        pinExportYieldMaxMs: LIBRARY_PIN_YIELD_MAX_MS,
         retryFailedLocations: false,
         networkLocationFallback: false,
         recheckCachedNoLocation: false,
@@ -201,7 +203,7 @@ export async function syncStampsFromLibrary(
       locationBatchSize: LIBRARY_GPS_BATCH,
       batchYieldMs: LIBRARY_GPS_YIELD_MS,
       yieldToPinExports: true,
-      pinExportYieldMaxMs: Number.POSITIVE_INFINITY,
+      pinExportYieldMaxMs: LIBRARY_PIN_YIELD_MAX_MS,
       retryFailedLocations: false,
       networkLocationFallback: deepRecheck,
       recheckCachedNoLocation: deepRecheck,

@@ -57,13 +57,13 @@ const CARD_ASPECT = 1920 / 1080;
 const SHEET_PEEK_MIN = 200;
 /** Approx. screen header under the safe-area top. */
 const CREATE_HEADER_H = 52;
-/** Scroll distance to fully tuck — longer = more gradual shrink. */
-const PREVIEW_COLLAPSE_Y = 340;
+/** Scroll distance to fully tuck — shorter = card shrinks sooner while picking. */
+const PREVIEW_COLLAPSE_Y = 220;
 /**
- * Mini-card scale at full tuck. Slot height tracks this scale so the whole
- * card (collage + skins + footer) stays visible — never clipped.
+ * Mini-card scale at full tuck — Instagram-like: almost photo-only when
+ * scrolled; pull to top to see the full card again.
  */
-const PREVIEW_COLLAPSED_SCALE = 0.55;
+const PREVIEW_COLLAPSED_SCALE = 0.32;
 /** Mild sheet climb — do not bury the card. */
 const GRID_COVER_Y = 12;
 /** One-line caption length on the create card. */

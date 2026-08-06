@@ -1,7 +1,6 @@
 import { Image } from 'expo-image';
 
 import type { MonthKey } from '../types';
-import { isAppForeground, waitForAppForeground } from './appForeground';
 import { resolveAssetUri } from './mediaLibrary';
 
 /**
@@ -75,10 +74,6 @@ async function warmOne(assetId: string): Promise<void> {
   if (warmedAssetIds.has(assetId)) {
     return;
   }
-  await waitForAppForeground();
-  if (!isAppForeground()) {
-    return;
-  }
   try {
     const uri = await resolveAssetUri(assetId);
     if (!uri) {
@@ -109,7 +104,6 @@ async function drain(runId: number): Promise<void> {
         if (warmedAssetIds.has(assetId)) {
           continue;
         }
-        await waitForAppForeground();
         if (runId !== generation) {
           return;
         }

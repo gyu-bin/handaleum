@@ -7,11 +7,19 @@ import {
 
 import { queryClient } from '@/lib/queryClient';
 
-import { loadMonthlyPhotos, loadMonthSummaries } from '../services/mediaLibrary';
-import { isAppForeground } from '../services/appForeground';
+import {
+  releaseIndexingBackground,
+  retainIndexingBackground,
+} from '../services/indexingBackground';
+import {
+  isFullAlbumScanBusy,
+  loadMonthlyPhotos,
+  loadMonthSummaries,
+} from '../services/mediaLibrary';
 import { startMonthWarmup } from '../services/monthWarmup';
 import type { MonthKey, MonthlyPhotos, PhotoRef } from '../types';
 import { excludeHomePhotos } from '../utils/homeFilter';
+import { isKoreaLatLng } from '../utils/koreaBounds';
 import { useHomeLocation } from './useHomeLocation';
 import { photosQueryKeys } from './photosQueryKeys';
 
@@ -26,16 +34,29 @@ export interface MonthlyPhotosData extends MonthlyPhotos {
   homeExcludedCount: number;
 }
 
+async function loadMonthKeepingAlive(
+  month: MonthKey,
+  onPartial: (partial: MonthlyPhotos) => void,
+): Promise<MonthlyPhotos> {
+  retainIndexingBackground();
+  try {
+    return await loadMonthlyPhotos(month, {
+      onPartial,
+      // Keep going when backgrounded; only pause if full-album stamp owns MediaLibrary.
+      shouldContinue: () => !isFullAlbumScanBusy(),
+    });
+  } finally {
+    releaseIndexingBackground();
+  }
+}
+
 /** Warm the React Query cache for a month (picker tap / neighbor prefetch). */
 export function prefetchMonthlyPhotos(month: MonthKey): void {
   void queryClient.prefetchQuery({
     queryKey: photosQueryKeys.monthly(month),
     queryFn: () =>
-      loadMonthlyPhotos(month, {
-        onPartial: (partial) => {
-          queryClient.setQueryData(photosQueryKeys.monthly(month), partial);
-        },
-        shouldContinue: isAppForeground,
+      loadMonthKeepingAlive(month, (partial) => {
+        queryClient.setQueryData(photosQueryKeys.monthly(month), partial);
       }),
   });
 }
@@ -52,11 +73,8 @@ export function useMonthlyPhotos(month: MonthKey, options?: { enabled?: boolean 
   const query = useQuery({
     queryKey: photosQueryKeys.monthly(month),
     queryFn: () =>
-      loadMonthlyPhotos(month, {
-        onPartial: (partial) => {
-          client.setQueryData(photosQueryKeys.monthly(month), partial);
-        },
-        shouldContinue: isAppForeground,
+      loadMonthKeepingAlive(month, (partial) => {
+        client.setQueryData(photosQueryKeys.monthly(month), partial);
       }),
     enabled,
     // Keep the previous month on screen while the next one loads — avoids a
@@ -85,10 +103,12 @@ export function useMonthlyPhotos(month: MonthKey, options?: { enabled?: boolean 
     if (query.isPlaceholderData) {
       return undefined;
     }
-    const { photos, homeExcludedCount } = excludeHomePhotos(
+    const { photos: notHome, homeExcludedCount } = excludeHomePhotos(
       query.data.photos,
       home,
     );
+    // Map pins are domestic-only; cards still use allPhotos (incl. overseas).
+    const photos = notHome.filter((p) => isKoreaLatLng(p.lat, p.lng));
     return {
       ...query.data,
       photos,
