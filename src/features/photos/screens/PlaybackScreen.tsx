@@ -51,7 +51,7 @@ function GridThumb({
   const [uri, setUri] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
-    void resolveAssetUri(photo.assetId)
+    void resolveAssetUri(photo.assetId, { imageSize: 512 })
       .then((next) => {
         if (!cancelled) {
           setUri(next);
@@ -161,7 +161,7 @@ function ClusterSlide({
       return;
     }
     let cancelled = false;
-    void resolveAssetUri(activePhoto.assetId)
+    void resolveAssetUri(activePhoto.assetId, { imageSize: 1080 })
       .then((next) => {
         if (!cancelled) {
           setUri(next);
@@ -232,7 +232,8 @@ function ClusterSlide({
             style={[styles.hero, { width: contentW }]}
             contentFit="cover"
             cachePolicy="memory-disk"
-            recyclingKey={activeId}
+            recyclingKey={`${activeId}-1080`}
+            priority="high"
           />
         ) : (
           <View style={[styles.hero, styles.placeholder, { width: contentW }]} />

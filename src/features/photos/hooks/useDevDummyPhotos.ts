@@ -1,6 +1,10 @@
 import { useCallback, useSyncExternalStore } from 'react';
 
 import { queryClient } from '@/lib/queryClient';
+import { notifyStampsChanged } from '@/features/stamps/hooks/useStamps';
+import { startStampLibrarySync } from '@/features/stamps/services/stampLibrarySyncRunner';
+import { clearAllStamps } from '@/features/stamps/services/stampsStorage';
+import { setStampsScanIntroSeen } from '@/lib/storage';
 
 import {
   isDevDummyPhotosEnabled,
@@ -38,7 +42,14 @@ export function useDevDummyPhotos(): {
   const setEnabled = useCallback((next: boolean) => {
     setDevDummyPhotosEnabled(next);
     clearPlaceResolveCache();
+    // Sample hubs ↔ stamps: wipe then force full sync so 발도장 matches the map.
+    clearAllStamps();
+    notifyStampsChanged();
+    if (next) {
+      setStampsScanIntroSeen();
+    }
     void queryClient.invalidateQueries({ queryKey: photosQueryKeys.all });
+    void startStampLibrarySync({ force: true });
     emit();
   }, []);
 

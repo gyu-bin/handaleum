@@ -1,4 +1,5 @@
 import type { LocationGeocodedAddress } from 'expo-location';
+import { Image } from 'react-native';
 
 import { getDevDummyPhotosRaw, setDevDummyPhotosRaw } from '@/lib/storage';
 
@@ -6,6 +7,42 @@ import type { MonthKey, MonthlyPhotos, MonthSummary, PhotoRef } from '../types';
 import { monthBounds } from '../utils/month';
 
 export const DUMMY_ASSET_PREFIX = 'dummy:';
+
+/** Bundled 1200×1600 demo stills — sharp on playback, no network. */
+const DEMO_IMAGE_MODULES = [
+  require('../../../../assets/demo/demo-10.jpg'),
+  require('../../../../assets/demo/demo-11.jpg'),
+  require('../../../../assets/demo/demo-12.jpg'),
+  require('../../../../assets/demo/demo-13.jpg'),
+  require('../../../../assets/demo/demo-15.jpg'),
+  require('../../../../assets/demo/demo-16.jpg'),
+  require('../../../../assets/demo/demo-18.jpg'),
+  require('../../../../assets/demo/demo-20.jpg'),
+  require('../../../../assets/demo/demo-22.jpg'),
+  require('../../../../assets/demo/demo-25.jpg'),
+  require('../../../../assets/demo/demo-26.jpg'),
+  require('../../../../assets/demo/demo-28.jpg'),
+  require('../../../../assets/demo/demo-29.jpg'),
+  require('../../../../assets/demo/demo-31.jpg'),
+  require('../../../../assets/demo/demo-33.jpg'),
+  require('../../../../assets/demo/demo-35.jpg'),
+  require('../../../../assets/demo/demo-37.jpg'),
+  require('../../../../assets/demo/demo-39.jpg'),
+  require('../../../../assets/demo/demo-40.jpg'),
+  require('../../../../assets/demo/demo-44.jpg'),
+  require('../../../../assets/demo/demo-47.jpg'),
+  require('../../../../assets/demo/demo-48.jpg'),
+  require('../../../../assets/demo/demo-52.jpg'),
+  require('../../../../assets/demo/demo-55.jpg'),
+  require('../../../../assets/demo/demo-57.jpg'),
+  require('../../../../assets/demo/demo-60.jpg'),
+  require('../../../../assets/demo/demo-64.jpg'),
+  require('../../../../assets/demo/demo-70.jpg'),
+  require('../../../../assets/demo/demo-71.jpg'),
+  require('../../../../assets/demo/demo-76.jpg'),
+  require('../../../../assets/demo/demo-82.jpg'),
+  require('../../../../assets/demo/demo-87.jpg'),
+] as const;
 
 /**
  * iOS CLGeocoder-shaped address for one demo hub.
@@ -44,18 +81,18 @@ function iosAddr(
 }
 
 /**
- * Fixed Seoul + Gyeonggi demo set — enough for map pins, journey chips,
- * and card “위치별” sections. Coordinates stay near the named 법정동 so
- * jitter (~0.012°) still resolves to the same hub address.
+ * Seoul / Gyeonggi (+ Incheon) demo set — map pins, journey chips, 발도장,
+ * and card “위치별”. Coordinates stay near the named leaf so jitter
+ * still resolves via offline PIP / canned geocode.
  *
- * Stress: `DUMMY_STRESS_MULT` multiplies per-hub counts (1 ≈ 55장, 50 ≈ 2.7k).
+ * Stress: `DUMMY_STRESS_MULT` multiplies per-hub counts.
  * Image URIs reuse a small pool so picsum/network doesn't mask JS jank.
  */
 /** __DEV__ map/CPU stress. Set back to 1 after stress testing. */
 export const DUMMY_STRESS_MULT = 1;
 
 const HUBS: DummyHub[] = [
-  // —— Seoul (region/city both 서울특별시; 구 in district; 동 in street) ——
+  // —— Seoul ——
   {
     lat: 37.5665,
     lng: 126.978,
@@ -72,8 +109,8 @@ const HUBS: DummyHub[] = [
     }),
   },
   {
-    lat: 37.4979,
-    lng: 127.0276,
+    lat: 37.5007,
+    lng: 127.0365,
     count: 5,
     label: '강남',
     address: iosAddr({
@@ -84,6 +121,21 @@ const HUBS: DummyHub[] = [
       name: '역삼동',
       postalCode: '06236',
       formattedAddress: '대한민국 서울특별시 강남구 역삼동',
+    }),
+  },
+  {
+    lat: 37.527,
+    lng: 127.0286,
+    count: 3,
+    label: '압구정',
+    address: iosAddr({
+      region: '서울특별시',
+      city: '서울특별시',
+      district: '강남구',
+      street: '압구정동',
+      name: '압구정동',
+      postalCode: '06001',
+      formattedAddress: '대한민국 서울특별시 강남구 압구정동',
     }),
   },
   {
@@ -102,6 +154,21 @@ const HUBS: DummyHub[] = [
     }),
   },
   {
+    lat: 37.5605,
+    lng: 126.923,
+    count: 3,
+    label: '연남',
+    address: iosAddr({
+      region: '서울특별시',
+      city: '서울특별시',
+      district: '마포구',
+      street: '연남동',
+      name: '연남동',
+      postalCode: '03998',
+      formattedAddress: '대한민국 서울특별시 마포구 연남동',
+    }),
+  },
+  {
     lat: 37.5446,
     lng: 127.0559,
     count: 4,
@@ -117,8 +184,8 @@ const HUBS: DummyHub[] = [
     }),
   },
   {
-    lat: 37.5133,
-    lng: 127.1001,
+    lat: 37.5112,
+    lng: 127.0981,
     count: 3,
     label: '잠실',
     address: iosAddr({
@@ -147,6 +214,21 @@ const HUBS: DummyHub[] = [
     }),
   },
   {
+    lat: 37.5826,
+    lng: 126.983,
+    count: 3,
+    label: '북촌',
+    address: iosAddr({
+      region: '서울특별시',
+      city: '서울특별시',
+      district: '종로구',
+      street: '가회동',
+      name: '가회동',
+      postalCode: '03057',
+      formattedAddress: '대한민국 서울특별시 종로구 가회동',
+    }),
+  },
+  {
     lat: 37.4842,
     lng: 126.9297,
     count: 3,
@@ -161,11 +243,41 @@ const HUBS: DummyHub[] = [
       formattedAddress: '대한민국 서울특별시 관악구 신림동',
     }),
   },
-  // —— Gyeonggi (region=경기도; 일반구 시는 subregion=구) ——
+  {
+    lat: 37.5345,
+    lng: 126.9946,
+    count: 3,
+    label: '이태원',
+    address: iosAddr({
+      region: '서울특별시',
+      city: '서울특별시',
+      district: '용산구',
+      street: '이태원동',
+      name: '이태원동',
+      postalCode: '04350',
+      formattedAddress: '대한민국 서울특별시 용산구 이태원동',
+    }),
+  },
+  {
+    lat: 37.5219,
+    lng: 126.9245,
+    count: 3,
+    label: '여의도',
+    address: iosAddr({
+      region: '서울특별시',
+      city: '서울특별시',
+      district: '영등포구',
+      street: '여의도동',
+      name: '여의도동',
+      postalCode: '07325',
+      formattedAddress: '대한민국 서울특별시 영등포구 여의도동',
+    }),
+  },
+  // —— Gyeonggi ——
   {
     lat: 37.3947,
     lng: 127.1112,
-    count: 5,
+    count: 4,
     label: '판교',
     address: iosAddr({
       region: '경기도',
@@ -180,7 +292,7 @@ const HUBS: DummyHub[] = [
   {
     lat: 37.2636,
     lng: 127.0286,
-    count: 4,
+    count: 3,
     label: '수원',
     address: iosAddr({
       region: '경기도',
@@ -210,7 +322,7 @@ const HUBS: DummyHub[] = [
   {
     lat: 37.2411,
     lng: 127.1776,
-    count: 3,
+    count: 2,
     label: '용인',
     address: iosAddr({
       region: '경기도',
@@ -225,7 +337,7 @@ const HUBS: DummyHub[] = [
   {
     lat: 37.5034,
     lng: 126.766,
-    count: 3,
+    count: 2,
     label: '부천',
     address: iosAddr({
       region: '경기도',
@@ -239,7 +351,7 @@ const HUBS: DummyHub[] = [
   {
     lat: 37.3943,
     lng: 126.9568,
-    count: 3,
+    count: 2,
     label: '안양',
     address: iosAddr({
       region: '경기도',
@@ -254,7 +366,7 @@ const HUBS: DummyHub[] = [
   {
     lat: 37.7599,
     lng: 126.7802,
-    count: 3,
+    count: 2,
     label: '파주',
     address: iosAddr({
       region: '경기도',
@@ -292,6 +404,143 @@ const HUBS: DummyHub[] = [
       name: '신장동',
       postalCode: '12942',
       formattedAddress: '대한민국 경기도 하남시 신장동',
+    }),
+  },
+  // —— More Seoul leaves (denser 발도장) ——
+  {
+    lat: 37.5665,
+    lng: 126.991,
+    count: 3,
+    label: '을지로',
+    address: iosAddr({
+      region: '서울특별시',
+      city: '서울특별시',
+      district: '중구',
+      street: '을지로2가',
+      name: '을지로2가',
+      postalCode: '04537',
+      formattedAddress: '대한민국 서울특별시 중구 을지로2가',
+    }),
+  },
+  {
+    lat: 37.5704,
+    lng: 126.992,
+    count: 3,
+    label: '종로',
+    address: iosAddr({
+      region: '서울특별시',
+      city: '서울특별시',
+      district: '종로구',
+      street: '종로3가',
+      name: '종로3가',
+      postalCode: '03188',
+      formattedAddress: '대한민국 서울특별시 종로구 종로3가',
+    }),
+  },
+  {
+    lat: 37.5045,
+    lng: 127.049,
+    count: 3,
+    label: '선릉',
+    address: iosAddr({
+      region: '서울특별시',
+      city: '서울특별시',
+      district: '강남구',
+      street: '삼성동',
+      name: '삼성동',
+      postalCode: '06164',
+      formattedAddress: '대한민국 서울특별시 강남구 삼성동',
+    }),
+  },
+  {
+    lat: 37.5112,
+    lng: 127.022,
+    count: 3,
+    label: '논현',
+    address: iosAddr({
+      region: '서울특별시',
+      city: '서울특별시',
+      district: '강남구',
+      street: '논현동',
+      name: '논현동',
+      postalCode: '06120',
+      formattedAddress: '대한민국 서울특별시 강남구 논현동',
+    }),
+  },
+  {
+    lat: 37.5485,
+    lng: 126.912,
+    count: 2,
+    label: '합정',
+    address: iosAddr({
+      region: '서울특별시',
+      city: '서울특별시',
+      district: '마포구',
+      street: '합정동',
+      name: '합정동',
+      postalCode: '04015',
+      formattedAddress: '대한민국 서울특별시 마포구 합정동',
+    }),
+  },
+  {
+    lat: 37.5571,
+    lng: 126.936,
+    count: 2,
+    label: '신촌',
+    address: iosAddr({
+      region: '서울특별시',
+      city: '서울특별시',
+      district: '서대문구',
+      street: '창천동',
+      name: '창천동',
+      postalCode: '03789',
+      formattedAddress: '대한민국 서울특별시 서대문구 창천동',
+    }),
+  },
+  {
+    lat: 37.4979,
+    lng: 126.927,
+    count: 2,
+    label: '노량진',
+    address: iosAddr({
+      region: '서울특별시',
+      city: '서울특별시',
+      district: '동작구',
+      street: '노량진동',
+      name: '노량진동',
+      postalCode: '06911',
+      formattedAddress: '대한민국 서울특별시 동작구 노량진동',
+    }),
+  },
+  {
+    lat: 37.6542,
+    lng: 127.0568,
+    count: 2,
+    label: '노원',
+    address: iosAddr({
+      region: '서울특별시',
+      city: '서울특별시',
+      district: '노원구',
+      street: '상계동',
+      name: '상계동',
+      postalCode: '01695',
+      formattedAddress: '대한민국 서울특별시 노원구 상계동',
+    }),
+  },
+  // —— Incheon (수도권) ——
+  {
+    lat: 37.4485,
+    lng: 126.701,
+    count: 2,
+    label: '인천시청',
+    address: iosAddr({
+      region: '인천광역시',
+      city: '인천광역시',
+      district: '남동구',
+      street: '구월동',
+      name: '구월동',
+      postalCode: '21554',
+      formattedAddress: '대한민국 인천광역시 남동구 구월동',
     }),
   },
 ];
@@ -355,7 +604,7 @@ export function buildDummyMonthSummaries(): MonthSummary[] {
   const out: MonthSummary[] = [];
   const total = dummyPhotoCount();
   // More months under stress → stamp library path + month warmup contend.
-  const months = DUMMY_STRESS_MULT > 1 ? 18 : 6;
+  const months = DUMMY_STRESS_MULT > 1 ? 18 : 8;
   for (let i = 0; i < months; i += 1) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const month =
@@ -373,14 +622,21 @@ export function dummyPhotoCount(): number {
   return HUBS.reduce((sum, h) => sum + hubCount(h), 0);
 }
 
-/** Deterministic remote placeholder for expo-image / Naver httpUri. */
-export function dummyAssetImageUri(assetId: string): string {
-  // Reuse a small seed pool — unique URLs per photo would make stress tests
-  // measure picsum, not our map/cluster/geocode path.
-  const tail = assetId.split(':').pop() ?? '0';
-  const n = Number.parseInt(tail, 10);
-  const pool = Number.isFinite(n) ? Math.abs(n) % 32 : 0;
-  return `https://picsum.photos/seed/handaleum-${pool}/128/128`;
+/** Local bundled demo image URI (size ignored — assets are already 1200×1600). */
+export type DummyImageSize = 128 | 256 | 512 | 1080;
+
+export function dummyAssetImageUri(
+  assetId: string,
+  _size: DummyImageSize = 256,
+): string {
+  // Hash full id so the same index across months doesn't reuse one still.
+  let h = 0;
+  for (let i = 0; i < assetId.length; i += 1) {
+    h = (Math.imul(h, 31) + assetId.charCodeAt(i)) >>> 0;
+  }
+  const pool = h % DEMO_IMAGE_MODULES.length;
+  const resolved = Image.resolveAssetSource(DEMO_IMAGE_MODULES[pool]!);
+  return resolved.uri;
 }
 
 /**

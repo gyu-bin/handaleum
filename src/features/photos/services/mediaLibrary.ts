@@ -23,6 +23,7 @@ import {
   dummyAssetImageUri,
   isDevDummyPhotosEnabled,
   isDummyAssetId,
+  type DummyImageSize,
 } from './dummyPhotos';
 import { readPinThumbFromDisk, writePinThumbToDisk } from './pinThumbCache';
 
@@ -739,15 +740,24 @@ const PIN_THUMB_WIDTH = 128;
  * (per-asset native call) lookup runs once and is memoized: grid cells
  * unmount/remount while scrolling and would otherwise re-pay it every time.
  */
-export async function resolveAssetUri(assetId: string): Promise<string | null> {
-  const hit = uriCache.get(assetId);
+export async function resolveAssetUri(
+  assetId: string,
+  options?: {
+    /** Dummy/picsum edge length; ignored for real Photos assets. */
+    imageSize?: DummyImageSize;
+  },
+): Promise<string | null> {
+  const imageSize = options?.imageSize ?? 256;
+  const cacheKey =
+    isDummyAssetId(assetId) ? `${assetId}#${imageSize}` : assetId;
+  const hit = uriCache.get(cacheKey);
   if (hit !== undefined) {
     return hit;
   }
 
   if (isDummyAssetId(assetId)) {
-    const uri = dummyAssetImageUri(assetId);
-    lruSet(uriCache, assetId, uri, URI_CACHE_MAX);
+    const uri = dummyAssetImageUri(assetId, imageSize);
+    lruSet(uriCache, cacheKey, uri, URI_CACHE_MAX);
     return uri;
   }
 
@@ -890,7 +900,7 @@ export async function resolveAssetFileUri(assetId: string): Promise<string | nul
 
   const work = (async (): Promise<string | null> => {
     if (isDummyAssetId(assetId)) {
-      const uri = dummyAssetImageUri(assetId);
+      const uri = dummyAssetImageUri(assetId, 256);
       lruSet(fileUriCache, assetId, uri, FILE_URI_CACHE_MAX);
       return uri;
     }

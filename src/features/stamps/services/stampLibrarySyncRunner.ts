@@ -2,6 +2,7 @@ import {
   isPinExportBusy,
   setFullAlbumScanBusy,
 } from '@/features/photos/services/mediaLibrary';
+import { isDevDummyPhotosEnabled } from '@/features/photos/services/dummyPhotos';
 import {
   releaseIndexingBackground,
   retainIndexingBackground,
@@ -108,29 +109,33 @@ export function startStampLibrarySync(
     }
   }
 
-  const resumeGeocodeOnly = shouldResumeGeocodeOnly({
-    now,
-    gpsScanAt: getStampsGpsScanAt(),
-    librarySyncAt: getStampsLibrarySyncAt(),
-    force: userForce,
-    parseRevRescan: parseRevStale,
-  });
-
-  if (userForce) {
-    clearPlaceResolveCache();
-    setStampsGpsScanAt(0);
-    setStampsCoarseGeocodeAt(0);
-    void clearLocatedPhotosSnapshot();
-  } else if (parseRevStale) {
-    clearPlaceResolveCache();
-    setStampsCoarseGeocodeAt(0);
-  }
+  const resumeGeocodeOnly =
+    !isDevDummyPhotosEnabled() &&
+    shouldResumeGeocodeOnly({
+      now,
+      gpsScanAt: getStampsGpsScanAt(),
+      librarySyncAt: getStampsLibrarySyncAt(),
+      force: userForce,
+      parseRevRescan: parseRevStale,
+    });
 
   syncing = true;
   setFullAlbumScanBusy(true);
   retainIndexingBackground();
   emit();
-  const run = syncStampsFromLibrary({ resumeGeocodeOnly })
+  const run = (async () => {
+    if (userForce || isDevDummyPhotosEnabled()) {
+      clearPlaceResolveCache();
+      setStampsGpsScanAt(0);
+      setStampsCoarseGeocodeAt(0);
+      await clearLocatedPhotosSnapshot();
+    } else if (parseRevStale) {
+      clearPlaceResolveCache();
+      setStampsCoarseGeocodeAt(0);
+    }
+
+    return syncStampsFromLibrary({ resumeGeocodeOnly });
+  })()
     .then((result) => {
       setStampsLibrarySyncAt(Date.now());
       if (result.photoCount > 0) {

@@ -1,3 +1,4 @@
+import { isDevDummyPhotosEnabled } from '@/features/photos/services/dummyPhotos';
 import { loadAllLocatedPhotos, setFullAlbumScanBusy } from '@/features/photos/services/mediaLibrary';
 import type { PhotoRef, VisitPlace } from '@/features/photos/types';
 import { currentMonthKey } from '@/features/photos/utils/month';
@@ -18,6 +19,7 @@ import {
 import { resetStampDongPhotoIndex } from './stampDongPhotos';
 import {
   countCollected,
+  clearAllStamps,
   markAllStampsSeen,
   readStampsCollected,
   syncStampsFromVisits,
@@ -127,9 +129,10 @@ export type SyncStampsFromLibraryOptions = {
 };
 
 /**
- * Lifetime accumulate from **all** GPS photos in the real album (every year).
+ * Lifetime accumulate from **all** GPS photos (every year).
+ * __DEV__ sample mode uses dummy hubs instead of the real album.
  *
- * Phase 1: MediaLibrary GPS.
+ * Phase 1: MediaLibrary GPS (or dummy).
  * Phase 2: offline dong PIP (`dongs.json`) — no CLGeocoder / location permission.
  */
 export async function syncStampsFromLibrary(
@@ -139,10 +142,13 @@ export async function syncStampsFromLibrary(
   const fallbackMonth = currentMonthKey();
   const silent = wasEmpty;
   const resumeGeocodeOnly = options?.resumeGeocodeOnly === true;
+  /** Sample set is the album in __DEV__ when Settings sample is on. */
+  const forceRealLibrary = !isDevDummyPhotosEnabled();
 
   const lastSync = getStampsLibrarySyncAt();
   const deepRecheck =
     !resumeGeocodeOnly &&
+    forceRealLibrary &&
     lastSync > 0 &&
     Date.now() - lastSync >= DEEP_RECHECK_MS;
 
@@ -173,7 +179,7 @@ export async function syncStampsFromLibrary(
         true,
       );
       photos = await loadAllLocatedPhotos({
-        forceRealLibrary: true,
+        forceRealLibrary,
         locationBatchSize: LIBRARY_GPS_BATCH,
         batchYieldMs: LIBRARY_GPS_YIELD_MS,
         yieldToPinExports: true,
@@ -201,7 +207,7 @@ export async function syncStampsFromLibrary(
     );
 
     photos = await loadAllLocatedPhotos({
-      forceRealLibrary: true,
+      forceRealLibrary,
       locationBatchSize: LIBRARY_GPS_BATCH,
       batchYieldMs: LIBRARY_GPS_YIELD_MS,
       yieldToPinExports: true,
@@ -234,6 +240,14 @@ export async function syncStampsFromLibrary(
 
   // Dong PIP does not touch MediaLibrary — free month warmup / pin exports.
   setFullAlbumScanBusy(false);
+
+  // Sample album replaces collected stamps so 발도장 matches the map hubs.
+  let silentSync = silent;
+  if (!forceRealLibrary) {
+    clearAllStamps();
+    notifyStampsChanged();
+    silentSync = true;
+  }
 
   const domestic = photos.filter((p) => isKoreaLatLng(p.lat, p.lng));
   const buckets = collectBuckets(domestic);
@@ -287,7 +301,7 @@ export async function syncStampsFromLibrary(
       if (batch.length > 0) {
         const result = syncStampsFromVisits(batch, {
           month: fallbackMonth,
-          silent,
+          silent: silentSync,
         });
         totalAdded += result.added.length;
         batch = [];

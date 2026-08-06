@@ -220,6 +220,12 @@ export function markAllStampsSeen(): string[] {
   return [];
 }
 
+/** Wipe collected + unseen (e.g. switching __DEV__ sample album). */
+export function clearAllStamps(): void {
+  writeCollected({});
+  writeUnseen([]);
+}
+
 export function countCollected(collected: StampsCollected): number {
   return Object.keys(collected).length;
 }

@@ -179,8 +179,8 @@ const STAMPS_LIBRARY_SYNC_AT_KEY = 'stampsLibrarySyncAt';
 const STAMPS_GPS_SCAN_AT_KEY = 'stampsGpsScanAt';
 /** Bump when place→구 parse changes so cooldown cannot hide new stamps. */
 const STAMPS_PLACE_PARSE_REV_KEY = 'stampsPlaceParseRev';
-/** Bump forces one full-album stamp rescan (local dong PIP 2026-08-06). */
-export const STAMPS_PLACE_PARSE_REV = 14;
+/** Bump forces one full-album stamp rescan (Seoul/Gyeonggi sample 2026-08-06). */
+export const STAMPS_PLACE_PARSE_REV = 17;
 
 /** Epoch ms of last finished full-album stamp sync (0 if never). */
 export function getStampsLibrarySyncAt(): number {

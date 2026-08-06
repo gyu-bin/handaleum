@@ -195,24 +195,29 @@ export function StampScreen() {
     return map;
   }, [l1Units, sido]);
 
-  const l1Rows: CityRow[] = useMemo(
-    () =>
-      l1Units.map((unit) => {
-        const leaves = leavesByL1.get(unit.key) ?? [];
-        return {
-          key: unit.key,
-          label: unit.label,
-          collected: countCollectedInLeaves(
-            collected,
-            sido,
-            unit.stampCity,
-            leaves,
-          ),
-          total: leaves.length,
-        };
-      }),
-    [collected, l1Units, leavesByL1, sido],
-  );
+  const l1Rows: CityRow[] = useMemo(() => {
+    const rows = l1Units.map((unit) => {
+      const leaves = leavesByL1.get(unit.key) ?? [];
+      return {
+        key: unit.key,
+        label: unit.label,
+        collected: countCollectedInLeaves(
+          collected,
+          sido,
+          unit.stampCity,
+          leaves,
+        ),
+        total: leaves.length,
+      };
+    });
+    rows.sort((a, b) => {
+      if ((a.collected > 0) !== (b.collected > 0)) {
+        return a.collected > 0 ? -1 : 1;
+      }
+      return a.label.localeCompare(b.label, 'ko');
+    });
+    return rows;
+  }, [collected, l1Units, leavesByL1, sido]);
 
   const sidoCollected = useMemo(
     () => l1Rows.reduce((n, r) => n + r.collected, 0),
@@ -285,7 +290,6 @@ export function StampScreen() {
 
       <ScreenHeader
         title={strings.stamps.title}
-        hideBack={!l1Key}
         onBack={l1Key ? () => setL1Key(null) : undefined}
         trailing={
           <View style={styles.trailing}>
