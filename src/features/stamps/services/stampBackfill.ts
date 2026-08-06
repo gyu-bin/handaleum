@@ -15,6 +15,7 @@ import {
   readLocatedPhotosSnapshot,
   writeLocatedPhotosSnapshot,
 } from './locatedPhotosSnapshot';
+import { resetStampDongPhotoIndex } from './stampDongPhotos';
 import {
   countCollected,
   markAllStampsSeen,
@@ -183,6 +184,7 @@ export async function syncStampsFromLibrary(
       });
       setStampsGpsScanAt(Date.now());
       await writeLocatedPhotosSnapshot(photos);
+      resetStampDongPhotoIndex();
     }
   } else {
     setProgress(
@@ -220,6 +222,7 @@ export async function syncStampsFromLibrary(
 
     setStampsGpsScanAt(Date.now());
     await writeLocatedPhotosSnapshot(photos);
+    resetStampDongPhotoIndex();
 
     console.warn(
       '[stamps] library GPS scan done',

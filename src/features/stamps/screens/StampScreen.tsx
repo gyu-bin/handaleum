@@ -21,9 +21,11 @@ import { CityList, type CityRow } from '../components/CityList';
 import {
   CityStampSections,
   type CityStampSection,
+  type CityStampUnit,
 } from '../components/CityStampSections';
 import { MascotPin } from '../components/MascotPin';
 import { RegionChips } from '../components/RegionChips';
+import { StampDongPhotosModal } from '../components/StampDongPhotosModal';
 import { StampEarnOverlay } from '../components/StampEarnOverlay';
 import { StampMapModal } from '../components/StampMapModal';
 import { StampScanIntroModal } from '../components/StampScanIntroModal';
@@ -38,6 +40,7 @@ import {
   l2LeavesForUnit,
   type StampL1Unit,
 } from '../services/stampNavIndex';
+import type { StampDongPhotosQuery } from '../services/stampDongPhotos';
 import { firstsInMonth } from '../services/stampsStorage';
 
 function tiltForName(name: string): number {
@@ -88,6 +91,9 @@ export function StampScreen() {
     () => !getStampsScanIntroSeen(),
   );
   const [mapOpen, setMapOpen] = useState(false);
+  const [dongPhotos, setDongPhotos] = useState<StampDongPhotosQuery | null>(
+    null,
+  );
   const celebratedIds = useRef(new Set<string>());
   const celebrating = useRef(false);
 
@@ -163,6 +169,21 @@ export function StampScreen() {
   const onReplayStamp = useCallback((id: string) => {
     setReplayNonce((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
   }, []);
+
+  const onSelectCollected = useCallback(
+    (unit: CityStampUnit) => {
+      if (!selectedL1) {
+        return;
+      }
+      onReplayStamp(unit.id);
+      setDongPhotos({
+        sido,
+        city: selectedL1.stampCity,
+        leaf: unit.name,
+      });
+    },
+    [onReplayStamp, selectedL1, sido],
+  );
 
   const monthFirsts = firstsInMonth(collected, month);
 
@@ -264,6 +285,7 @@ export function StampScreen() {
 
       <ScreenHeader
         title={strings.stamps.title}
+        hideBack={!l1Key}
         onBack={l1Key ? () => setL1Key(null) : undefined}
         trailing={
           <View style={styles.trailing}>
@@ -288,6 +310,11 @@ export function StampScreen() {
             </Pressable>
           </View>
         }
+      />
+
+      <StampDongPhotosModal
+        query={dongPhotos}
+        onClose={() => setDongPhotos(null)}
       />
 
       <StampMapModal
@@ -365,7 +392,7 @@ export function StampScreen() {
           <CityStampSections
             sections={[leafSection]}
             replayNonce={replayNonce}
-            onReplay={onReplayStamp}
+            onSelectCollected={onSelectCollected}
           />
         )
       ) : (

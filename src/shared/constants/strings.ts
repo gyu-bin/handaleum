@@ -348,5 +348,11 @@ export const strings = {
     mapEmpty: '아직 모은 동이 없어요',
     leafListEmpty: '동네 목록이 없어요',
     gunLeafListEmpty: '면·읍 목록을 아직 준비 중이에요',
+    dongPhotosLoading: '사진을 찾는 중…',
+    dongPhotosCount: (n: number) =>
+      n === 0 ? '모은 사진 없음' : `모은 사진 ${n}장`,
+    dongPhotosEmpty:
+      '이 동네 사진을 아직 찾지 못했어요. 앨범 정리가 끝나면 다시 열어 보세요.',
+    dongPhotosClose: '닫기',
   },
 } as const;

@@ -10,37 +10,54 @@ export interface ScreenHeaderProps {
   trailing?: React.ReactNode;
   /** Override the default back behavior (router.back()). */
   onBack?: () => void;
+  /** Hide the back control (title stays optically centered). */
+  hideBack?: boolean;
 }
 
 /**
- * Journal top bar — serif title only; back control is sans ink.
+ * Journal top bar — title is centered on the screen; side slots balance chrome.
  */
-export function ScreenHeader({ title, trailing, onBack }: ScreenHeaderProps) {
+export function ScreenHeader({
+  title,
+  trailing,
+  onBack,
+  hideBack = false,
+}: ScreenHeaderProps) {
   const router = useRouter();
+  const showBack = !hideBack;
 
   return (
     <View style={styles.header}>
-      <Pressable
-        onPress={() => (onBack ? onBack() : router.back())}
-        hitSlop={10}
-        accessibilityRole="button"
-        accessibilityLabel={strings.common.back}
-        style={({ pressed }) => [styles.backBtn, pressed && styles.backPressed]}
-      >
-        <Text style={styles.chevron}>‹</Text>
-        <Text style={styles.backLabel}>{strings.common.back}</Text>
-      </Pressable>
+      <View style={styles.side}>
+        {showBack ? (
+          <Pressable
+            onPress={() => (onBack ? onBack() : router.back())}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel={strings.common.back}
+            style={({ pressed }) => [
+              styles.backBtn,
+              pressed && styles.backPressed,
+            ]}
+          >
+            <Text style={styles.chevron}>‹</Text>
+            <Text style={styles.backLabel}>{strings.common.back}</Text>
+          </Pressable>
+        ) : null}
+      </View>
 
-      <Text style={styles.title} numberOfLines={1}>
+      <Text style={styles.title} numberOfLines={1} pointerEvents="none">
         {title}
       </Text>
 
-      <View style={styles.trailing}>{trailing}</View>
+      <View style={[styles.side, styles.sideEnd]}>{trailing}</View>
     </View>
   );
 }
 
 const HIT = 40;
+/** Keep left/right chrome similar so absolute title reads as screen-centered. */
+const SIDE_MIN = 96;
 
 const styles = StyleSheet.create({
   header: {
@@ -49,10 +66,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     paddingTop: theme.spacing.sm,
     paddingBottom: theme.spacing.sm,
-    gap: theme.spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.colors.hairline,
     backgroundColor: theme.colors.background,
+    position: 'relative',
+  },
+  side: {
+    minWidth: SIDE_MIN,
+    minHeight: HIT,
+    zIndex: 1,
+    justifyContent: 'center',
+  },
+  sideEnd: {
+    alignItems: 'flex-end',
   },
   backBtn: {
     minWidth: HIT,
@@ -86,13 +112,11 @@ const styles = StyleSheet.create({
   title: {
     ...theme.type.title,
     fontFamily: theme.fonts.serif,
-    flex: 1,
+    position: 'absolute',
+    left: theme.spacing.md,
+    right: theme.spacing.md,
     textAlign: 'center',
     color: theme.colors.ink,
     fontWeight: '700',
-  },
-  trailing: {
-    minWidth: HIT + 24,
-    alignItems: 'flex-end',
   },
 });
