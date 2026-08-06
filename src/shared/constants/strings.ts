@@ -354,5 +354,7 @@ export const strings = {
     dongPhotosEmpty:
       '이 동네 사진을 아직 찾지 못했어요. 앨범 정리가 끝나면 다시 열어 보세요.',
     dongPhotosClose: '닫기',
+    dongPhotosNewest: '최신순',
+    dongPhotosOldest: '오래된순',
   },
 } as const;
