@@ -1,10 +1,12 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -14,7 +16,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
 } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LoadingView } from '@/shared/components/LoadingView';
 import { ScreenHeader } from '@/shared/components/ScreenHeader';
@@ -27,92 +29,243 @@ import { useMonthlyPhotos } from '../../photos/hooks/useMonthlyPhotos';
 import type { PhotoRef } from '../../photos/types';
 import { CollageEditor } from '../components/CollageEditor';
 import { PhotoSelectGrid } from '../components/PhotoSelectGrid';
+import {
+  DEFAULT_PAPER_SKIN,
+  PAPER_SKIN_IDS,
+  resolvePaperSkin,
+  type PaperSkinId,
+} from '../constants/paperSkins';
 import { useSaveCard } from '../hooks/useCards';
 import {
   usePhotoPlaceSections,
   type PickerSortMode,
 } from '../hooks/usePhotoPlaceSections';
-import { cardCoordinate, formatMonthDot } from '../utils/cardMeta';
+import { formatMonthDot } from '../utils/cardMeta';
 import type { MapSnapshot } from '../types';
 
 /** The card holds up to five photos (cover + grid). */
 const MAX_PHOTOS = 5;
-/** Card preview width; inner content strips paper 6·frame 1·frame 7 pads ×2 = 26. */
-const CARD_W = 200;
-const CARD_INNER = CARD_W - 26;
-/** Scroll distance (px) to fully shrink the sticky card preview. */
-const PREVIEW_COLLAPSE_Y = 160;
+/** Paper pad 6 + frame border 1 + frame pad 7, both sides. */
+const CARD_CHROME = 26;
+/** Skin column + gap reserved on both sides so the card stays centered. */
+const SKIN_COL_W = 22;
+const SKIN_GAP = 12;
+const SKIN_SIDE = SKIN_COL_W + SKIN_GAP;
+/** Story card aspect (matches export). */
+const CARD_ASPECT = 1920 / 1080;
+/** Always leave this much for the photo sheet under the card. */
+const SHEET_PEEK_MIN = 200;
+/** Approx. screen header under the safe-area top. */
+const CREATE_HEADER_H = 52;
+/** Scroll distance to fully tuck — longer = more gradual shrink. */
+const PREVIEW_COLLAPSE_Y = 340;
+/**
+ * Mini-card scale at full tuck. Slot height tracks this scale so the whole
+ * card (collage + skins + footer) stays visible — never clipped.
+ */
+const PREVIEW_COLLAPSED_SCALE = 0.55;
+/** Mild sheet climb — do not bury the card. */
+const GRID_COVER_Y = 12;
+/** One-line caption length on the create card. */
+const COMMENT_MAX = 40;
+
+/** Smoothstep — soft ease without killing responsiveness. */
+function collapseProgress(scrollY: number): number {
+  'worklet';
+  const raw = interpolate(
+    scrollY,
+    [0, PREVIEW_COLLAPSE_Y],
+    [0, 1],
+    Extrapolation.CLAMP,
+  );
+  return raw * raw * (3 - 2 * raw);
+}
+
+function previewCardWidth(windowW: number, bodyH: number): number {
+  // Room for sticky pad + skin column + balance — dots must stay on-screen.
+  const maxByWidth = windowW - theme.spacing.lg * 2 - SKIN_SIDE * 2 - 8;
+  const maxPreviewH = bodyH - SHEET_PEEK_MIN;
+  const maxByHeight = (maxPreviewH - 80) / CARD_ASPECT;
+  return Math.max(200, Math.min(maxByWidth, maxByHeight));
+}
+
+function previewExpandedMaxHeight(cardW: number): number {
+  // Paper + stage pads + hint + sticky vertical padding — must fit full card.
+  return Math.ceil(cardW * CARD_ASPECT) + 88;
+}
+
+function paperSkinLabel(id: PaperSkinId): string {
+  switch (id) {
+    case 'ivory':
+      return strings.cards.paperSkinIvory;
+    case 'fog':
+      return strings.cards.paperSkinFog;
+    case 'sage':
+      return strings.cards.paperSkinSage;
+    case 'blush':
+      return strings.cards.paperSkinBlush;
+    case 'ink':
+      return strings.cards.paperSkinInk;
+  }
+}
 
 /**
  * Owns hero height locally so FlatList header memo identity stays stable
  * while CollageEditor measures — avoids remount mid-drag.
+ *
+ * Row: [skin dots | centered card | balance spacer]. Dots never overlay paper.
  */
 function CreateCardPreview({
   assetIds,
-  photos,
+  photos: _photos,
   month,
+  paperSkin,
+  onPaperSkinChange,
+  comment,
+  onCommentChange,
   onSwap,
   onDraggingChange,
   onDeselect,
+  cardW,
 }: {
   assetIds: string[];
   photos: PhotoRef[];
   month: string;
+  paperSkin: PaperSkinId;
+  onPaperSkinChange: (id: PaperSkinId) => void;
+  comment: string;
+  onCommentChange: (next: string) => void;
   onSwap: (a: number, b: number) => void;
   onDraggingChange: (dragging: boolean) => void;
   onDeselect: (assetId: string) => void;
+  cardW: number;
 }) {
   const [heroH, setHeroH] = useState<number | null>(null);
+  const cardInner = cardW - CARD_CHROME;
+  const cardH = cardW * CARD_ASPECT;
   const monthNumber = Number(month.split('-')[1]);
-  const coord = cardCoordinate(photos);
+  const skin = resolvePaperSkin(paperSkin);
+
+  // Remeasure collage when preview size changes (sticky maxHeight used to squash it).
+  useEffect(() => {
+    setHeroH(null);
+  }, [cardW]);
 
   return (
     <View style={styles.previewStage}>
-      <View style={[styles.regMark, styles.regTL]} />
-      <View style={[styles.regMark, styles.regTR]} />
-      <View style={[styles.regMark, styles.regBL]} />
-      <View style={[styles.regMark, styles.regBR]} />
-
-      <View style={styles.cardPaper}>
-        <View style={styles.cardFrame}>
-          <View style={styles.cardHead}>
-            <Text style={styles.cardBrand}>한달음</Text>
-            {coord ? <Text style={styles.cardCoord}>{coord}</Text> : null}
-          </View>
-          <View style={styles.cardRule} />
-
-          <View
-            style={styles.cardHero}
-            onLayout={(e) => {
-              const next = e.nativeEvent.layout.height;
-              setHeroH((prev) =>
-                prev != null && Math.abs(prev - next) < 0.5 ? prev : next,
-              );
-            }}
-          >
-            {heroH != null && heroH > 0 ? (
-              <CollageEditor
-                assetIds={assetIds}
-                width={CARD_INNER}
-                height={heroH}
-                onSwap={onSwap}
-                onDraggingChange={onDraggingChange}
-                onPressCell={onDeselect}
+      <View style={styles.previewRow}>
+        <View
+          style={styles.skinCol}
+          accessibilityRole="radiogroup"
+          accessibilityLabel={strings.cards.paperSkinLabel}
+        >
+          {PAPER_SKIN_IDS.map((id) => {
+            const tone = resolvePaperSkin(id);
+            const selected = id === paperSkin;
+            return (
+              <Pressable
+                key={id}
+                onPress={() => onPaperSkinChange(id)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+                accessibilityLabel={strings.cards.paperSkinA11y(
+                  paperSkinLabel(id),
+                )}
+                hitSlop={6}
+                style={[
+                  styles.skinDot,
+                  { backgroundColor: tone.paper },
+                  id === 'ink' && styles.skinDotInkEdge,
+                  selected && styles.skinDotOn,
+                ]}
               />
-            ) : null}
-          </View>
+            );
+          })}
+        </View>
 
-          <Text style={styles.cardTitle} numberOfLines={1}>
-            {strings.map.monthTitle(monthNumber)}
-          </Text>
-          <View style={styles.cardFoot}>
-            <View style={styles.cardTickRow}>
-              <View style={styles.cardTick} />
-              <Text style={styles.cardMonth}>{formatMonthDot(month)}</Text>
+        <View style={styles.cardSlot}>
+          <View
+            style={[
+              styles.cardPaper,
+              {
+                width: cardW,
+                height: cardH,
+                backgroundColor: skin.paper,
+              },
+            ]}
+          >
+            <View style={[styles.cardFrame, { borderColor: skin.line }]}>
+              <View style={styles.cardHead}>
+                <Text
+                  style={[styles.cardHeadTitle, { color: skin.ink }]}
+                  numberOfLines={1}
+                >
+                  {strings.map.monthTitle(monthNumber)}
+                </Text>
+                <Text style={[styles.cardBrand, { color: skin.inkSoft }]}>
+                  한달음
+                </Text>
+              </View>
+              <View style={[styles.cardRule, { backgroundColor: skin.line }]} />
+
+              <View
+                style={styles.cardHero}
+                onLayout={(e) => {
+                  const next = e.nativeEvent.layout.height;
+                  setHeroH((prev) =>
+                    prev != null && Math.abs(prev - next) < 0.5 ? prev : next,
+                  );
+                }}
+              >
+                {heroH != null && heroH > 0 ? (
+                  <CollageEditor
+                    assetIds={assetIds}
+                    width={cardInner}
+                    height={heroH}
+                    onSwap={onSwap}
+                    onDraggingChange={onDraggingChange}
+                    onPressCell={onDeselect}
+                  />
+                ) : null}
+              </View>
+
+              <View
+                style={[
+                  styles.commentStrip,
+                  { backgroundColor: skin.commentStrip },
+                ]}
+              >
+                <TextInput
+                  value={comment}
+                  onChangeText={(t) => onCommentChange(t.slice(0, COMMENT_MAX))}
+                  placeholder={strings.cards.commentPlaceholder}
+                  placeholderTextColor={skin.subtle}
+                  maxLength={COMMENT_MAX}
+                  numberOfLines={1}
+                  style={[styles.commentInput, { color: skin.inkSoft }]}
+                  returnKeyType="done"
+                />
+              </View>
+
+              <View style={styles.cardFoot}>
+                <View style={styles.cardTickRow}>
+                  <View
+                    style={[styles.cardTick, { backgroundColor: skin.inkSoft }]}
+                  />
+                  <Text style={[styles.cardMonth, { color: skin.ink }]}>
+                    {formatMonthDot(month)}
+                  </Text>
+                </View>
+                <Text style={[styles.cardUnit, { color: skin.subtle }]}>
+                  MONTHLY RECAP
+                </Text>
+              </View>
             </View>
-            <Text style={styles.cardUnit}>MONTHLY RECAP</Text>
           </View>
         </View>
+
+        {/* Mirror skin width so the card stays optically centered. */}
+        <View style={styles.skinBalance} />
       </View>
 
       <Text style={styles.hint}>{strings.cards.arrangeHint}</Text>
@@ -131,12 +284,23 @@ export function CardCreateScreen() {
   const saveCard = useSaveCard();
 
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
+  const [selectionUndoStack, setSelectionUndoStack] = useState<string[][]>([]);
+  const [selectionHint, setSelectionHint] = useState<string | null>(null);
+  const [paperSkin, setPaperSkin] = useState<PaperSkinId>(DEFAULT_PAPER_SKIN);
+  const [comment, setComment] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [collageDragging, setCollageDragging] = useState(false);
   const [sortMode, setSortMode] = useState<PickerSortMode>('newest');
+  const selectedIdsRef = useRef(selectedAssetIds);
+  selectedIdsRef.current = selectedAssetIds;
   const scrollY = useSharedValue(0);
+  const insets = useSafeAreaInsets();
+  const { width: windowW, height: windowH } = useWindowDimensions();
+  // Body height under the screen header — size the card so the sheet always peeks.
+  const bodyH = windowH - insets.top - CREATE_HEADER_H;
+  const cardW = previewCardWidth(windowW, bodyH);
+  const previewMaxH = previewExpandedMaxHeight(cardW);
 
-  // RN FlatList needs a JS function — Reanimated's scroll handler is for Animated.FlatList.
   const onGridScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       scrollY.value = e.nativeEvent.contentOffset.y;
@@ -144,17 +308,32 @@ export function CardCreateScreen() {
     [scrollY],
   );
 
+  // Outer slot height tracks the mini-card so the sheet rises without clipping.
   const stickyPreviewStyle = useAnimatedStyle(() => {
-    const t = interpolate(
-      scrollY.value,
-      [0, PREVIEW_COLLAPSE_Y],
-      [0, 1],
-      Extrapolation.CLAMP,
-    );
+    const t = collapseProgress(scrollY.value);
+    const scale = interpolate(t, [0, 1], [1, PREVIEW_COLLAPSED_SCALE]);
     return {
-      maxHeight: interpolate(t, [0, 1], [440, 152]),
-      paddingBottom: interpolate(t, [0, 1], [theme.spacing.sm, 0]),
-      opacity: interpolate(t, [0, 1], [1, 0.96]),
+      height: previewMaxH * scale,
+    };
+  });
+
+  // Inner keeps full layout size and only scales — collage/skins/footer stay intact.
+  const stickyPreviewInnerStyle = useAnimatedStyle(() => {
+    const t = collapseProgress(scrollY.value);
+    const scale = interpolate(t, [0, 1], [1, PREVIEW_COLLAPSED_SCALE]);
+    const pinTop = -((1 - scale) * previewMaxH) / 2;
+    return {
+      transform: [{ translateY: pinTop }, { scale }],
+    };
+  });
+
+  const gridSheetStyle = useAnimatedStyle(() => {
+    const t = collapseProgress(scrollY.value);
+    return {
+      marginTop: interpolate(t, [0, 1], [0, -GRID_COVER_Y]),
+      borderTopLeftRadius: interpolate(t, [0, 1], [12, 16]),
+      borderTopRightRadius: interpolate(t, [0, 1], [12, 16]),
+      shadowOpacity: interpolate(t, [0, 1], [0.04, 0.1]),
     };
   });
 
@@ -221,18 +400,63 @@ export function CardCreateScreen() {
     };
   }, [selectedPhotos]);
 
-  // Selection is capped; picking past the cap swaps out the oldest pick.
-  const onToggle = (assetId: string) => {
-    setSelectedAssetIds((prev) => {
+  useEffect(() => {
+    if (!selectionHint) {
+      return;
+    }
+    const timer = setTimeout(() => setSelectionHint(null), 2200);
+    return () => clearTimeout(timer);
+  }, [selectionHint]);
+
+  const commitSelection = useCallback((next: string[]) => {
+    const prev = selectedIdsRef.current;
+    if (
+      next.length === prev.length &&
+      next.every((id, i) => id === prev[i])
+    ) {
+      return;
+    }
+    setSelectionUndoStack((stack) => [...stack.slice(-19), prev]);
+    setSelectedAssetIds(next);
+    setSelectionHint(null);
+  }, []);
+
+  // Cap at MAX — further picks are blocked (no silent swap).
+  const onToggle = useCallback(
+    (assetId: string) => {
+      const prev = selectedIdsRef.current;
       if (prev.includes(assetId)) {
-        return prev.filter((id) => id !== assetId);
+        commitSelection(prev.filter((id) => id !== assetId));
+        return;
       }
-      const next = [...prev, assetId];
-      return next.length > MAX_PHOTOS
-        ? next.slice(next.length - MAX_PHOTOS)
-        : next;
+      if (prev.length >= MAX_PHOTOS) {
+        setSelectionHint(strings.cards.maxPhotosHint);
+        return;
+      }
+      commitSelection([...prev, assetId]);
+    },
+    [commitSelection],
+  );
+
+  const onSelectionUndo = useCallback(() => {
+    setSelectionUndoStack((stack) => {
+      if (stack.length === 0) {
+        return stack;
+      }
+      const previous = stack[stack.length - 1]!;
+      setSelectedAssetIds(previous);
+      setSelectionHint(null);
+      return stack.slice(0, -1);
     });
-  };
+  }, []);
+
+  const onSelectionReset = useCallback(() => {
+    const prev = selectedIdsRef.current;
+    if (prev.length === 0) {
+      return;
+    }
+    commitSelection([]);
+  }, [commitSelection]);
 
   const onSave = async () => {
     setFormError(null);
@@ -246,9 +470,10 @@ export function CardCreateScreen() {
         month,
         // Default title (e.g. "칠월의 기록") — editable on the preview screen.
         title: strings.map.monthTitle(monthNumber),
-        comment: '',
+        comment: comment.trim(),
         photoRefs: selectedPhotos,
         template: 'story',
+        paperSkin,
         mapSnapshot,
       });
       // Keep create under preview so back returns to 카드 만들기.
@@ -264,80 +489,138 @@ export function CardCreateScreen() {
 
   // Must stay above early returns — loading→ready would otherwise change hook count.
   const selectedCount = selectedAssetIds.length;
+  const canUndo = selectionUndoStack.length > 0;
+  const canReset = selectedCount > 0;
 
-  const listHeader = useMemo(
+  // Sticky sheet chrome (count + sort) — stays put while photos scroll under it.
+  const sheetChrome = useMemo(
     () => (
-      <View style={styles.headerBox}>
-        <View style={styles.meterBlock}>
-          <View style={styles.labelRow}>
-            <Text style={styles.label}>{strings.cards.photoLabel}</Text>
-            <View style={styles.meterCount}>
-              <Text style={styles.meterNum}>{selectedCount}</Text>
-              <Text style={styles.meterDen}>/ {MAX_PHOTOS}장</Text>
+      <View style={styles.sheetChrome}>
+        <View style={styles.sheetHandle} />
+        <View style={styles.headerBox}>
+          <View style={styles.meterBlock}>
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>{strings.cards.photoLabel}</Text>
+              <View style={styles.meterCount}>
+                <Text style={styles.meterNum}>{selectedCount}</Text>
+                <Text style={styles.meterDen}>/ {MAX_PHOTOS}장</Text>
+              </View>
             </View>
-          </View>
-          <View style={styles.meterTrack}>
-            {Array.from({ length: MAX_PHOTOS }, (_, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.meterTick,
-                  i < selectedCount && styles.meterTickOn,
+            <View style={styles.meterTrack}>
+              {Array.from({ length: MAX_PHOTOS }, (_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.meterTick,
+                    i < selectedCount && styles.meterTickOn,
+                  ]}
+                />
+              ))}
+            </View>
+            <View style={styles.selectionActions}>
+              <Pressable
+                onPress={onSelectionUndo}
+                disabled={!canUndo}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={strings.cards.selectionUndo}
+                style={({ pressed }) => [
+                  styles.selectionAction,
+                  (!canUndo || pressed) && styles.selectionActionDim,
                 ]}
-              />
-            ))}
+              >
+                <Text style={styles.selectionActionText}>
+                  {strings.cards.selectionUndo}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={onSelectionReset}
+                disabled={!canReset}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={strings.cards.selectionReset}
+                style={({ pressed }) => [
+                  styles.selectionAction,
+                  (!canReset || pressed) && styles.selectionActionDim,
+                ]}
+              >
+                <Text style={styles.selectionActionText}>
+                  {strings.cards.selectionReset}
+                </Text>
+              </Pressable>
+            </View>
+            {selectionHint ? (
+              <Text style={styles.selectionHint}>{selectionHint}</Text>
+            ) : null}
           </View>
-        </View>
-        <View style={styles.sortRow}>
-          <Pressable
-            onPress={() => setSortMode('newest')}
-            accessibilityRole="button"
-            accessibilityState={{ selected: sortMode === 'newest' }}
-            style={[styles.sortChip, sortMode === 'newest' && styles.sortChipOn]}
-          >
-            <Text
+          <View style={styles.sortRow}>
+            <Pressable
+              onPress={() => setSortMode('newest')}
+              accessibilityRole="button"
+              accessibilityState={{ selected: sortMode === 'newest' }}
               style={[
-                styles.sortChipText,
-                sortMode === 'newest' && styles.sortChipTextOn,
+                styles.sortChip,
+                sortMode === 'newest' && styles.sortChipOn,
               ]}
             >
-              {strings.cards.sortNewest}
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setSortMode('oldest')}
-            accessibilityRole="button"
-            accessibilityState={{ selected: sortMode === 'oldest' }}
-            style={[styles.sortChip, sortMode === 'oldest' && styles.sortChipOn]}
-          >
-            <Text
+              <Text
+                style={[
+                  styles.sortChipText,
+                  sortMode === 'newest' && styles.sortChipTextOn,
+                ]}
+              >
+                {strings.cards.sortNewest}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setSortMode('oldest')}
+              accessibilityRole="button"
+              accessibilityState={{ selected: sortMode === 'oldest' }}
               style={[
-                styles.sortChipText,
-                sortMode === 'oldest' && styles.sortChipTextOn,
+                styles.sortChip,
+                sortMode === 'oldest' && styles.sortChipOn,
               ]}
             >
-              {strings.cards.sortOldest}
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setSortMode('place')}
-            accessibilityRole="button"
-            accessibilityState={{ selected: sortMode === 'place' }}
-            style={[styles.sortChip, sortMode === 'place' && styles.sortChipOn]}
-          >
-            <Text
+              <Text
+                style={[
+                  styles.sortChipText,
+                  sortMode === 'oldest' && styles.sortChipTextOn,
+                ]}
+              >
+                {strings.cards.sortOldest}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setSortMode('place')}
+              accessibilityRole="button"
+              accessibilityState={{ selected: sortMode === 'place' }}
               style={[
-                styles.sortChipText,
-                sortMode === 'place' && styles.sortChipTextOn,
+                styles.sortChip,
+                sortMode === 'place' && styles.sortChipOn,
               ]}
             >
-              {strings.cards.sortByPlace}
-            </Text>
-          </Pressable>
+              <Text
+                style={[
+                  styles.sortChipText,
+                  sortMode === 'place' && styles.sortChipTextOn,
+                ]}
+              >
+                {strings.cards.sortByPlace}
+              </Text>
+            </Pressable>
+          </View>
         </View>
       </View>
     ),
-    [selectedCount, sortMode],
+    [
+      selectedCount,
+      sortMode,
+      canUndo,
+      canReset,
+      selectionHint,
+      onSelectionUndo,
+      onSelectionReset,
+    ],
   );
 
   if (isPending) {
@@ -388,35 +671,46 @@ export function CardCreateScreen() {
         }
       />
       {formError ? <Text style={styles.error}>{formError}</Text> : null}
-      {/* Sticky card preview: shrinks as the photo grid scrolls down. */}
-      {selectedCount > 0 ? (
-        <Animated.View style={[styles.stickyPreview, stickyPreviewStyle]}>
-          <CreateCardPreview
-            assetIds={selectedAssetIds}
-            photos={selectedPhotos}
-            month={month}
-            onSwap={onSwap}
-            onDraggingChange={setCollageDragging}
-            onDeselect={onToggle}
-          />
+      <View style={styles.body}>
+        {/* Card sits under the photo sheet; sheet climbs over it on scroll. */}
+        {selectedCount > 0 ? (
+          <Animated.View style={[styles.stickyPreview, stickyPreviewStyle]}>
+            <Animated.View style={stickyPreviewInnerStyle}>
+              <CreateCardPreview
+                assetIds={selectedAssetIds}
+                photos={selectedPhotos}
+                month={month}
+                paperSkin={paperSkin}
+                onPaperSkinChange={setPaperSkin}
+                comment={comment}
+                onCommentChange={setComment}
+                onSwap={onSwap}
+                onDraggingChange={setCollageDragging}
+                onDeselect={onToggle}
+                cardW={cardW}
+              />
+            </Animated.View>
+          </Animated.View>
+        ) : null}
+        <Animated.View style={[styles.gridSheet, gridSheetStyle]}>
+          {sheetChrome}
+          <View style={styles.gridFlex}>
+            <PhotoSelectGrid
+              key={sortMode}
+              photos={pickerPhotos}
+              sections={
+                sortMode === 'place' ? (placeLoading ? [] : placeSections) : null
+              }
+              sectionsLoading={sortMode === 'place' && placeLoading}
+              selectedAssetIds={selectedAssetIds}
+              onToggle={onToggle}
+              scrollEnabled={!collageDragging}
+              contentContainerStyle={styles.scroll}
+              onScroll={onGridScroll}
+              scrollEventThrottle={16}
+            />
+          </View>
         </Animated.View>
-      ) : null}
-      <View style={styles.gridFlex}>
-        <PhotoSelectGrid
-          key={sortMode}
-          photos={pickerPhotos}
-          sections={
-            sortMode === 'place' ? (placeLoading ? [] : placeSections) : null
-          }
-          sectionsLoading={sortMode === 'place' && placeLoading}
-          selectedAssetIds={selectedAssetIds}
-          onToggle={onToggle}
-          scrollEnabled={!collageDragging}
-          contentContainerStyle={styles.scroll}
-          ListHeaderComponent={listHeader}
-          onScroll={onGridScroll}
-          scrollEventThrottle={16}
-        />
       </View>
     </SafeAreaView>
   );
@@ -429,13 +723,43 @@ const styles = StyleSheet.create({
   },
   stickyPreview: {
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.sm,
-    paddingBottom: theme.spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.hairline,
     backgroundColor: theme.colors.background,
     overflow: 'hidden',
     alignItems: 'center',
+    justifyContent: 'flex-start',
+    zIndex: 0,
+  },
+  body: {
+    flex: 1,
+  },
+  gridSheet: {
+    flex: 1,
+    zIndex: 2,
+    backgroundColor: theme.colors.background,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.hairline,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -6 },
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  sheetChrome: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.sm,
+    backgroundColor: theme.colors.background,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.hairline,
+    gap: theme.spacing.sm,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: theme.colors.hairline,
+    marginBottom: 2,
   },
   gridFlex: {
     flex: 1,
@@ -448,8 +772,7 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing.xl,
   },
   headerBox: {
-    gap: theme.spacing.lg,
-    marginBottom: theme.spacing.sm,
+    gap: theme.spacing.md,
   },
   saveAction: {
     paddingHorizontal: 14,
@@ -510,39 +833,66 @@ const styles = StyleSheet.create({
   hint: {
     ...theme.type.micro,
     color: theme.colors.subtle,
+    textAlign: 'center',
+    paddingHorizontal: theme.spacing.md,
   },
   previewStage: {
     backgroundColor: theme.colors.surfaceAlt,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: theme.colors.hairline,
-    paddingVertical: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.sm,
     alignItems: 'center',
-    gap: 12,
-    marginHorizontal: -theme.spacing.lg,
+    gap: 10,
+    width: '100%',
   },
-  regMark: {
-    position: 'absolute',
-    width: 12,
-    height: 12,
-    borderColor: theme.tint.mid,
+  previewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
   },
-  regTL: { top: 10, left: 14, borderLeftWidth: 1, borderTopWidth: 1 },
-  regTR: { top: 10, right: 14, borderRightWidth: 1, borderTopWidth: 1 },
-  regBL: { bottom: 10, left: 14, borderLeftWidth: 1, borderBottomWidth: 1 },
-  regBR: { bottom: 10, right: 14, borderRightWidth: 1, borderBottomWidth: 1 },
+  /** In-flow column — cannot paint over the card. */
+  skinCol: {
+    width: SKIN_COL_W,
+    marginRight: SKIN_GAP,
+    gap: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    zIndex: 2,
+  },
+  /** Same width as skinCol+gap so the card stays screen-centered. */
+  skinBalance: {
+    width: SKIN_SIDE,
+  },
+  cardSlot: {
+    flex: 1,
+    alignItems: 'center',
+    minWidth: 0,
+  },
+  skinDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(44,62,80,0.2)',
+  },
+  skinDotInkEdge: {
+    borderColor: 'rgba(44,62,80,0.35)',
+  },
+  skinDotOn: {
+    borderWidth: 2,
+    borderColor: theme.colors.ink,
+  },
 
   cardPaper: {
-    width: CARD_W,
-    aspectRatio: 1080 / 1920,
-    backgroundColor: theme.colors.background,
     padding: 6,
     ...theme.shadows.card,
   },
   cardFrame: {
     flex: 1,
     borderWidth: 1,
-    borderColor: theme.tint.mid,
     padding: 7,
     gap: 3,
   },
@@ -550,30 +900,44 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
+  },
+  cardHeadTitle: {
+    flex: 1,
+    flexShrink: 1,
+    fontFamily: theme.fonts.sans,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+    textAlign: 'left',
   },
   cardBrand: {
-    color: theme.colors.inkSoft,
-    fontSize: 7.4,
+    fontSize: 8,
     fontWeight: '700',
     letterSpacing: 1.85,
-  },
-  cardCoord: {
-    color: theme.colors.subtle,
-    fontSize: 5.6,
-    letterSpacing: 0.4,
+    textAlign: 'right',
   },
   cardRule: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: theme.tint.soft,
   },
-  cardHero: { flex: 1, overflow: 'hidden' },
-  cardTitle: {
-    fontFamily: theme.fonts.sans,
-    color: theme.colors.ink,
-    fontSize: 12.6,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-    paddingTop: 2,
+  cardHero: {
+    flex: 1,
+    overflow: 'hidden',
+    marginBottom: 10,
+  },
+  commentStrip: {
+    borderRadius: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    minHeight: 30,
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  commentInput: {
+    fontSize: 9.5,
+    lineHeight: 13,
+    padding: 0,
+    margin: 0,
   },
   cardFoot: {
     flexDirection: 'row',
@@ -584,16 +948,13 @@ const styles = StyleSheet.create({
   cardTick: {
     width: 5.2,
     height: 5.2,
-    backgroundColor: theme.colors.sand,
   },
   cardMonth: {
-    color: theme.colors.ink,
     fontSize: 8.2,
     fontWeight: '600',
     letterSpacing: 0.3,
   },
   cardUnit: {
-    color: theme.colors.subtle,
     fontSize: 5.9,
     letterSpacing: 1.2,
   },
@@ -615,6 +976,29 @@ const styles = StyleSheet.create({
   meterTrack: { flexDirection: 'row', gap: 4, height: 3 },
   meterTick: { flex: 1, backgroundColor: theme.tint.soft },
   meterTickOn: { backgroundColor: theme.colors.terracotta },
+  selectionActions: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+    marginTop: 2,
+  },
+  selectionAction: {
+    paddingVertical: 4,
+  },
+  selectionActionDim: {
+    opacity: 0.35,
+  },
+  selectionActionText: {
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.inkSoft,
+    fontWeight: '600',
+  },
+  selectionHint: {
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.terracotta,
+    fontWeight: '600',
+  },
 
   /** Fixed under the header (not in the scroll) so it's visible next to save. */
   error: {

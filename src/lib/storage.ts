@@ -175,10 +175,12 @@ export function setStampsScanIntroSeen(): void {
 }
 
 const STAMPS_LIBRARY_SYNC_AT_KEY = 'stampsLibrarySyncAt';
+/** Epoch ms when full-album GPS phase last finished (geocode may still run). */
+const STAMPS_GPS_SCAN_AT_KEY = 'stampsGpsScanAt';
 /** Bump when place→구 parse changes so cooldown cannot hide new stamps. */
 const STAMPS_PLACE_PARSE_REV_KEY = 'stampsPlaceParseRev';
-/** Bump forces one full-album stamp rescan (dong grain 2026-08-05). */
-export const STAMPS_PLACE_PARSE_REV = 13;
+/** Bump forces one full-album stamp rescan (local dong PIP 2026-08-06). */
+export const STAMPS_PLACE_PARSE_REV = 14;
 
 /** Epoch ms of last finished full-album stamp sync (0 if never). */
 export function getStampsLibrarySyncAt(): number {
@@ -192,6 +194,36 @@ export function getStampsLibrarySyncAt(): number {
 
 export function setStampsLibrarySyncAt(atMs: number): void {
   storage.set(STAMPS_LIBRARY_SYNC_AT_KEY, String(atMs));
+}
+
+/** Epoch ms of last finished library GPS scan (0 if never). */
+export function getStampsGpsScanAt(): number {
+  const raw = storage.getString(STAMPS_GPS_SCAN_AT_KEY);
+  if (!raw) {
+    return 0;
+  }
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}
+
+export function setStampsGpsScanAt(atMs: number): void {
+  storage.set(STAMPS_GPS_SCAN_AT_KEY, String(atMs));
+}
+
+/** Epoch ms when coarse (~1km) stamp geocode pass finished. */
+const STAMPS_COARSE_GEOCODE_AT_KEY = 'stampsCoarseGeocodeAt';
+
+export function getStampsCoarseGeocodeAt(): number {
+  const raw = storage.getString(STAMPS_COARSE_GEOCODE_AT_KEY);
+  if (!raw) {
+    return 0;
+  }
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}
+
+export function setStampsCoarseGeocodeAt(atMs: number): void {
+  storage.set(STAMPS_COARSE_GEOCODE_AT_KEY, String(atMs));
 }
 
 export function getStampsPlaceParseRev(): number {
@@ -220,4 +252,19 @@ export function getPlaceResolveRaw(cacheKey: string): string | null {
 
 export function setPlaceResolveRaw(cacheKey: string, json: string): void {
   storage.set(`${PLACE_RESOLVE_PREFIX}${cacheKey}`, json);
+}
+
+/**
+ * Home-map journey path order labels (mid-segment numbers). Absent = on.
+ */
+const JOURNEY_PATH_ORDER_KEY = 'journeyPathOrderVisible';
+
+export function getJourneyPathOrderVisible(): boolean {
+  const raw = storage.getString(JOURNEY_PATH_ORDER_KEY);
+  // Default on — first install / missing key shows order numbers.
+  return raw !== '0';
+}
+
+export function setJourneyPathOrderVisible(visible: boolean): void {
+  storage.set(JOURNEY_PATH_ORDER_KEY, visible ? '1' : '0');
 }

@@ -109,9 +109,15 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   label: {
-    ...theme.type.body,
     fontFamily: theme.fonts.sans,
+    fontSize: theme.type.body.fontSize,
+    letterSpacing: theme.type.body.letterSpacing,
+    // Spreading theme.type.body lineHeight clips Hangul bottoms in padded Pressable
+    // (same issue as RegionChips — keep line box taller than the glyph).
+    lineHeight: 22,
+    includeFontPadding: false,
     fontWeight: '700',
+    textAlignVertical: 'center',
   },
   labelOnSolid: {
     color: theme.colors.surface,

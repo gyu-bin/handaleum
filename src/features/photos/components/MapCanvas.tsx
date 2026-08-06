@@ -1,8 +1,10 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
+  NaverMapMarkerOverlay,
   NaverMapPolylineOverlay,
   NaverMapView,
+  type MapImageProp,
   type NaverMapViewRef,
 } from '@mj-studio/react-native-naver-map';
 
@@ -10,10 +12,16 @@ import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
 import type { PlaceCluster } from '../types';
-import { journeyPathCoords } from '../utils/journeyPath';
+import { journeyPathCoords, journeyPathSteps } from '../utils/journeyPath';
 import { placeBucketKey } from '../utils/placeJourney';
 import { clusterSeedId, MapClusterMarker } from './MapClusterMarker';
 import { MapPinBakeHost } from './MapPinBakeHost';
+
+/** Tiny neutral dot — caption carries the visit-order number. */
+const ORDER_DOT: MapImageProp = {
+  symbol: 'gray',
+  reuseIdentifier: 'handaleum-path-order-dot',
+};
 
 /** Approximate zoom from latitude span (clustering grain). */
 export function zoomFromLatitudeDelta(latitudeDelta: number): number {
@@ -104,6 +112,9 @@ export interface MapCanvasProps {
    * Time-slider filtering must not yank the camera on every drag frame.
    */
   frameKey: string;
+  /** Mid-segment visit-order numbers on the journey polyline. */
+  showPathOrder?: boolean;
+  onTogglePathOrder?: () => void;
 }
 
 /**
@@ -119,6 +130,8 @@ export const MapCanvas = memo(function MapCanvas({
   selectedClusterId,
   pinCovers = {},
   frameKey,
+  showPathOrder = true,
+  onTogglePathOrder,
 }: MapCanvasProps) {
   const mapRef = useRef<NaverMapViewRef>(null);
   const clustersRef = useRef(clusters);
@@ -132,6 +145,10 @@ export const MapCanvas = memo(function MapCanvas({
   const [zoom, setZoom] = useState(DEFAULT_MAP_ZOOM);
   const initialCamera = cameraForClusters(clusters);
   const pathCoords = useMemo(() => journeyPathCoords(clusters), [clusters]);
+  const pathSteps = useMemo(
+    () => (showPathOrder ? journeyPathSteps(clusters) : []),
+    [clusters, showPathOrder],
+  );
 
   const reportZoom = useCallback(
     (nextZoom: number, force = false) => {
@@ -302,6 +319,25 @@ export const MapCanvas = memo(function MapCanvas({
             zIndex={0}
           />
         ) : null}
+        {pathSteps.map((step) => (
+          <NaverMapMarkerOverlay
+            key={`order-${step.order}-${step.latitude}-${step.longitude}`}
+            latitude={step.latitude}
+            longitude={step.longitude}
+            width={14}
+            height={14}
+            anchor={{ x: 0.5, y: 0.5 }}
+            zIndex={1}
+            image={ORDER_DOT}
+            caption={{
+              text: String(step.order),
+              color: theme.colors.ink,
+              haloColor: theme.colors.background,
+              textSize: 12,
+              offset: 0,
+            }}
+          />
+        ))}
         {clusters.map((cluster) => {
           const seedId = clusterSeedId(cluster);
           const placeKey = placeBucketKey(cluster.centerLat, cluster.centerLng);
@@ -320,6 +356,28 @@ export const MapCanvas = memo(function MapCanvas({
       </NaverMapView>
 
       <View style={styles.zoomCtl} pointerEvents="box-none">
+        {onTogglePathOrder && pathCoords.length >= 2 ? (
+          <Pressable
+            style={[styles.zoomBtn, showPathOrder && styles.zoomBtnActive]}
+            onPress={onTogglePathOrder}
+            accessibilityRole="button"
+            accessibilityState={{ selected: showPathOrder }}
+            accessibilityLabel={
+              showPathOrder
+                ? strings.map.pathOrderHide
+                : strings.map.pathOrderShow
+            }
+          >
+            <Text
+              style={[
+                styles.zoomBtnOrder,
+                showPathOrder && styles.zoomBtnOrderActive,
+              ]}
+            >
+              {strings.map.pathOrderToggle}
+            </Text>
+          </Pressable>
+        ) : null}
         <Pressable
           style={styles.zoomBtn}
           onPress={() => zoomByFactorCentered(1.6)}
@@ -379,11 +437,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...theme.shadows.card,
   },
+  zoomBtnActive: {
+    borderColor: theme.colors.ink,
+    backgroundColor: theme.colors.background,
+  },
   zoomBtnText: {
     fontSize: 18,
     color: theme.colors.ink,
     lineHeight: 20,
     fontWeight: '500',
+  },
+  zoomBtnOrder: {
+    fontSize: 11,
+    color: theme.colors.inkSoft,
+    fontWeight: '600',
+    letterSpacing: -0.3,
+  },
+  zoomBtnOrderActive: {
+    color: theme.colors.ink,
   },
   zoomBtnHome: {
     fontSize: 14,

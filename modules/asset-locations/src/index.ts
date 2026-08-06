@@ -25,3 +25,27 @@ export async function getAssetLocationsAsync(
   }
   return AssetLocationsModule.getAssetLocationsAsync(ids);
 }
+
+/** iOS UIBackgroundTask — false if native module missing or OS denied. */
+export function beginBackgroundWork(name: string): boolean {
+  if (AssetLocationsModule == null) {
+    return false;
+  }
+  try {
+    return AssetLocationsModule.beginBackgroundWork(name) === true;
+  } catch (error) {
+    console.warn('[asset-locations] beginBackgroundWork failed', error);
+    return false;
+  }
+}
+
+export function endBackgroundWork(): void {
+  if (AssetLocationsModule == null) {
+    return;
+  }
+  try {
+    AssetLocationsModule.endBackgroundWork();
+  } catch (error) {
+    console.warn('[asset-locations] endBackgroundWork failed', error);
+  }
+}

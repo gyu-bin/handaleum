@@ -99,6 +99,10 @@ export const strings = {
     zoomIn: '확대',
     zoomOut: '축소',
     resetView: '처음으로',
+    /** Toggle mid-segment visit-order numbers on the journey path. */
+    pathOrderToggle: '1·2',
+    pathOrderShow: '여정 순서 켜기',
+    pathOrderHide: '여정 순서 끄기',
     /** Accessibility label for the "!" button that reveals the map notices. */
     infoToggle: '안내 보기',
     /**
@@ -117,8 +121,8 @@ export const strings = {
     indexingPhotoCount: (scanned: string, total: string) =>
       `${scanned}/${total}`,
     indexingPlaces: '동네 정리 중',
-    indexingPlaceCount: (done: number, total: number, _photos: string) =>
-      `${done}/${total}`,
+    indexingPlaceCount: (done: string, total: string) => `${done}/${total}`,
+    indexingPercent: (pct: number) => `${pct}%`,
     indexingPlacesEmpty: '위치 사진 없음',
     indexingDone: '앨범 정리 완료',
     indexingDoneDetail: (photos: string) => `위치 ${photos}장`,
@@ -252,7 +256,14 @@ export const strings = {
     create: '만들기',
     previewTitle: '미리보기',
     titlePlaceholder: '이 달의 제목',
-    commentPlaceholder: '한 달을 한마디로',
+    commentPlaceholder: '사진에 남길 한마디',
+    paperSkinLabel: '종이 색',
+    paperSkinA11y: (name: string) => `종이 ${name}`,
+    paperSkinIvory: '크림',
+    paperSkinFog: '안개',
+    paperSkinSage: '세이지',
+    paperSkinBlush: '블러시',
+    paperSkinInk: '잉크',
     templateLabel: '템플릿',
     photoLabel: '사진 선택',
     sortNewest: '최신순',
@@ -260,7 +271,10 @@ export const strings = {
     sortByPlace: '위치별',
     placeUnknown: '위치 미확인',
     arrangeLabel: '배치',
-    arrangeHint: '탭하면 선택 해제 · 길게 눌러 드래그해 위치 바꾸기',
+    arrangeHint: '카드 사진 탭으로 해제 · 길게 눌러 위치 변경 · 실수는 되돌리기',
+    selectionUndo: '되돌리기',
+    selectionReset: '초기화',
+    maxPhotosHint: '사진은 최대 5장까지예요',
     templateFeed: '피드 4:5',
     templateStory: '스토리 9:16',
     shareFormatLabel: '공유 형식',
@@ -306,7 +320,7 @@ export const strings = {
       `${month}월 ${day}일 · ${count}장`,
   },
   stamps: {
-    title: '동네 도장',
+    title: '발도장',
     progress: (a: number, b: number) => `${a}/${b}`,
     progressLabel: (sido: string) => `${sido} · `,
     cityProgressLabel: (city: string) => `${city} · `,
@@ -332,5 +346,7 @@ export const strings = {
     mapOpen: '모은 동네 보기',
     mapVisitCount: (n: number) => `${n}개 동을 모았어요`,
     mapEmpty: '아직 모은 동이 없어요',
+    leafListEmpty: '동네 목록이 없어요',
+    gunLeafListEmpty: '면·읍 목록을 아직 준비 중이에요',
   },
 } as const;

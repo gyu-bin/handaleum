@@ -21,6 +21,16 @@ class AssetLocationsModule : Module() {
     AsyncFunction("getAssetLocationsAsync") { ids: List<String> ->
       ids.map { id -> readLocation(id) }
     }
+
+    // Android keeps JS longer than iOS when backgrounded; no-op retain API
+    // keeps the JS call sites cross-platform.
+    Function("beginBackgroundWork") { _: String ->
+      true
+    }
+
+    Function("endBackgroundWork") {
+      // no-op
+    }
   }
 
   private fun readLocation(id: String): Map<String, Any?> {

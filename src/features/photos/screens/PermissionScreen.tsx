@@ -50,6 +50,7 @@ export function PermissionScreen() {
             isDenied ? strings.permission.openSettings : strings.permission.request
           }
           variant="accent"
+          style={styles.cta}
           onPress={() =>
             isDenied ? void Linking.openSettings() : void onRequest()
           }
@@ -112,5 +113,8 @@ const styles = StyleSheet.create({
   footer: {
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: theme.spacing.md,
+  },
+  cta: {
+    alignSelf: 'stretch',
   },
 });

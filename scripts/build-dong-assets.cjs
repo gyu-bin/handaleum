@@ -1,8 +1,8 @@
 /**
- * Build dong stamp index (+ optional packed geometries) from admdongkor GeoJSON.
- * Source: 행정동 — we keep names ending with 동 only (읍·면 drop).
+ * Build leaf stamp index (+ packed geometries) from admdongkor GeoJSON.
+ * Keep: 동 everywhere; 읍·면 only under 군 (도농복합 시 읍·면 drop).
  *
- * Usage: node scripts/build-dong-assets.mjs [/path/to.geojson]
+ * Usage: node scripts/build-dong-assets.cjs [/path/to.geojson]
  */
 const fs = require('fs');
 const path = require('path');
@@ -48,19 +48,34 @@ const METRO = new Set([
 ]);
 
 function parentCity(sido, sggnm) {
+  if (!sggnm) {
+    return null;
+  }
+  // 기장군 / 가평군 — stamp city is the 군 itself.
+  if (sggnm.endsWith('군')) {
+    return sggnm;
+  }
   if (METRO.has(sido)) {
     return sido === '세종' ? '세종시' : sido;
-  }
-  if (!sggnm || sggnm.endsWith('군')) {
-    return null;
   }
   const m = sggnm.match(/^(.+?시)/);
   return m ? m[1] : null;
 }
 
-function dongName(admNm) {
+function leafName(admNm) {
   const parts = String(admNm).trim().split(/\s+/);
   return parts[parts.length - 1] || '';
+}
+
+/** 동 always; 읍·면 only when stamp city is a 군. */
+function keepLeaf(name, city) {
+  if (name.endsWith('동')) {
+    return true;
+  }
+  if (city.endsWith('군') && (name.endsWith('읍') || name.endsWith('면'))) {
+    return true;
+  }
+  return false;
 }
 
 /** Keep points at least `minDeg` apart (cheap simplify). */
@@ -143,8 +158,8 @@ function main() {
     if (!city) {
       continue;
     }
-    const name = dongName(p.adm_nm);
-    if (!name.endsWith('동')) {
+    const name = leafName(p.adm_nm);
+    if (!keepLeaf(name, city)) {
       continue;
     }
     const key = `${sido}/${city}/${name}`;

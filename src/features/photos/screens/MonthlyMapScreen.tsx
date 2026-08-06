@@ -21,6 +21,7 @@ import { PhotoPreviewSheet } from '../components/PhotoPreviewSheet';
 import { TimeSlider, type TimeRange } from '../components/TimeSlider';
 import { VisitChipRow } from '../components/VisitChipRow';
 import { useCurrentMonth } from '../hooks/useCurrentMonth';
+import { useJourneyPathOrder } from '../hooks/useJourneyPathOrder';
 import { useMonthJourney } from '../hooks/useMonthJourney';
 import { useMonthlyPhotos } from '../hooks/useMonthlyPhotos';
 import { usePhotoPermission } from '../hooks/usePhotoPermission';
@@ -76,6 +77,7 @@ export function MonthlyMapScreen() {
   const hasAccess = hasLibraryAccess || isDevDummyPhotosEnabled();
   const { month } = useCurrentMonth();
   const { covers, setCover } = usePinCovers(month);
+  const { showPathOrder, togglePathOrder } = useJourneyPathOrder();
   const { data, isPending, isFetching, isError, refetch, isRefetching } = useMonthlyPhotos(month, {
     enabled: isReady && hasAccess,
   });
@@ -333,6 +335,8 @@ export function MonthlyMapScreen() {
             onSelectCluster={onSelectCluster}
             selectedClusterId={selectedSeedId}
             pinCovers={covers}
+            showPathOrder={showPathOrder}
+            onTogglePathOrder={togglePathOrder}
           />
           {data.photos.length === 0 ? (
             <View style={styles.emptyOverlay} pointerEvents="box-none">

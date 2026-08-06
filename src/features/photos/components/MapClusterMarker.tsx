@@ -164,7 +164,7 @@ function MapClusterMarkerInner({
       width={markerW}
       height={markerH}
       anchor={{ x: 0.5, y: 1 }}
-      zIndex={selected ? 2 : 1}
+      zIndex={selected ? 3 : 2}
       isHideCollidedSymbols
       image={image}
       caption={

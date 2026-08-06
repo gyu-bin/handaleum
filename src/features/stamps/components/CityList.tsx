@@ -3,29 +3,30 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { theme } from '@/shared/constants/theme';
 
 export type CityRow = {
-  city: string;
+  key: string;
+  label: string;
   collected: number;
   total: number;
 };
 
 export interface CityListProps {
   cities: CityRow[];
-  onSelect: (city: string) => void;
+  onSelect: (key: string) => void;
 }
 
-/** Minimal 시 list — hairline rows, no cards. */
+/** Minimal L1 list (구·시·군) — hairline rows, no cards. */
 export function CityList({ cities, onSelect }: CityListProps) {
   return (
     <View style={styles.list}>
       {cities.map((row) => (
         <Pressable
-          key={row.city}
-          onPress={() => onSelect(row.city)}
+          key={row.key}
+          onPress={() => onSelect(row.key)}
           accessibilityRole="button"
-          accessibilityLabel={`${row.city} ${row.collected}/${row.total}`}
+          accessibilityLabel={`${row.label} ${row.collected}/${row.total}`}
           style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
         >
-          <Text style={styles.title}>{row.city}</Text>
+          <Text style={styles.title}>{row.label}</Text>
           <Text style={styles.count}>
             {row.collected}/{row.total}
           </Text>

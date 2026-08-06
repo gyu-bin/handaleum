@@ -1,6 +1,5 @@
 import * as Location from 'expo-location';
 
-import { isAppForeground, waitForAppForeground } from './appForeground';
 import { dummyGeocodeNear } from './dummyPhotos';
 
 /**
@@ -21,8 +20,9 @@ export type GeocodePriority = 'interactive' | 'background';
 
 const GAP_MS: Record<GeocodePriority, number> = {
   interactive: 90,
-  // Slow lane — stamp album scan. Keep Location cool while the user pans.
-  background: 500,
+  // Stamp album scan. Slightly under 500ms — coarse Pass A already cuts volume;
+  // Apple still throttles if we go much lower.
+  background: 280,
 };
 const MAX_BACKOFF_MS = 4000;
 const FIRST_BACKOFF_MS = 300;
@@ -116,16 +116,11 @@ async function work(): Promise<void> {
   working = true;
   try {
     while (true) {
-      // Interactive always first. Background only while the app is foreground —
-      // pocketed phones were finishing the whole album scan and heating up.
-      const job =
-        queues.interactive.shift() ??
-        (isAppForeground() ? queues.background.shift() : undefined);
+      // Interactive always first. Background jobs keep running when the app is
+      // locked/switched away (indexingBackground + iOS UIBackgroundTask). OS
+      // may still suspend later — stamp sync resumes from disk.
+      const job = queues.interactive.shift() ?? queues.background.shift();
       if (!job) {
-        if (queues.background.length > 0 && !isAppForeground()) {
-          await waitForAppForeground();
-          continue;
-        }
         return;
       }
       await sleep(GAP_MS[job.priority] + backoffMs);

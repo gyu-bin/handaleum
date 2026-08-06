@@ -67,7 +67,7 @@
 | geocode는 **직렬 큐 + 최소 간격 + 지수 백오프 + 3회 재시도**. 실패 버킷을 버리지 않음 | 동시 6 Promise.all | CLGeocoder 스로틀로 임의 장소가 영구 누락(교항리) + JS 스레드 잼 | 2026-08-03 |
 | geocode 큐 **우선순위 2단**: interactive(90ms — 칩·시트·몰아보기) > background(300ms — 발도장 전체 스캔). interactive는 부분 실패 시 **1회 재패스** | 단일 FIFO | 전체 앨범 스캔이 이번 달과 1:1 경합 + 스로틀 창에 걸린 리가 세션 내내 누락 | 2026-08-03 |
 | 버킷 지오코딩은 **실제 사진 좌표**로 (캐시 키만 110m 반올림). place cache v17 — 발도장 rev는 유지(시·군 단위는 78m 무관) | 반올림 좌표로 조회 | ±78m가 리 경계를 넘어 교항리→주문리로 병합. Apple 사진과 결과가 달라진 원인 | 2026-08-03 |
-| 사용감: 전체앨범 GPS에 **배치 yield** + foreground 게이트, 배치 8, 월워밍업↔앨범스캔 배타(`fullAlbumScanBusy`), 발도장 탭 즉시스캔→12s 지연, 핀 bake는 **선택 핀만**, 줌 recluster 180ms debounce, background geocode 500ms + 백그라운드 시 pause | 동시 스캐너 / 전 핀 bake / 즉시 앨범 스캔 | 지도 사용 중 발열·버벅 | 2026-08-04 |
+| 사용감: 전체앨범 GPS에 **배치 yield**, 배치 8, 월워밍업↔앨범스캔 배타(`fullAlbumScanBusy`), 발도장 탭 즉시스캔→12s 지연, 핀 bake는 **선택 핀만**, 줌 recluster 180ms debounce. 발도장 sync geocode는 **백그라운드 계속**(UIBackgroundTask) + gap 280ms | 동시 스캐너 / 전 핀 bake / 즉시 앨범 스캔 | 지도 사용 중 발열·버벅 → 인덱싱은 잠금 중에도 진행 | 2026-08-06 |
 | 지도 핀: React key=**seed assetId** (grain 아님) + `peekAssetFileUri` 첫 페인트. 맵 워밍은 cover만. grain sticky ±1줌 | key=`grain:cell` 리마운트 → 캐시 있어도 placeholder 깜빡 + 네이티브 churn | 확대 시 이미지 깜빡·쓰다 보면 버벅 | 2026-08-04 |
 | 맵 격리: `memo(MapCanvas)` + `memo(MapClusterMarker)` 비교, 스탬프 뱃지는 HomeNavBar 구독, sync notify 2s throttle, GPS partial 1.4s | 칩/스탬프 setState가 네이티브 마커 전부 재평가 | 사용 중 지도 버벅 | 2026-08-04 |
 | 디스크 miss를 메모리에 기억(`diskMissCache`), 동일 버킷 in-flight 합치기. `resolveVisitPlaces`는 캐시분 즉시 emit 후 점진 갱신 | 리페인트마다 버킷당 동기 SQLite read | 칩 스크롤 끊김 | 2026-08-03 |

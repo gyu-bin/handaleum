@@ -2,25 +2,37 @@ import {
   isPinExportBusy,
   setFullAlbumScanBusy,
 } from '@/features/photos/services/mediaLibrary';
+import {
+  releaseIndexingBackground,
+  retainIndexingBackground,
+} from '@/features/photos/services/indexingBackground';
 import { clearPlaceResolveCache } from '@/features/photos/services/placeResolve';
 import {
+  getStampsGpsScanAt,
   getStampsLibrarySyncAt,
   getStampsPlaceParseRev,
+  setStampsCoarseGeocodeAt,
+  setStampsGpsScanAt,
   setStampsLibrarySyncAt,
   setStampsPlaceParseRev,
   STAMPS_PLACE_PARSE_REV,
 } from '@/lib/storage';
 
+import { clearLocatedPhotosSnapshot } from './locatedPhotosSnapshot';
 import {
   resetStampLibraryProgress,
   syncStampsFromLibrary,
   type StampLibrarySyncResult,
 } from './stampBackfill';
+import {
+  STAMP_GPS_RESUME_MS,
+  shouldResumeGeocodeOnly,
+} from './stampSyncResume';
 
 type Listener = (syncing: boolean) => void;
 
-/** Skip restarting a full-album scan if one finished within this window. */
-const SYNC_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
+/** Skip restarting a finished full-album sync if one finished within this window. */
+const SYNC_COOLDOWN_MS = STAMP_GPS_RESUME_MS;
 /** Settle after month GPS so pin thumb exports can start before album scan. */
 const MAP_KICKOFF_DELAY_MS = 1_800;
 /** Wait for first pin-export wave; scan still yields while later pins decode. */
@@ -75,9 +87,8 @@ export type StartStampLibrarySyncOptions = {
 };
 
 /**
- * Single-flight full-album stamp sync. Safe to call from map + stamps screen.
- * Place-parse revision bumps force one rescan; rev only locks after a scan that
- * actually saw photos (so a failed/empty run does not skip the real fix).
+ * Single-flight full-album stamp sync.
+ * GPS → offline dong PIP (no CLGeocoder). Resumes from GPS snapshot when killed.
  */
 export function startStampLibrarySync(
   options?: StartStampLibrarySyncOptions,
@@ -87,31 +98,41 @@ export function startStampLibrarySync(
   }
 
   const parseRevStale = getStampsPlaceParseRev() < STAMPS_PLACE_PARSE_REV;
-  const force = options?.force === true || parseRevStale;
+  const userForce = options?.force === true;
+  const now = Date.now();
 
-  if (!force) {
+  if (!userForce && !parseRevStale) {
     const last = getStampsLibrarySyncAt();
-    if (last > 0 && Date.now() - last < SYNC_COOLDOWN_MS) {
+    if (last > 0 && now - last < SYNC_COOLDOWN_MS) {
       return Promise.resolve({ added: 0, photoCount: 0 });
     }
   }
 
-  if (parseRevStale || options?.force) {
-    // Drop in-memory geocode results so the new parser runs; disk keys are
-    // already invalidated by placeResolve CACHE_REV. Do NOT zero
-    // stampsLibrarySyncAt here: `force` already bypasses the cooldown, and a
-    // zeroed timestamp flips syncStampsFromLibrary into deep recheck (network
-    // re-reads of no-GPS assets) — a parse change never needs GPS re-reads.
+  const resumeGeocodeOnly = shouldResumeGeocodeOnly({
+    now,
+    gpsScanAt: getStampsGpsScanAt(),
+    librarySyncAt: getStampsLibrarySyncAt(),
+    force: userForce,
+    parseRevRescan: parseRevStale,
+  });
+
+  if (userForce) {
     clearPlaceResolveCache();
+    setStampsGpsScanAt(0);
+    setStampsCoarseGeocodeAt(0);
+    void clearLocatedPhotosSnapshot();
+  } else if (parseRevStale) {
+    clearPlaceResolveCache();
+    setStampsCoarseGeocodeAt(0);
   }
 
   syncing = true;
   setFullAlbumScanBusy(true);
+  retainIndexingBackground();
   emit();
-  const run = syncStampsFromLibrary()
+  const run = syncStampsFromLibrary({ resumeGeocodeOnly })
     .then((result) => {
       setStampsLibrarySyncAt(Date.now());
-      // Only lock rev after we actually scanned the library.
       if (result.photoCount > 0) {
         setStampsPlaceParseRev(STAMPS_PLACE_PARSE_REV);
       }
@@ -125,13 +146,13 @@ export function startStampLibrarySync(
       inflight = null;
       syncing = false;
       setFullAlbumScanBusy(false);
+      releaseIndexingBackground();
       emit();
-      // Keep "done" visible briefly, then clear the home banner.
       setTimeout(() => {
         if (!isStampLibrarySyncing()) {
           resetStampLibraryProgress();
         }
-      }, 1600);
+      }, 400);
     });
   inflight = run;
   return run;

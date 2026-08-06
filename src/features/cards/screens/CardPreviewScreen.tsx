@@ -214,6 +214,7 @@ export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
     comment: data.comment,
     photoRefs: data.photoRefs,
     template: data.template,
+    paperSkin: data.paperSkin,
     mapSnapshot: data.mapSnapshot,
   };
 

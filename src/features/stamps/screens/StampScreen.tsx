@@ -29,17 +29,16 @@ import { StampMapModal } from '../components/StampMapModal';
 import { StampScanIntroModal } from '../components/StampScanIntroModal';
 import { useStampLibrarySync } from '../hooks/useStampLibrarySync';
 import { useStamps } from '../hooks/useStamps';
+import { stampId } from '../services/dongIndex';
 import {
   SIDO_ORDER,
-  cityListForSido,
-  dongListForCity,
-  stampId,
-} from '../services/dongIndex';
-import {
-  countCollectedInCity,
-  countCollectedInSido,
-  firstsInMonth,
-} from '../services/stampsStorage';
+  countCollectedInLeaves,
+  findL1ForStamp,
+  l1UnitsForSido,
+  l2LeavesForUnit,
+  type StampL1Unit,
+} from '../services/stampNavIndex';
+import { firstsInMonth } from '../services/stampsStorage';
 
 function tiltForName(name: string): number {
   let h = 0;
@@ -69,7 +68,7 @@ function MapIcon({ color }: { color: string }) {
 }
 
 /**
- * 발도장 — 시·도 → 시 → 동 (방문/미방문).
+ * 발도장 — 시·도 → L1(구·시·군) → L2(동 / 읍·면).
  */
 export function StampScreen() {
   const { month } = useCurrentMonth();
@@ -81,7 +80,7 @@ export function StampScreen() {
 
   const { collected, unseen, collectedCount, markAllSeen } = useStamps();
   const [sido, setSido] = useState(SIDO_ORDER[0] ?? '서울');
-  const [city, setCity] = useState<string | null>(null);
+  const [l1Key, setL1Key] = useState<string | null>(null);
   const [celebrate, setCelebrate] = useState<string[] | null>(null);
   const [animateIds, setAnimateIds] = useState<Set<string>>(() => new Set());
   const [replayNonce, setReplayNonce] = useState<Record<string, number>>({});
@@ -98,8 +97,14 @@ export function StampScreen() {
   }, []);
 
   useEffect(() => {
-    setCity(null);
+    setL1Key(null);
   }, [sido]);
+
+  const l1Units = useMemo(() => l1UnitsForSido(sido), [sido]);
+  const selectedL1: StampL1Unit | null = useMemo(
+    () => l1Units.find((u) => u.key === l1Key) ?? null,
+    [l1Key, l1Units],
+  );
 
   useEffect(() => {
     if (celebrating.current || unseen.length === 0) {
@@ -139,8 +144,11 @@ export function StampScreen() {
       if (first?.sido) {
         setSido(first.sido);
       }
-      if (first?.city) {
-        setCity(first.city);
+      if (first?.sido && first.city && first.name) {
+        const unit = findL1ForStamp(first.sido, first.city, first.name);
+        if (unit) {
+          setL1Key(unit.key);
+        }
       }
     } else {
       celebrating.current = false;
@@ -156,39 +164,53 @@ export function StampScreen() {
     setReplayNonce((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
   }, []);
 
-  const cities = useMemo(() => cityListForSido(sido), [sido]);
-  const collectedInSido = countCollectedInSido(collected, sido);
   const monthFirsts = firstsInMonth(collected, month);
 
-  const cityRows: CityRow[] = useMemo(
+  const leavesByL1 = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const unit of l1Units) {
+      map.set(unit.key, l2LeavesForUnit(sido, unit));
+    }
+    return map;
+  }, [l1Units, sido]);
+
+  const l1Rows: CityRow[] = useMemo(
     () =>
-      cities.map((c) => {
-        const total = dongListForCity(sido, c).length;
+      l1Units.map((unit) => {
+        const leaves = leavesByL1.get(unit.key) ?? [];
         return {
-          city: c,
-          collected: countCollectedInCity(collected, sido, c),
-          total,
+          key: unit.key,
+          label: unit.label,
+          collected: countCollectedInLeaves(
+            collected,
+            sido,
+            unit.stampCity,
+            leaves,
+          ),
+          total: leaves.length,
         };
       }),
-    [cities, collected, sido],
+    [collected, l1Units, leavesByL1, sido],
   );
 
-  const progressTotal = useMemo(
-    () => cities.reduce((n, c) => n + dongListForCity(sido, c).length, 0),
-    [cities, sido],
+  const sidoCollected = useMemo(
+    () => l1Rows.reduce((n, r) => n + r.collected, 0),
+    [l1Rows],
+  );
+  const sidoTotal = useMemo(
+    () => l1Rows.reduce((n, r) => n + r.total, 0),
+    [l1Rows],
   );
   const progressPct =
-    progressTotal === 0
-      ? 0
-      : Math.min(100, (collectedInSido / progressTotal) * 100);
+    sidoTotal === 0 ? 0 : Math.min(100, (sidoCollected / sidoTotal) * 100);
 
-  const dongSection: CityStampSection | null = useMemo(() => {
-    if (!city) {
+  const leafSection: CityStampSection | null = useMemo(() => {
+    if (!selectedL1) {
       return null;
     }
-    const dongs = dongListForCity(sido, city);
-    const units = dongs.map((name) => {
-      const id = stampId(sido, city, name);
+    const leaves = leavesByL1.get(selectedL1.key) ?? [];
+    const units = leaves.map((name) => {
+      const id = stampId(sido, selectedL1.stampCity, name);
       return {
         id,
         name,
@@ -197,7 +219,6 @@ export function StampScreen() {
         tiltDeg: tiltForName(name),
       };
     });
-    // Visited first so progress is obvious at a glance.
     units.sort((a, b) => {
       if (a.collected !== b.collected) {
         return a.collected ? -1 : 1;
@@ -205,14 +226,19 @@ export function StampScreen() {
       return a.name.localeCompare(b.name, 'ko');
     });
     return {
-      city,
+      city: selectedL1.label,
       grouped: true,
       showHeader: false,
-      collected: countCollectedInCity(collected, sido, city),
-      total: dongs.length,
+      collected: countCollectedInLeaves(
+        collected,
+        sido,
+        selectedL1.stampCity,
+        leaves,
+      ),
+      total: leaves.length,
       units,
     };
-  }, [animateIds, city, collected, sido]);
+  }, [animateIds, collected, leavesByL1, selectedL1, sido]);
 
   if (!isReady) {
     return (
@@ -238,7 +264,7 @@ export function StampScreen() {
 
       <ScreenHeader
         title={strings.stamps.title}
-        onBack={city ? () => setCity(null) : undefined}
+        onBack={l1Key ? () => setL1Key(null) : undefined}
         trailing={
           <View style={styles.trailing}>
             {monthFirsts > 0 ? (
@@ -270,22 +296,22 @@ export function StampScreen() {
         onClose={() => setMapOpen(false)}
         onSelectSido={(next) => {
           setSido(next);
-          setCity(null);
+          setL1Key(null);
         }}
       />
 
-      {!city ? (
+      {!l1Key ? (
         <RegionChips sidos={SIDO_ORDER} selected={sido} onSelect={setSido} />
       ) : null}
 
       <View style={styles.progressBlock}>
         <Text style={styles.progressLabel}>
-          {city
-            ? strings.stamps.cityProgressLabel(city)
+          {selectedL1
+            ? strings.stamps.cityProgressLabel(selectedL1.label)
             : strings.stamps.progressLabel(sido)}
-          {city && dongSection
-            ? strings.stamps.progress(dongSection.collected, dongSection.total)
-            : strings.stamps.progress(collectedInSido, progressTotal)}
+          {selectedL1 && leafSection
+            ? strings.stamps.progress(leafSection.collected, leafSection.total)
+            : strings.stamps.progress(sidoCollected, sidoTotal)}
         </Text>
         <View style={styles.track}>
           <View
@@ -293,12 +319,12 @@ export function StampScreen() {
               styles.fill,
               {
                 width: `${
-                  city && dongSection
-                    ? dongSection.total === 0
+                  selectedL1 && leafSection
+                    ? leafSection.total === 0
                       ? 0
                       : Math.min(
                           100,
-                          (dongSection.collected / dongSection.total) * 100,
+                          (leafSection.collected / leafSection.total) * 100,
                         )
                     : progressPct
                 }%`,
@@ -311,7 +337,7 @@ export function StampScreen() {
         ) : null}
       </View>
 
-      {empty && !city ? (
+      {empty && !l1Key ? (
         <View style={styles.emptyWrap}>
           <MascotPin size={48} />
           <StateView
@@ -323,15 +349,28 @@ export function StampScreen() {
             }
           />
         </View>
-      ) : city && dongSection ? (
-        <CityStampSections
-          sections={[dongSection]}
-          replayNonce={replayNonce}
-          onReplay={onReplayStamp}
-        />
+      ) : selectedL1 && leafSection ? (
+        leafSection.total === 0 ? (
+          <View style={styles.emptyWrap}>
+            <StateView
+              title={selectedL1.label}
+              description={
+                selectedL1.kind === 'gun'
+                  ? strings.stamps.gunLeafListEmpty
+                  : strings.stamps.leafListEmpty
+              }
+            />
+          </View>
+        ) : (
+          <CityStampSections
+            sections={[leafSection]}
+            replayNonce={replayNonce}
+            onReplay={onReplayStamp}
+          />
+        )
       ) : (
         <ScrollView>
-          <CityList cities={cityRows} onSelect={setCity} />
+          <CityList cities={l1Rows} onSelect={setL1Key} />
         </ScrollView>
       )}
     </SafeAreaView>

@@ -6,9 +6,11 @@
 |---|---|---|
 | StampEntry | name(동), city, sido(short), firstMonth | kv `stampsCollected` |
 | StampId | `${sido}/${city}/${dong}` | 맵 키 (동명 충돌 방지) |
-| DongsIndex | sido → city → dong[] | `assets/geo/dongs-by-sido-city.json` |
+| DongsIndex | sido → city → leaf[] (동 + 군 읍·면) | `assets/geo/dongs-by-sido-city.json` |
 | StampsUnseen | stampId[] | kv `stampsUnseen` — 탭 배지 |
 | CitiesIndex | sido → city → units[] | `assets/geo/cities-by-sido.json` |
+| AdminDongGu | stampCity → 행정동 → 구 | `assets/geo/admin-dong-gu.json` |
+| GunEupMyeon | sido → 군 → 읍·면[] | `assets/geo/gun-eupmyeon-by-sido.json` |
 
 VisitPlace는 photos feature 소유. 발도장은 `gu ?? city` / `province`만 소비.
 Grain = **시군구** (서울·광역 구, 도 시·군, 일반구 시 → 구만; 부모 시 이름 수집 금지).
@@ -18,14 +20,15 @@ Grain = **시군구** (서울·광역 구, 도 시·군, 일반구 시 → 구�
 | 데이터 | 분류 | 이유 |
 |---|---|---|
 | collected / unseen | sqlite kv + useSyncExternalStore | useCurrentMonth 패턴 |
-| 시·도·시 선택, 축하 오버레이 | 화면 로컬 | |
+| 시·도·L1 선택, 축하 오버레이 | 화면 로컬 | |
 | **전체 라이브러리 sync만** | 지도/발도장 진입 (single-flight) | 월 선택으로 도장 추가 금지 |
 
 ## 내비
 
-시·도 칩 → **한 페이지**에서 시별 구역.
-- 일반구 시(창원 등): 섹션 헤더 + 구 도장들
-- 구 없는 시·군(진주·거창 등): 헤더 없이 도장만 이어서 표시
+시·도 칩 → **L1(구·시·군)** → **L2(동 / 읍·면)**. 시→구→동 3뎁스 금지.
+- 광역(서울·부산…): L1=구(+군), L2=동(군은 읍·면)
+- 도(경기·경남…): L1=구·시·군 flat(일반구 시는 구만, 부모 시 단독 없음), L2=동 또는 읍·면
+- 인덱스: `admin-dong-gu.json`(행정동→구), `gun-eupmyeon-by-sido.json`
 
 ## 결정 기록
 
@@ -56,7 +59,12 @@ Grain = **시군구** (서울·광역 구, 도 시·군, 일반구 시 → 구�
 | 발도장 **방문 지도** = 헤더 아이콘 → 팝업. **테두리 없는 한반도 실루엣** + soft 남색 채우기 + 핀치 줌. 탭→시·도 | 사각 프레임 / 인라인 | 사용자: 한반도만·이쁘게·줌 | 2026-08-05 |
 | 홈 지도 상단 **인덱싱 배너** (GPS 장수 → 지역 매칭 진행률). sync progress 구독 | 발도장 문구만 | 발자취형 첫 사용 체감 | 2026-08-05 |
 | 전체 앨범 GPS = **로컬 메타 우선**. iCloud network deep recheck는 주 1회만 (첫 설치 제외). 배치 64 | 첫 설치에도 deep+network | 초당 ~20장 병목 | 2026-08-05 |
-| **동 단위** 발도장·방문지도 전환 예정 (시·도→시→동). 읍·면 제외. spec: `2026-08-05-dong-stamp-indexing-design.md` | 시군구 유지 | 사용자 확정 B | 2026-08-05 |
+| GPS 끝나면 `stampsGpsScanAt` + located 스냅샷 저장. geocode 중 종료 후 재실행은 **앨범 재스캔 없이** 동네만 이어감(캐시 % 시드). 설정 force만 GPS 재실행 | 매번 GPS부터 | “또 앨범 훑는 중” + 진행 리셋 | 2026-08-06 |
+| 발도장 「동네 정리」= **로컬 PIP** (`dongs.json` + 그리드). CLGeocoder·위치권한 불필요. 지도 칩은 placeResolve 유지 | Apple 2-pass geocode | 동네 정리 체감 = GPS 이후 수 초~수십 초 | 2026-08-06 |
+| 인덱싱 중 **잠금/앱전환 허용**: iOS `UIBackgroundTask`(asset-locations). OS 만료 후엔 resume | foreground only | 두고 있어도 GPS/PIP 이어감 | 2026-08-06 |
+| **동 단위** 발도장 (시·도→시→동). 읍·면 제외 수집 초안. spec: `2026-08-05-dong-stamp-indexing-design.md` | 시군구 유지 | 사용자 확정 B | 2026-08-05 |
+| 내비 = **2뎁스** 시·도→구·시·군→동·면. `admin-dong-gu`로 행정동→구 100% | 시→전체 동(서울 425) / 법정동 dong-gu만 | 너무 깊음 피드백 | 2026-08-06 |
+| 군 **읍·면** PIP 수집 (`dongs.json`에 군 leaf 포함). 도농복합 시 읍·면은 제외 | 동만 / 시 읍면까지 | 사용자 Q=군만 | 2026-08-06 |
 
 ## 경계
 

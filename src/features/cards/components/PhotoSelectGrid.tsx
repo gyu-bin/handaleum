@@ -200,7 +200,7 @@ export function PhotoSelectGrid({
       extraData={selectedAssetIds}
       scrollEnabled={scrollEnabled}
       onScroll={onScroll}
-      scrollEventThrottle={scrollEventThrottle}
+      scrollEventThrottle={scrollEventThrottle ?? 16}
       keyboardShouldPersistTaps={keyboardShouldPersistTaps}
       showsVerticalScrollIndicator={false}
       ListHeaderComponent={header}

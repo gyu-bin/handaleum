@@ -1,17 +1,20 @@
-import * as Location from 'expo-location';
-
-import {
-  isAppForeground,
-  waitForAppForeground,
-} from '@/features/photos/services/appForeground';
-import { loadAllLocatedPhotos } from '@/features/photos/services/mediaLibrary';
-import type { PhotoRef } from '@/features/photos/types';
+import { loadAllLocatedPhotos, setFullAlbumScanBusy } from '@/features/photos/services/mediaLibrary';
+import type { PhotoRef, VisitPlace } from '@/features/photos/types';
 import { currentMonthKey } from '@/features/photos/utils/month';
-import { resolveVisitPlaces } from '@/features/photos/services/placeResolve';
-import { getStampsLibrarySyncAt } from '@/lib/storage';
+import { collectBuckets } from '@/features/photos/utils/visitPlaceBuild';
+import {
+  getStampsLibrarySyncAt,
+  setStampsCoarseGeocodeAt,
+  setStampsGpsScanAt,
+} from '@/lib/storage';
 
 import { notifyStampsChanged } from '../hooks/useStamps';
+import { lookupDong } from './dongLookup';
 import { isKoreaLatLng } from './koreaBounds';
+import {
+  readLocatedPhotosSnapshot,
+  writeLocatedPhotosSnapshot,
+} from './locatedPhotosSnapshot';
 import {
   countCollected,
   markAllStampsSeen,
@@ -67,7 +70,6 @@ function setProgress(next: StampLibraryProgress, force = false): void {
   const scannedChanged = next.assetScanned !== progress.assetScanned;
   progress = next;
   const now = Date.now();
-  // Always surface count ticks; only throttle identical GPS snapshots.
   if (
     !force &&
     next.phase === 'gps' &&
@@ -107,127 +109,131 @@ export function getStampScanDebug(): StampScanDebug {
 const LIBRARY_GPS_BATCH = 32;
 /** Yield between batches so the banner paints and the OS can reclaim. */
 const LIBRARY_GPS_YIELD_MS = 24;
-/** Geocode / stamp write chunks so the grid fills while the rest runs. */
-const GEOCODE_PHOTO_CHUNK = 500;
-/** Short yield — keep UI alive without stalling the scan. */
-const GEOCODE_CHUNK_YIELD_MS = 16;
+/** Local PIP buckets per UI tick — no network, so larger than geocode chunks. */
+const DONG_MATCH_CHUNK = 128;
+const DONG_MATCH_YIELD_MS = 8;
 /** How often to re-check assets previously cached as no-GPS (iCloud etc.). */
 const DEEP_RECHECK_MS = 7 * 24 * 60 * 60 * 1000;
 
-async function ensureGeocodePermission(): Promise<boolean> {
-  try {
-    const current = await Location.getForegroundPermissionsAsync();
-    if (current.status === 'granted') {
-      return true;
-    }
-    const requested = await Location.requestForegroundPermissionsAsync();
-    return requested.status === 'granted';
-  } catch (error) {
-    console.warn('[stamps] location permission for geocode failed', error);
-    return false;
-  }
-}
-
-async function ingestPlaces(
-  photos: PhotoRef[],
-  fallbackMonth: ReturnType<typeof currentMonthKey>,
-  silent: boolean,
-): Promise<number> {
-  // Domestic only — skip overseas GPS before reverse-geocode.
-  const domestic = photos.filter((p) => isKoreaLatLng(p.lat, p.lng));
-  if (domestic.length === 0) {
-    return 0;
-  }
-  // Background lane — the month view's chips always geocode first.
-  const places = await resolveVisitPlaces(domestic, { priority: 'background' });
-  if (places.length === 0) {
-    return 0;
-  }
-  const result = syncStampsFromVisits(places, {
-    month: fallbackMonth,
-    silent,
-  });
-  // Defer UI notify — chunked geocode used to rebuild the stamp snapshot on
-  // every batch and re-render anything subscribed (map screen before badge move).
-  return result.added.length;
-}
+export type SyncStampsFromLibraryOptions = {
+  /**
+   * Skip MediaLibrary GPS when a recent snapshot exists (killed mid-match
+   * or parse-rev redo). Falls back to a silent album walk if missing.
+   */
+  resumeGeocodeOnly?: boolean;
+};
 
 /**
- * Lifetime accumulate from **all** GPS photos in the real album (every year),
- * not the month currently open on the map.
+ * Lifetime accumulate from **all** GPS photos in the real album (every year).
  *
- * Phase 1: scan MediaLibrary GPS as fast as possible (no reverse-geocode waits).
- * Phase 2: geocode unique places in chunks and write stamps.
- *
- * Always silent — earn popups come from map month sync only.
+ * Phase 1: MediaLibrary GPS.
+ * Phase 2: offline dong PIP (`dongs.json`) — no CLGeocoder / location permission.
  */
-export async function syncStampsFromLibrary(): Promise<StampLibrarySyncResult> {
+export async function syncStampsFromLibrary(
+  options?: SyncStampsFromLibraryOptions,
+): Promise<StampLibrarySyncResult> {
   const wasEmpty = countCollected(readStampsCollected()) === 0;
   const fallbackMonth = currentMonthKey();
-  // First fill: silent (no earn spam). Later runs: unseen for truly new places.
   const silent = wasEmpty;
+  const resumeGeocodeOnly = options?.resumeGeocodeOnly === true;
 
   const lastSync = getStampsLibrarySyncAt();
-  // Weekly iCloud recheck only — never on first fill. First open must stay
-  // local-metadata-fast. wasEmpty||lastSync===0 used to force
-  // network downloads and capped scan at ~tens of assets/sec.
   const deepRecheck =
-    lastSync > 0 && Date.now() - lastSync >= DEEP_RECHECK_MS;
+    !resumeGeocodeOnly &&
+    lastSync > 0 &&
+    Date.now() - lastSync >= DEEP_RECHECK_MS;
 
-  setProgress(
-    {
-      phase: 'gps',
-      assetTotal: 0,
-      assetScanned: 0,
-      photoCount: 0,
-      chunkDone: 0,
-      chunkTotal: 0,
-      startedAt: Date.now(),
-    },
-    true,
-  );
+  const startedAt = Date.now();
+  let photos: PhotoRef[] = [];
 
-  // Phase 1 — MediaLibrary GPS only (no Location permission needed).
-  // Stream pages so we don't wait to list 전체 앨범 before reading EXIF.
-  const photos = await loadAllLocatedPhotos({
-    forceRealLibrary: true,
-    locationBatchSize: LIBRARY_GPS_BATCH,
-    batchYieldMs: LIBRARY_GPS_YIELD_MS,
-    // Pause GPS batches while map pins decode — concurrent ImageManipulator
-    // + MediaLibrary is the usual iOS jetsam on home.
-    yieldToPinExports: true,
-    pinExportYieldMaxMs: Number.POSITIVE_INFINITY,
-    retryFailedLocations: false,
-    networkLocationFallback: deepRecheck,
-    recheckCachedNoLocation: deepRecheck,
-    shouldContinue: isAppForeground,
-    onScanProgress: (scan) => {
-      setProgress({
-        ...progress,
-        phase: 'gps',
-        assetTotal: scan.assetTotal,
-        assetScanned: scan.assetScanned,
-        photoCount: scan.locatedCount,
+  if (resumeGeocodeOnly) {
+    const snap = await readLocatedPhotosSnapshot();
+    if (snap && snap.length > 0) {
+      photos = snap;
+      console.warn(
+        '[stamps] resume dong match from GPS snapshot',
+        photos.length,
+        'photos',
+      );
+    } else {
+      console.warn('[stamps] resume requested but no snapshot — silent GPS');
+      setProgress(
+        {
+          phase: 'geocode',
+          assetTotal: 0,
+          assetScanned: 0,
+          photoCount: 0,
+          chunkDone: 0,
+          chunkTotal: 0,
+          startedAt,
+        },
+        true,
+      );
+      photos = await loadAllLocatedPhotos({
+        forceRealLibrary: true,
+        locationBatchSize: LIBRARY_GPS_BATCH,
+        batchYieldMs: LIBRARY_GPS_YIELD_MS,
+        yieldToPinExports: true,
+        pinExportYieldMaxMs: Number.POSITIVE_INFINITY,
+        retryFailedLocations: false,
+        networkLocationFallback: false,
+        recheckCachedNoLocation: false,
       });
-    },
-  });
+      setStampsGpsScanAt(Date.now());
+      await writeLocatedPhotosSnapshot(photos);
+    }
+  } else {
+    setProgress(
+      {
+        phase: 'gps',
+        assetTotal: 0,
+        assetScanned: 0,
+        photoCount: 0,
+        chunkDone: 0,
+        chunkTotal: 0,
+        startedAt,
+      },
+      true,
+    );
 
-  console.warn(
-    '[stamps] library GPS scan done',
-    photos.length,
-    'photos — geocoding places',
-    deepRecheck ? '(deep)' : '(incremental)',
-  );
+    photos = await loadAllLocatedPhotos({
+      forceRealLibrary: true,
+      locationBatchSize: LIBRARY_GPS_BATCH,
+      batchYieldMs: LIBRARY_GPS_YIELD_MS,
+      yieldToPinExports: true,
+      pinExportYieldMaxMs: Number.POSITIVE_INFINITY,
+      retryFailedLocations: false,
+      networkLocationFallback: deepRecheck,
+      recheckCachedNoLocation: deepRecheck,
+      onScanProgress: (scan) => {
+        setProgress({
+          ...progress,
+          phase: 'gps',
+          assetTotal: scan.assetTotal,
+          assetScanned: scan.assetScanned,
+          photoCount: scan.locatedCount,
+        });
+      },
+    });
 
-  // Location permission only for reverse-geocode (동 이름).
-  if (!(await ensureGeocodePermission())) {
-    console.warn('[stamps] geocode skipped — location permission denied');
-    setProgress({ ...progress, phase: 'done', photoCount: photos.length }, true);
-    return { added: 0, photoCount: photos.length };
+    setStampsGpsScanAt(Date.now());
+    await writeLocatedPhotosSnapshot(photos);
+
+    console.warn(
+      '[stamps] library GPS scan done',
+      photos.length,
+      'photos — matching dongs locally',
+      deepRecheck ? '(deep)' : '(incremental)',
+    );
   }
 
-  // Phase 2 — places → stamps for the entire set (month picker never stamps).
-  const chunkTotal = Math.max(1, Math.ceil(photos.length / GEOCODE_PHOTO_CHUNK));
+  // Dong PIP does not touch MediaLibrary — free month warmup / pin exports.
+  setFullAlbumScanBusy(false);
+
+  const domestic = photos.filter((p) => isKoreaLatLng(p.lat, p.lng));
+  const buckets = collectBuckets(domestic);
+  const placeTotal = buckets.length;
+
   setProgress(
     {
       ...progress,
@@ -235,33 +241,74 @@ export async function syncStampsFromLibrary(): Promise<StampLibrarySyncResult> {
       photoCount: photos.length,
       assetScanned: progress.assetTotal || progress.assetScanned,
       chunkDone: 0,
-      chunkTotal: photos.length === 0 ? 0 : chunkTotal,
+      chunkTotal: placeTotal,
+      startedAt,
     },
     true,
   );
+
   let totalAdded = 0;
   let lastNotifyAt = 0;
-  for (let i = 0; i < photos.length; i += GEOCODE_PHOTO_CHUNK) {
-    await waitForAppForeground();
-    const chunk = photos.slice(i, i + GEOCODE_PHOTO_CHUNK);
-    const added = await ingestPlaces(chunk, fallbackMonth, silent);
-    totalAdded += added;
-    setProgress(
-      {
-        ...progress,
-        chunkDone: progress.chunkDone + 1,
-      },
-      true,
-    );
-    const now = Date.now();
-    if (added > 0 && now - lastNotifyAt > 2000) {
-      notifyStampsChanged();
-      lastNotifyAt = now;
+  let batch: VisitPlace[] = [];
+
+  console.warn(
+    '[stamps] local dong PIP',
+    placeTotal,
+    'buckets (from',
+    domestic.length,
+    'domestic photos)',
+  );
+
+  for (let i = 0; i < buckets.length; i += 1) {
+    const bucket = buckets[i]!;
+    const hit = lookupDong(bucket.lat, bucket.lng);
+    if (hit) {
+      batch.push({
+        key: bucket.key,
+        label: `${hit.city} ${hit.name}`,
+        level: 'dong',
+        province: hit.sido,
+        city: hit.city,
+        dong: hit.name,
+        firstTakenAt: bucket.firstTakenAt,
+      });
     }
-    if (i + GEOCODE_PHOTO_CHUNK < photos.length) {
-      await new Promise((r) => setTimeout(r, GEOCODE_CHUNK_YIELD_MS));
+
+    const done = i + 1;
+    const flush =
+      batch.length >= DONG_MATCH_CHUNK || done === placeTotal || done % DONG_MATCH_CHUNK === 0;
+
+    if (flush) {
+      if (batch.length > 0) {
+        const result = syncStampsFromVisits(batch, {
+          month: fallbackMonth,
+          silent,
+        });
+        totalAdded += result.added.length;
+        batch = [];
+        const now = Date.now();
+        if (result.added.length > 0 && now - lastNotifyAt > 2000) {
+          notifyStampsChanged();
+          lastNotifyAt = now;
+        }
+      }
+      setProgress(
+        {
+          ...progress,
+          phase: 'geocode',
+          chunkDone: done,
+          chunkTotal: placeTotal,
+        },
+        true,
+      );
+      if (done < placeTotal) {
+        await new Promise((r) => setTimeout(r, DONG_MATCH_YIELD_MS));
+      }
     }
   }
+
+  // Mark coarse checkpoint so older resume helpers stay coherent.
+  setStampsCoarseGeocodeAt(Date.now());
 
   if (wasEmpty) {
     markAllStampsSeen();
@@ -278,7 +325,17 @@ export async function syncStampsFromLibrary(): Promise<StampLibrarySyncResult> {
     totalAdded,
   );
 
-  setProgress({ ...progress, phase: 'done' }, true);
+  setProgress(
+    {
+      ...progress,
+      phase: 'done',
+      photoCount: photos.length,
+      chunkDone: placeTotal,
+      chunkTotal: placeTotal,
+    },
+    true,
+  );
+
   return { added: totalAdded, photoCount: photos.length };
 }
 

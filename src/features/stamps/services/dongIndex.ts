@@ -1,8 +1,8 @@
 import dongsBySidoCity from '@/assets/geo/dongs-by-sido-city.json';
 
 /**
- * Dong-grain stamp index (행정동 names ending with 동; 읍·면·군 excluded).
- * Shape: sido → city → dong[].
+ * Leaf-grain stamp index: 행정동 + 군 읍·면 (도농복합 시 읍·면 제외).
+ * Shape: sido → city → leaf[].
  */
 
 type DongsIndex = Record<string, Record<string, string[]>>;
@@ -88,7 +88,7 @@ export function normalizeSido(province: string | null | undefined): string | nul
   return null;
 }
 
-/** stamp id — sido/city/dong (동명 충돌 방지). */
+/** stamp id — sido/city/leaf (동·읍·면 충돌 방지). */
 export function stampId(sido: string, city: string, dong: string): string {
   return `${sido}/${city}/${dong}`;
 }

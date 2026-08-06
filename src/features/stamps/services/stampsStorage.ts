@@ -19,6 +19,7 @@ import {
   resolveCityForVisit,
   stampId,
 } from './dongIndex';
+import { isKnownGunLeaf } from './stampNavIndex';
 
 export function readStampsCollected(): StampsCollected {
   const raw = getStampsRaw();
@@ -77,23 +78,30 @@ function writeUnseen(ids: string[]): void {
 }
 
 /**
- * Dong grain from a visit place. 읍·면·리 / 구 alone → null.
+ * Leaf grain from a visit place: 동, or 읍·면 under 군.
+ * 리 / 구 alone → null.
  */
 export function dongFromVisit(place: VisitPlace): string | null {
-  const raw = place.dong?.trim() || null;
-  if (!raw || !raw.endsWith('동')) {
+  const raw = place.dong?.trim() || place.eupMyon?.trim() || null;
+  if (!raw) {
     return null;
   }
-  return raw;
+  if (raw.endsWith('동') || raw.endsWith('면') || raw.endsWith('읍')) {
+    return raw;
+  }
+  return null;
 }
 
-/** Match geocoded dong string to an index slot (admin 숫자동 허용). */
+/** Match geocoded leaf string to an index slot (admin 숫자동 · 군 읍면 허용). */
 export function matchIndexedDong(
   sido: string,
   city: string,
   rawDong: string,
 ): string | null {
   if (isKnownDong(sido, city, rawDong)) {
+    return rawDong;
+  }
+  if (city.endsWith('군') && isKnownGunLeaf(sido, city, rawDong)) {
     return rawDong;
   }
   const legal = legalDongFromAdmin(rawDong);

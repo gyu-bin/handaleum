@@ -2,7 +2,7 @@
 
 ## 엔티티
 
-- 회고카드 RecapCard: id, month, title, comment, photoRefs[], template(feed/story), mapSnapshot(viewport min/max lat/lng), createdAt
+- 회고카드 RecapCard: id, month, title, comment, photoRefs[], template(feed/story), paperSkin(ivory/fog/sage/blush/ink), mapSnapshot(viewport min/max lat/lng), createdAt
 - RecapCardDraft: RecapCard에서 id/createdAt 제외. 편집 중 상태의 타입
 - 사진 원본은 저장하지 않는다. photoRefs는 카메라롤 참조만 담는다
 

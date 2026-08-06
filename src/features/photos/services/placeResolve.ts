@@ -182,6 +182,11 @@ export function getVisitResolveDebug(): VisitResolveDebug | null {
 export type ResolveVisitPlacesOptions = {
   /** Paint chips as buckets land instead of one flush after the last geocode. */
   onProgress?: (places: VisitPlace[]) => void;
+  /**
+   * Fired once per place-bucket settled (cache hit or geocode attempt).
+   * Full-album indexing uses this for a live 동네 정리 percent.
+   */
+  onBucketSettled?: (info: { key: string; fromCache: boolean }) => void;
   /** Flip `cancelled` to stop geocoding when the month or filter changes. */
   signal?: { cancelled: boolean };
   /** `background` for the full-album stamp scan — yields to screen requests. */
@@ -213,6 +218,7 @@ export async function resolveVisitPlaces(
     const cached = peekResolvedPlace(bucket.lat, bucket.lng);
     if (cached) {
       resolved.set(bucket.key, cached);
+      options?.onBucketSettled?.({ key: bucket.key, fromCache: true });
     } else {
       pending.push(bucket);
     }
@@ -251,9 +257,12 @@ export async function resolveVisitPlaces(
         if (debug) {
           debug.failedBuckets += 1;
         }
+        // Still count as settled so the indexing bar keeps moving.
+        options?.onBucketSettled?.({ key: bucket.key, fromCache: false });
         continue;
       }
       resolved.set(bucket.key, place);
+      options?.onBucketSettled?.({ key: bucket.key, fromCache: false });
       if (debug) {
         debug.resolvedBuckets += 1;
       }
