@@ -53,8 +53,8 @@ const SKIN_GAP = 12;
 const SKIN_SIDE = SKIN_COL_W + SKIN_GAP;
 /** Story card aspect (matches export). */
 const CARD_ASPECT = 1920 / 1080;
-/** Always leave this much for the photo sheet under the card. */
-const SHEET_PEEK_MIN = 200;
+/** Always leave this much for the photo sheet under the card when expanded. */
+const SHEET_PEEK_MIN = 300;
 /** Approx. screen header under the safe-area top. */
 const CREATE_HEADER_H = 52;
 /** Scroll distance to fully tuck — shorter = card shrinks sooner while picking. */
@@ -64,8 +64,8 @@ const PREVIEW_COLLAPSE_Y = 220;
  * scrolled; pull to top to see the full card again.
  */
 const PREVIEW_COLLAPSED_SCALE = 0.32;
-/** Mild sheet climb — do not bury the card. */
-const GRID_COVER_Y = 12;
+/** How far the photo sheet climbs over the shrinking card. */
+const GRID_COVER_Y = 56;
 /** One-line caption length on the create card. */
 const COMMENT_MAX = 40;
 
@@ -85,13 +85,13 @@ function previewCardWidth(windowW: number, bodyH: number): number {
   // Room for sticky pad + skin column + balance — dots must stay on-screen.
   const maxByWidth = windowW - theme.spacing.lg * 2 - SKIN_SIDE * 2 - 8;
   const maxPreviewH = bodyH - SHEET_PEEK_MIN;
-  const maxByHeight = (maxPreviewH - 80) / CARD_ASPECT;
-  return Math.max(200, Math.min(maxByWidth, maxByHeight));
+  const maxByHeight = (maxPreviewH - 56) / CARD_ASPECT;
+  return Math.max(180, Math.min(maxByWidth, maxByHeight));
 }
 
 function previewExpandedMaxHeight(cardW: number): number {
-  // Paper + stage pads + hint + sticky vertical padding — must fit full card.
-  return Math.ceil(cardW * CARD_ASPECT) + 88;
+  // Paper + stage pads + hint — keep chrome tight so the sheet peeks higher.
+  return Math.ceil(cardW * CARD_ASPECT) + 64;
 }
 
 function paperSkinLabel(id: PaperSkinId): string {
