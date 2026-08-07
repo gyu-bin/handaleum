@@ -15,11 +15,13 @@ import Svg, { Circle, G, Path, Polyline } from 'react-native-svg';
 
 import { theme } from '@/shared/constants/theme';
 
-/** Uiverse.io bike loader by fanishah — fewer animated SVG nodes for device FPS. */
+/**
+ * Uiverse.io bike loader by fanishah — one progress drives draw + spin.
+ * Do not split spin/draw clocks: out-of-phase repeats look like a mid-cycle cut.
+ */
 const never = { reduceMotion: ReduceMotion.Never as const };
-const SPIN_MS = 1100;
-const DRAW_MS = 2800;
-const DRAW_EASE = Easing.bezier(0.45, 0.05, 0.55, 0.95);
+const CYCLE_MS = 3000;
+const EASE = Easing.bezier(0.42, 0, 0.58, 1);
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const AnimatedG = Animated.createAnimatedComponent(G);
@@ -27,60 +29,92 @@ const AnimatedPolyline = Animated.createAnimatedComponent(Polyline);
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 function useDashOffset(
-  draw: SharedValue<number>,
+  progress: SharedValue<number>,
   from: number,
   mid: number,
   to: number,
 ) {
   return useAnimatedProps(() => ({
     strokeDashoffset: interpolate(
-      draw.value,
-      [0, 0.32, 0.68, 1],
+      progress.value,
+      [0, 0.33, 0.67, 1],
       [from, mid, mid, to],
     ),
   }));
 }
 
-/** One spin transform for tire + spokes (was 2–3 animated rotators per wheel). */
-function Wheel({
-  spin,
-  draw,
+function Tire({
+  progress,
   color,
 }: {
-  spin: SharedValue<number>;
-  draw: SharedValue<number>;
+  progress: SharedValue<number>;
+  color: string;
+}) {
+  const props = useAnimatedProps(() => {
+    const p = progress.value;
+    return {
+      strokeDashoffset: interpolate(
+        p,
+        [0, 0.33, 0.67, 1],
+        [56.549, 0, 0, -56.549],
+      ),
+      rotation: interpolate(p, [0, 0.33, 0.67, 1], [0, 118.8, 241.2, 360]),
+    };
+  });
+
+  return (
+    <AnimatedCircle
+      animatedProps={props}
+      r={9}
+      stroke={color}
+      strokeWidth={1}
+      strokeDasharray="56.549 56.549"
+      fill="none"
+      originX={0}
+      originY={0}
+    />
+  );
+}
+
+function spokeDash(progress: SharedValue<number>) {
+  'worklet';
+  return interpolate(
+    progress.value,
+    [0, 0.33, 0.67, 1],
+    [-31.416, -23.562, -23.562, -31.416],
+  );
+}
+
+function pedalDash(progress: SharedValue<number>) {
+  'worklet';
+  return interpolate(
+    progress.value,
+    [0, 0.33, 0.67, 1],
+    [-25.133, -21.991, -21.991, -25.133],
+  );
+}
+
+function SpokesSpin({
+  progress,
+  color,
+}: {
+  progress: SharedValue<number>;
   color: string;
 }) {
   const spinProps = useAnimatedProps(() => ({
-    rotation: spin.value * 360,
+    rotation: interpolate(progress.value, [0, 1], [0, 1080]),
   }));
-  const tireDash = useAnimatedProps(() => ({
-    strokeDashoffset: interpolate(
-      draw.value,
-      [0, 0.32, 0.68, 1],
-      [56.549, 0, 0, -56.549],
-    ),
+  const spokeA = useAnimatedProps(() => ({
+    strokeDashoffset: spokeDash(progress),
   }));
-  const spokeDash = useAnimatedProps(() => ({
-    strokeDashoffset: interpolate(
-      draw.value,
-      [0, 0.32, 0.68, 1],
-      [-31.416, -23.562, -23.562, -31.416],
-    ),
+  const spokeB = useAnimatedProps(() => ({
+    strokeDashoffset: spokeDash(progress),
   }));
 
   return (
     <AnimatedG animatedProps={spinProps} originX={0} originY={0}>
       <AnimatedCircle
-        animatedProps={tireDash}
-        r={9}
-        stroke={color}
-        strokeWidth={1}
-        strokeDasharray="56.549 56.549"
-        fill="none"
-      />
-      <AnimatedCircle
-        animatedProps={spokeDash}
+        animatedProps={spokeA}
         r={5}
         stroke={color}
         strokeWidth={1}
@@ -88,7 +122,7 @@ function Wheel({
         fill="none"
       />
       <AnimatedCircle
-        animatedProps={spokeDash}
+        animatedProps={spokeB}
         r={5}
         stroke={color}
         strokeWidth={1}
@@ -102,30 +136,27 @@ function Wheel({
   );
 }
 
-function Pedals({
-  spin,
-  draw,
+function PedalsSpin({
+  progress,
   color,
 }: {
-  spin: SharedValue<number>;
-  draw: SharedValue<number>;
+  progress: SharedValue<number>;
   color: string;
 }) {
   const spinProps = useAnimatedProps(() => ({
-    rotation: 67.5 + spin.value * 360,
+    rotation: interpolate(progress.value, [0, 1], [67.5, 1147.5]),
   }));
-  const pedalDash = useAnimatedProps(() => ({
-    strokeDashoffset: interpolate(
-      draw.value,
-      [0, 0.32, 0.68, 1],
-      [-25.133, -21.991, -21.991, -25.133],
-    ),
+  const pedalA = useAnimatedProps(() => ({
+    strokeDashoffset: pedalDash(progress),
+  }));
+  const pedalB = useAnimatedProps(() => ({
+    strokeDashoffset: pedalDash(progress),
   }));
 
   return (
     <AnimatedG animatedProps={spinProps} originX={0} originY={0}>
       <AnimatedCircle
-        animatedProps={pedalDash}
+        animatedProps={pedalA}
         r={4}
         stroke={color}
         strokeWidth={1}
@@ -133,7 +164,7 @@ function Pedals({
         fill="none"
       />
       <AnimatedCircle
-        animatedProps={pedalDash}
+        animatedProps={pedalB}
         r={4}
         stroke={color}
         strokeWidth={1}
@@ -154,39 +185,30 @@ export interface BikeLoaderProps {
 
 /**
  * Brand loading mark — stroke-draw bike (Uiverse / fanishah), cream splash ink.
- * Look unchanged; spin is linear and wheels share one rotation node each.
  */
 export const BikeLoader = memo(function BikeLoader({
   width = 132,
 }: BikeLoaderProps) {
-  const spin = useSharedValue(0);
-  const draw = useSharedValue(0);
+  const progress = useSharedValue(0);
   const color = theme.colors.splashMark;
   const height = (width * 30) / 48;
 
-  const bodyProps = useDashOffset(draw, 79, 0, -79);
-  const frontProps = useDashOffset(draw, 19, 0, -19);
-  const barsProps = useDashOffset(draw, 10, 0, -10);
-  const seatProps = useDashOffset(draw, 5, 0, -5);
+  const bodyProps = useDashOffset(progress, 79, 0, -79);
+  const frontProps = useDashOffset(progress, 19, 0, -19);
+  const barsProps = useDashOffset(progress, 10, 0, -10);
+  const seatProps = useDashOffset(progress, 5, 0, -5);
 
   useEffect(() => {
-    spin.value = 0;
-    draw.value = 0;
-    spin.value = withRepeat(
-      withTiming(1, { duration: SPIN_MS, easing: Easing.linear, ...never }),
-      -1,
-      false,
-    );
-    draw.value = withRepeat(
-      withTiming(1, { duration: DRAW_MS, easing: DRAW_EASE, ...never }),
+    progress.value = 0;
+    progress.value = withRepeat(
+      withTiming(1, { duration: CYCLE_MS, easing: EASE, ...never }),
       -1,
       false,
     );
     return () => {
-      cancelAnimation(spin);
-      cancelAnimation(draw);
+      cancelAnimation(progress);
     };
-  }, [draw, spin]);
+  }, [progress]);
 
   return (
     <View
@@ -203,13 +225,15 @@ export const BikeLoader = memo(function BikeLoader({
           strokeWidth={1}
         >
           <G transform="translate(9.5,19)">
-            <Wheel spin={spin} draw={draw} color={color} />
+            <Tire progress={progress} color={color} />
+            <SpokesSpin progress={progress} color={color} />
           </G>
           <G transform="translate(24,19)">
-            <Pedals spin={spin} draw={draw} color={color} />
+            <PedalsSpin progress={progress} color={color} />
           </G>
           <G transform="translate(38.5,19)">
-            <Wheel spin={spin} draw={draw} color={color} />
+            <Tire progress={progress} color={color} />
+            <SpokesSpin progress={progress} color={color} />
           </G>
           <AnimatedPolyline
             animatedProps={seatProps}

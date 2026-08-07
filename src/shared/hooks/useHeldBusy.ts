@@ -3,9 +3,10 @@ import { useEffect, useRef, useState } from 'react';
 /**
  * Keep a busy UI visible for at least `minMs` after busy becomes true.
  * If busy never flips on, returns false immediately (no forced wait).
- * Default is short — brand hold is opt-in via a longer minMs at call sites.
+ * Default holds long enough for one full bike cycle (~3s) so the brand mark
+ * does not vanish mid-stroke when data resolves early.
  */
-export function useHeldBusy(busy: boolean, minMs = 700): boolean {
+export function useHeldBusy(busy: boolean, minMs = 2500): boolean {
   const [held, setHeld] = useState(busy);
   const sinceRef = useRef<number | null>(busy ? Date.now() : null);
 

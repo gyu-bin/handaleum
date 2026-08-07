@@ -285,7 +285,7 @@ export function StampScreen() {
     };
   }, [animateIds, collected, leavesByL1, selectedL1, sido]);
 
-  const showBootLoading = useHeldBusy(!isReady, 1200);
+  const showBootLoading = useHeldBusy(!isReady, 2500);
 
   if (showBootLoading) {
     return (

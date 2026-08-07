@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
   Pressable,
   StyleSheet,
   Text,
@@ -13,6 +11,7 @@ import { useRouter } from 'expo-router';
 import Animated, {
   Extrapolation,
   interpolate,
+  useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
 } from 'react-native-reanimated';
@@ -63,13 +62,8 @@ const SHEET_PEEK_MIN = 300;
 const CREATE_HEADER_H = 52;
 /** Scroll distance to fully tuck — shorter = card shrinks sooner while picking. */
 const PREVIEW_COLLAPSE_Y = 220;
-/**
- * Mini-card scale at full tuck — Instagram-like: almost photo-only when
- * scrolled; pull to top to see the full card again.
- */
-const PREVIEW_COLLAPSED_SCALE = 0.32;
-/** How far the photo sheet climbs over the shrinking card. */
-const GRID_COVER_Y = 56;
+/** How far the photo sheet climbs over the card preview. */
+const GRID_COVER_Y = 96;
 /** One-line caption length on the create card. */
 const COMMENT_MAX = 40;
 
@@ -388,15 +382,15 @@ export function CardCreateScreen() {
   const cardW = previewCardWidth(windowW, bodyH);
   const previewMaxH = previewExpandedMaxHeight(cardW);
 
-  const onGridScroll = useCallback(
-    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      scrollY.value = e.nativeEvent.contentOffset.y;
+  // Keep scroll → sticky collapse on the UI thread (JS onScroll was janky).
+  const onGridScroll = useAnimatedScrollHandler({
+    onScroll: (e) => {
+      scrollY.value = e.contentOffset.y;
     },
-    [scrollY],
-  );
+  });
 
   // Outer keeps a fixed layout height — animating height was Yoga thrash on scroll.
-  // Inner scales; sheet climbs via translateY only.
+  // Inner slides up (no scale); sheet climbs via translateY only.
   const stickyPreviewStyle = useMemo(
     () => [{ height: previewMaxH } as const],
     [previewMaxH],
@@ -404,10 +398,14 @@ export function CardCreateScreen() {
 
   const stickyPreviewInnerStyle = useAnimatedStyle(() => {
     const t = collapseProgress(scrollY.value);
-    const scale = interpolate(t, [0, 1], [1, PREVIEW_COLLAPSED_SCALE]);
-    const pinTop = -((1 - scale) * previewMaxH) / 2;
+    // Translate only — scaling CollageEditor under the sheet janks scroll on device.
     return {
-      transform: [{ translateY: pinTop }, { scale }],
+      transform: [
+        {
+          translateY: interpolate(t, [0, 1], [0, -previewMaxH * 0.62]),
+        },
+      ],
+      opacity: interpolate(t, [0, 0.75, 1], [1, 0.85, 0.4]),
     };
   });
 
@@ -417,9 +415,6 @@ export function CardCreateScreen() {
       transform: [
         { translateY: interpolate(t, [0, 1], [0, -GRID_COVER_Y]) },
       ],
-      borderTopLeftRadius: interpolate(t, [0, 1], [12, 16]),
-      borderTopRightRadius: interpolate(t, [0, 1], [12, 16]),
-      shadowOpacity: interpolate(t, [0, 1], [0.04, 0.1]),
     };
   });
 

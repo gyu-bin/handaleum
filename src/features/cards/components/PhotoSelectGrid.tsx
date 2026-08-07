@@ -1,7 +1,6 @@
 import { memo, useEffect, useMemo, useState, type ReactElement } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
   StyleSheet,
   Text,
@@ -11,6 +10,9 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { Image } from 'expo-image';
+import Animated, {
+  useAnimatedScrollHandler,
+} from 'react-native-reanimated';
 
 import { theme } from '@/shared/constants/theme';
 
@@ -34,8 +36,8 @@ export interface PhotoSelectGridProps {
   keyboardShouldPersistTaps?: 'always' | 'never' | 'handled';
   /** Lock scrolling while the collage drag-to-swap gesture is active. */
   scrollEnabled?: boolean;
-  /** Forwarded to FlatList for sticky-preview collapse, etc. */
-  onScroll?: FlatList['props']['onScroll'];
+  /** UI-thread scroll handler for sticky-preview collapse. */
+  onScroll?: ReturnType<typeof useAnimatedScrollHandler>;
   scrollEventThrottle?: number;
 }
 
@@ -96,7 +98,7 @@ const Cell = memo(function Cell({
 
   useEffect(() => {
     let cancelled = false;
-    void resolveAssetUri(photo.assetId)
+    void resolveAssetUri(photo.assetId, { imageSize: 128 })
       .then((next) => {
         if (!cancelled) {
           setUri(next);
@@ -193,7 +195,7 @@ export function PhotoSelectGrid({
   );
 
   return (
-    <FlatList
+    <Animated.FlatList
       style={styles.list}
       data={rows}
       keyExtractor={(item) => item.key}
@@ -206,9 +208,9 @@ export function PhotoSelectGrid({
       ListHeaderComponent={header}
       ListFooterComponent={ListFooterComponent}
       contentContainerStyle={contentContainerStyle}
-      initialNumToRender={8}
-      maxToRenderPerBatch={4}
-      windowSize={5}
+      initialNumToRender={6}
+      maxToRenderPerBatch={3}
+      windowSize={3}
       updateCellsBatchingPeriod={50}
       removeClippedSubviews
       renderItem={({ item }) => {

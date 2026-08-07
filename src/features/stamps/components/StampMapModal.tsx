@@ -31,7 +31,7 @@ export interface StampMapModalProps {
   onSelect: (selection: StampMapSelection) => void;
 }
 
-/** Full-screen visit map: nation 시·도 → L1 close-up (real Korea geo). */
+/** Full-screen visit map: nation soft hint → L1 close-up (real Korea geo). */
 export function StampMapModal({
   visible,
   collected,

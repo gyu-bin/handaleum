@@ -16,13 +16,11 @@ import {
   Text,
   useWindowDimensions,
   View,
-  type ViewToken,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LoadingView } from '@/shared/components/LoadingView';
-import { PaperGrain } from '@/shared/components/PaperGrain';
 import { ScreenHeader } from '@/shared/components/ScreenHeader';
 import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
@@ -42,10 +40,10 @@ import {
 } from '../utils/placeJourney';
 
 const GRID_COLS = 3;
-/** First paint + each load-more page — keep small on device. */
-const PAGE_SIZE = 18;
-const HERO_SIZE = 512;
-const THUMB_SIZE = 256;
+/** Cap thumbs on the active page — nested FlatList was killing swipe FPS. */
+const GRID_MAX = 9;
+const HERO_SIZE = 256;
+const THUMB_SIZE = 128;
 
 const GridThumb = memo(function GridThumb({
   photo,
@@ -112,8 +110,8 @@ const GridThumb = memo(function GridThumb({
 });
 
 /**
- * Heavy place page — only mount grid / geocode / warmup when nearby.
- * Off-screen slides stay a light shell so horizontal paging stays smooth.
+ * Heavy place page — mount grid / geocode / warmup only when settled on this page.
+ * During horizontal paging every slide is a light shell.
  */
 const ClusterSlide = memo(function ClusterSlide({
   cluster,
@@ -121,15 +119,15 @@ const ClusterSlide = memo(function ClusterSlide({
   coverAssetId,
   onSetCover,
   month,
-  isNearby,
+  isActive,
 }: {
   cluster: PlaceCluster;
   width: number;
   coverAssetId?: string | null;
   onSetCover: (placeKey: string, assetId: string) => void;
   month: MonthKey;
-  /** Active page ±1 — full UI. Farther pages = shell only. */
-  isNearby: boolean;
+  /** Settled active page only — full UI. Others = shell. */
+  isActive: boolean;
 }) {
   const placeKey = placeBucketKey(cluster.centerLat, cluster.centerLng);
   const [activeId, setActiveId] = useState(
@@ -138,16 +136,11 @@ const ClusterSlide = memo(function ClusterSlide({
   const [uri, setUri] = useState<string | null>(null);
   const [placeLabel, setPlaceLabel] = useState<string | null>(null);
   const [labelLoading, setLabelLoading] = useState(true);
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const pad = theme.spacing.lg;
   const gap = theme.spacing.sm;
   const contentW = width - pad * 2;
   const cell = (contentW - gap * (GRID_COLS - 1)) / GRID_COLS;
-
-  useEffect(() => {
-    setVisibleCount(PAGE_SIZE);
-  }, [cluster.id]);
 
   useEffect(() => {
     const next =
@@ -164,22 +157,22 @@ const ClusterSlide = memo(function ClusterSlide({
     cluster.photos.find((p) => p.assetId === activeId) ?? cluster.photos[0];
 
   const pagePhotos = useMemo(
-    () => (isNearby ? cluster.photos.slice(0, visibleCount) : []),
-    [cluster.photos, isNearby, visibleCount],
+    () => (isActive ? cluster.photos.slice(0, GRID_MAX) : []),
+    [cluster.photos, isActive],
   );
 
   useEffect(() => {
-    if (!isNearby || pagePhotos.length === 0) {
+    if (!isActive || pagePhotos.length === 0) {
       return;
     }
     startMonthImageWarmup({
       month,
       assetIds: pagePhotos.map((p) => p.assetId),
     });
-  }, [isNearby, month, pagePhotos]);
+  }, [isActive, month, pagePhotos]);
 
   useEffect(() => {
-    if (!isNearby || !activePhoto) {
+    if (!isActive || !activePhoto) {
       return;
     }
     let cancelled = false;
@@ -195,10 +188,10 @@ const ClusterSlide = memo(function ClusterSlide({
     return () => {
       cancelled = true;
     };
-  }, [activePhoto, isNearby]);
+  }, [activePhoto, isActive]);
 
   useEffect(() => {
-    if (!isNearby) {
+    if (!isActive) {
       return;
     }
     let cancelled = false;
@@ -223,7 +216,7 @@ const ClusterSlide = memo(function ClusterSlide({
     return () => {
       cancelled = true;
     };
-  }, [activePhoto, cluster, isNearby]);
+  }, [activePhoto, cluster, isActive]);
 
   const onSelectPhoto = useCallback(
     (assetId: string) => {
@@ -233,7 +226,7 @@ const ClusterSlide = memo(function ClusterSlide({
     [onSetCover, placeKey],
   );
 
-  const placeText = !isNearby
+  const placeText = !isActive
     ? (placeLabel ?? strings.playback.placeLoading)
     : labelLoading
       ? strings.playback.placeLoading
@@ -242,14 +235,6 @@ const ClusterSlide = memo(function ClusterSlide({
   const chapterDay = cluster.photos[0]?.takenAt
     ? strings.playback.chapterDay(cluster.photos[0].takenAt)
     : '';
-
-  const loadMore = useCallback(() => {
-    setVisibleCount((n) =>
-      n >= cluster.photos.length
-        ? n
-        : Math.min(n + PAGE_SIZE, cluster.photos.length),
-    );
-  }, [cluster.photos.length]);
 
   const titleBlock = (
     <View style={styles.titleRow}>
@@ -269,7 +254,7 @@ const ClusterSlide = memo(function ClusterSlide({
     </View>
   );
 
-  if (!isNearby) {
+  if (!isActive) {
     return (
       <View style={[styles.slide, styles.gridContent, { width }]}>
         {titleBlock}
@@ -285,13 +270,8 @@ const ClusterSlide = memo(function ClusterSlide({
     );
   }
 
-  const header = (
-    <View
-      style={[
-        styles.headerBlock,
-        cluster.photos.length <= 1 && styles.gridContent,
-      ]}
-    >
+  return (
+    <View style={[styles.slide, styles.gridContent, { width }]}>
       {titleBlock}
       <View style={styles.imageWrap}>
         {uri ? (
@@ -308,42 +288,22 @@ const ClusterSlide = memo(function ClusterSlide({
         )}
       </View>
       {cluster.photos.length > 1 ? (
-        <Text style={styles.gridHint}>{strings.playback.gridHint}</Text>
+        <>
+          <Text style={styles.gridHint}>{strings.playback.gridHint}</Text>
+          <View style={[styles.gridRowWrap, { gap }]}>
+            {pagePhotos.map((item) => (
+              <GridThumb
+                key={item.assetId}
+                photo={item}
+                size={cell}
+                selected={item.assetId === activeId}
+                isCover={item.assetId === (coverAssetId ?? activeId)}
+                onPress={() => onSelectPhoto(item.assetId)}
+              />
+            ))}
+          </View>
+        </>
       ) : null}
-    </View>
-  );
-
-  return (
-    <View style={[styles.slide, { width }]}>
-      {cluster.photos.length <= 1 ? (
-        header
-      ) : (
-        <FlatList
-          data={pagePhotos}
-          keyExtractor={(item) => item.assetId}
-          numColumns={GRID_COLS}
-          ListHeaderComponent={header}
-          contentContainerStyle={styles.gridContent}
-          columnWrapperStyle={[styles.gridRow, { gap }]}
-          showsVerticalScrollIndicator={false}
-          nestedScrollEnabled
-          initialNumToRender={PAGE_SIZE}
-          maxToRenderPerBatch={9}
-          windowSize={3}
-          removeClippedSubviews
-          onEndReached={loadMore}
-          onEndReachedThreshold={0.4}
-          renderItem={({ item }) => (
-            <GridThumb
-              photo={item}
-              size={cell}
-              selected={item.assetId === activeId}
-              isCover={item.assetId === (coverAssetId ?? activeId)}
-              onPress={() => onSelectPhoto(item.assetId)}
-            />
-          )}
-        />
-      )}
     </View>
   );
 });
@@ -359,9 +319,9 @@ export function PlaybackScreen() {
   const showLoading = useHeldBusy(isPending);
   const { covers, setCover } = usePinCovers(month);
   const [index, setIndex] = useState(0);
+  /** While paging, every slide stays a shell — nested grids kill swipe FPS. */
+  const [isPaging, setIsPaging] = useState(false);
   const listRef = useRef<FlatList<PlaceCluster>>(null);
-  const indexRef = useRef(0);
-  indexRef.current = index;
 
   const clusters = useMemo(() => {
     if (!data) {
@@ -376,24 +336,9 @@ export function PlaybackScreen() {
 
   useEffect(() => {
     setIndex(0);
+    setIsPaging(false);
     listRef.current?.scrollToOffset({ offset: 0, animated: false });
   }, [month]);
-
-  const onViewableItemsChanged = useRef(
-    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      const first = viewableItems.find((v) => v.isViewable && v.index != null);
-      if (first?.index == null) {
-        return;
-      }
-      if (first.index !== indexRef.current) {
-        setIndex(first.index);
-      }
-    },
-  ).current;
-
-  const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 55,
-  }).current;
 
   const renderPlace = useCallback(
     ({ item, index: itemIndex }: ListRenderItemInfo<PlaceCluster>) => {
@@ -405,11 +350,39 @@ export function PlaybackScreen() {
           coverAssetId={covers[key] ?? null}
           onSetCover={setCover}
           month={month}
-          isNearby={Math.abs(itemIndex - index) <= 1}
+          isActive={!isPaging && itemIndex === index}
         />
       );
     },
-    [covers, index, month, setCover, width],
+    [covers, index, isPaging, month, setCover, width],
+  );
+
+  const onScrollEnd = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const next = Math.round(e.nativeEvent.contentOffset.x / width);
+      setIndex(Math.max(0, Math.min(next, clusters.length - 1)));
+      setIsPaging(false);
+    },
+    [clusters.length, width],
+  );
+
+  const goTo = useCallback(
+    (next: number) => {
+      if (next < 0 || next >= clusters.length) {
+        return;
+      }
+      setIsPaging(true);
+      try {
+        listRef.current?.scrollToIndex({ index: next, animated: true });
+      } catch (error) {
+        console.warn('playback goTo failed', next, error);
+        listRef.current?.scrollToOffset({
+          offset: next * width,
+          animated: true,
+        });
+      }
+    },
+    [clusters.length, width],
   );
 
   if (showLoading) {
@@ -439,37 +412,11 @@ export function PlaybackScreen() {
     );
   }
 
-  const onScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const next = Math.round(e.nativeEvent.contentOffset.x / width);
-    setIndex(Math.max(0, Math.min(next, clusters.length - 1)));
-  };
-
-  const goTo = useCallback(
-    (next: number) => {
-      if (next < 0 || next >= clusters.length) {
-        return;
-      }
-      try {
-        listRef.current?.scrollToIndex({ index: next, animated: true });
-        setIndex(next);
-      } catch (error) {
-        console.warn('playback goTo failed', next, error);
-        listRef.current?.scrollToOffset({
-          offset: next * width,
-          animated: true,
-        });
-        setIndex(next);
-      }
-    },
-    [clusters.length, width],
-  );
-
   const canPrev = index > 0;
   const canNext = index < clusters.length - 1;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-      <PaperGrain style={styles.grain} />
       <ScreenHeader title={strings.playback.title} />
       <FlatList
         ref={listRef}
@@ -479,15 +426,14 @@ export function PlaybackScreen() {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
+        onScrollBeginDrag={() => setIsPaging(true)}
         onMomentumScrollEnd={onScrollEnd}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={viewabilityConfig}
-        extraData={index}
+        extraData={`${index}:${isPaging ? 1 : 0}`}
         initialNumToRender={1}
         maxToRenderPerBatch={1}
-        windowSize={3}
+        windowSize={2}
         removeClippedSubviews
-        updateCellsBatchingPeriod={16}
+        updateCellsBatchingPeriod={50}
         getItemLayout={(_, i) => ({
           length: width,
           offset: width * i,
@@ -500,6 +446,7 @@ export function PlaybackScreen() {
               animated: false,
             });
             setIndex(Math.max(0, Math.min(failedIndex, clusters.length - 1)));
+            setIsPaging(false);
           });
         }}
         renderItem={renderPlace}
@@ -547,9 +494,6 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: theme.colors.background,
-  },
-  grain: {
-    opacity: 0.28,
   },
   list: {
     flex: 1,
@@ -651,6 +595,11 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.sm,
     marginBottom: theme.spacing.xs,
     color: theme.colors.subtle,
+  },
+  gridRowWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    width: '100%',
   },
   gridRow: {
     marginBottom: theme.spacing.sm,
