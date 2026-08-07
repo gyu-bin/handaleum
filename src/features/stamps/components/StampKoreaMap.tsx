@@ -6,12 +6,11 @@ import {
   useState,
 } from 'react';
 import { LayoutChangeEvent, StyleSheet, View, type ViewStyle } from 'react-native';
-import Svg, { Circle, Defs, G, Mask, Path } from 'react-native-svg';
+import Svg, { Defs, G, Mask, Path } from 'react-native-svg';
 
 import koreaGeo from '@/assets/geo/korea.json';
 import {
   bboxOf,
-  centroidOf,
   createProjection,
   geometryToPath,
   pointInGeometry,
@@ -52,8 +51,6 @@ const CELL = {
   nationFilledStrokeW: 0.45,
   /** Soften pastel so a visited 시·도 does not read as "fully stamped". */
   nationWashOp: 0.38,
-  nationDotR: 3.4,
-  nationDotOp: 0.62,
   hinterlandOp: 0.22,
 } as const;
 const FOCUS_BBOX = {
@@ -84,8 +81,6 @@ type NationHit = {
   d: string;
   filled: boolean;
   fill: string;
-  cx: number;
-  cy: number;
 };
 
 type L1Hit = {
@@ -99,7 +94,7 @@ type L1Hit = {
 };
 
 /**
- * Real Korea atlas — nation = soft visit hint (wash + dot); drill = L1 cells.
+ * Real Korea atlas — nation = soft visit wash only; drill = L1 cells.
  * Taps go through {@link StampKoreaMapHandle.hitTest} (ResumableZoom steals Path onPress).
  */
 export const StampKoreaMap = memo(
@@ -163,19 +158,13 @@ export const StampKoreaMap = memo(
       if (!projection || mode !== 'nation') {
         return [];
       }
-      return provinces.map((p) => {
-        const [lng, lat] = centroidOf(p.geometry);
-        const [cx, cy] = projection.project([lng, lat]);
-        return {
-          name: p.name,
-          geometry: p.geometry,
-          d: geometryToPath(p.geometry, projection.project),
-          filled: visitedSido.has(p.name),
-          fill: stampMapFill(p.name),
-          cx,
-          cy,
-        };
-      });
+      return provinces.map((p) => ({
+        name: p.name,
+        geometry: p.geometry,
+        d: geometryToPath(p.geometry, projection.project),
+        filled: visitedSido.has(p.name),
+        fill: stampMapFill(p.name),
+      }));
     }, [mode, projection, provinces, visitedSido]);
 
     const l1Drawn = useMemo((): L1Hit[] => {
@@ -278,19 +267,6 @@ export const StampKoreaMap = memo(
                     />
                   ))}
                 </G>
-
-                {nationDrawn
-                  .filter((p) => p.filled)
-                  .map((p) => (
-                    <Circle
-                      key={`dot-${p.name}`}
-                      cx={p.cx}
-                      cy={p.cy}
-                      r={CELL.nationDotR}
-                      fill={theme.colors.ink}
-                      fillOpacity={CELL.nationDotOp}
-                    />
-                  ))}
 
                 <Path
                   d={koreaPath}

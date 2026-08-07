@@ -13,8 +13,8 @@ export interface LoadingViewProps {
 }
 
 /**
- * Brand loading — stroke-draw bike on cream paper (min hold is call-site via useHeldBusy).
- * Grain stays static; bike spin is linear so device FPS doesn't hitch on eased wheels.
+ * Brand loading — bike on cream paper (min hold is call-site via useHeldBusy).
+ * Wheels spin on the UI thread (linear forever); grain stays static.
  */
 export function LoadingView({
   message = strings.common.loading,

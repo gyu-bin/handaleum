@@ -12,6 +12,7 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -270,8 +271,16 @@ const ClusterSlide = memo(function ClusterSlide({
     );
   }
 
+  // Vertical ScrollView — plain View overflow made down-swipes look like a blink
+  // (parent pager stole the gesture / remounted the shell).
   return (
-    <View style={[styles.slide, styles.gridContent, { width }]}>
+    <ScrollView
+      style={[styles.slide, { width }]}
+      contentContainerStyle={styles.gridContent}
+      showsVerticalScrollIndicator={false}
+      nestedScrollEnabled
+      keyboardShouldPersistTaps="handled"
+    >
       {titleBlock}
       <View style={styles.imageWrap}>
         {uri ? (
@@ -304,7 +313,7 @@ const ClusterSlide = memo(function ClusterSlide({
           </View>
         </>
       ) : null}
-    </View>
+    </ScrollView>
   );
 });
 
@@ -322,6 +331,7 @@ export function PlaybackScreen() {
   /** While paging, every slide stays a shell — nested grids kill swipe FPS. */
   const [isPaging, setIsPaging] = useState(false);
   const listRef = useRef<FlatList<PlaceCluster>>(null);
+  const settledXRef = useRef(0);
 
   const clusters = useMemo(() => {
     if (!data) {
@@ -337,8 +347,13 @@ export function PlaybackScreen() {
   useEffect(() => {
     setIndex(0);
     setIsPaging(false);
+    settledXRef.current = 0;
     listRef.current?.scrollToOffset({ offset: 0, animated: false });
   }, [month]);
+
+  useEffect(() => {
+    settledXRef.current = index * width;
+  }, [index, width]);
 
   const renderPlace = useCallback(
     ({ item, index: itemIndex }: ListRenderItemInfo<PlaceCluster>) => {
@@ -364,6 +379,17 @@ export function PlaybackScreen() {
       setIsPaging(false);
     },
     [clusters.length, width],
+  );
+
+  /** Shell only after a real horizontal page move — not on vertical pan. */
+  const onHorizScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const x = e.nativeEvent.contentOffset.x;
+      if (Math.abs(x - settledXRef.current) > width * 0.1) {
+        setIsPaging(true);
+      }
+    },
+    [width],
   );
 
   const goTo = useCallback(
@@ -425,8 +451,10 @@ export function PlaybackScreen() {
         keyExtractor={(item) => item.id}
         horizontal
         pagingEnabled
+        directionalLockEnabled
         showsHorizontalScrollIndicator={false}
-        onScrollBeginDrag={() => setIsPaging(true)}
+        onScroll={onHorizScroll}
+        scrollEventThrottle={16}
         onMomentumScrollEnd={onScrollEnd}
         extraData={`${index}:${isPaging ? 1 : 0}`}
         initialNumToRender={1}

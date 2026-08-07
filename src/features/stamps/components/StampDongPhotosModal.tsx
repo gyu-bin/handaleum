@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -8,6 +8,7 @@ import {
   Text,
   useWindowDimensions,
   View,
+  type ListRenderItemInfo,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,9 +26,15 @@ import {
 const COLS = 2;
 const GAP = 10;
 const H_PAD = theme.spacing.md;
+/** Decode budget for 2-col cells — full-res ph:// thrash on scroll. */
+const THUMB_SIZE = 256;
 
 type SortMode = 'newest' | 'oldest';
-type ThumbPhase = 'resolving' | 'decoding' | 'ready' | 'error';
+
+type ThumbRow = {
+  assetId: string;
+  dateLabel: string;
+};
 
 function formatTakenAt(iso: string): string {
   const t = Date.parse(iso);
@@ -41,38 +48,37 @@ function formatTakenAt(iso: string): string {
   });
 }
 
-function Thumb({
+const Thumb = memo(function Thumb({
   assetId,
-  takenAt,
+  dateLabel,
   size,
 }: {
   assetId: string;
-  takenAt: string;
+  dateLabel: string;
   size: number;
 }) {
   const [uri, setUri] = useState<string | null>(null);
-  const [phase, setPhase] = useState<ThumbPhase>('resolving');
+  const [failed, setFailed] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    setPhase('resolving');
+    setFailed(false);
     setUri(null);
-    void resolveAssetUri(assetId)
+    void resolveAssetUri(assetId, { imageSize: THUMB_SIZE })
       .then((next) => {
         if (cancelled) {
           return;
         }
         if (!next) {
-          setPhase('error');
+          setFailed(true);
           return;
         }
         setUri(next);
-        setPhase('decoding');
       })
       .catch(() => {
         if (!cancelled) {
-          setPhase('error');
+          setFailed(true);
         }
       });
     return () => {
@@ -84,48 +90,33 @@ function Thumb({
     setRetryNonce((n) => n + 1);
   }, []);
 
-  const dateLabel = formatTakenAt(takenAt);
-  const busy = phase === 'resolving' || phase === 'decoding';
-
   return (
     <View style={{ width: size }}>
       <Pressable
-        onPress={phase === 'error' ? onRetry : undefined}
-        disabled={phase !== 'error'}
-        accessibilityRole={phase === 'error' ? 'button' : undefined}
+        onPress={failed ? onRetry : undefined}
+        disabled={!failed}
+        accessibilityRole={failed ? 'button' : undefined}
         accessibilityLabel={
-          phase === 'error' ? strings.stamps.dongPhotoRetry : undefined
+          failed ? strings.stamps.dongPhotoRetry : undefined
         }
         style={[styles.thumb, { width: size, height: size }]}
       >
-        {uri && phase !== 'error' ? (
+        {uri && !failed ? (
           <Image
             source={{ uri }}
             style={{ width: size, height: size }}
             contentFit="cover"
-            recyclingKey={assetId}
+            recyclingKey={`${assetId}-${THUMB_SIZE}`}
             cachePolicy="memory-disk"
-            onLoad={() => setPhase('ready')}
+            transition={0}
             onError={() => {
               setUri(null);
-              setPhase('error');
+              setFailed(true);
             }}
           />
         ) : null}
 
-        {busy ? (
-          <View
-            style={[
-              styles.thumbOverlay,
-              phase === 'decoding' && styles.thumbOverlaySoft,
-            ]}
-            pointerEvents="none"
-          >
-            <ActivityIndicator color={theme.colors.inkSoft} />
-          </View>
-        ) : null}
-
-        {phase === 'error' ? (
+        {failed ? (
           <View style={styles.thumbOverlay}>
             <Text style={styles.retryLabel}>{strings.stamps.dongPhotoRetry}</Text>
           </View>
@@ -138,7 +129,7 @@ function Thumb({
       ) : null}
     </View>
   );
-}
+});
 
 export interface StampDongPhotosModalProps {
   query: StampDongPhotosQuery | null;
@@ -200,17 +191,22 @@ export function StampDongPhotosModal({
     void Image.clearMemoryCache();
   }, [visible]);
 
-  const sortedPhotos = useMemo(() => {
-    if (photos.length <= 1) {
-      return photos;
+  const rows = useMemo((): ThumbRow[] => {
+    if (photos.length === 0) {
+      return [];
     }
-    const next = [...photos];
-    next.sort((a, b) =>
-      sortMode === 'newest'
-        ? b.takenAt.localeCompare(a.takenAt)
-        : a.takenAt.localeCompare(b.takenAt),
-    );
-    return next;
+    const ordered =
+      photos.length <= 1
+        ? photos
+        : [...photos].sort((a, b) =>
+            sortMode === 'newest'
+              ? b.takenAt.localeCompare(a.takenAt)
+              : a.takenAt.localeCompare(b.takenAt),
+          );
+    return ordered.map((p) => ({
+      assetId: p.assetId,
+      dateLabel: formatTakenAt(p.takenAt),
+    }));
   }, [photos, sortMode]);
 
   const onRequestClose = useCallback(() => {
@@ -218,6 +214,13 @@ export function StampDongPhotosModal({
   }, [onClose]);
 
   const cell = Math.floor((windowW - H_PAD * 2 - GAP * (COLS - 1)) / COLS);
+
+  const renderItem = useCallback(
+    ({ item }: ListRenderItemInfo<ThumbRow>) => (
+      <Thumb assetId={item.assetId} dateLabel={item.dateLabel} size={cell} />
+    ),
+    [cell],
+  );
 
   return (
     <Modal
@@ -308,24 +311,18 @@ export function StampDongPhotosModal({
             </View>
           ) : (
             <FlatList
-              data={sortedPhotos}
-              extraData={sortMode}
+              data={rows}
               keyExtractor={(item) => item.assetId}
               numColumns={COLS}
               columnWrapperStyle={styles.row}
               contentContainerStyle={styles.grid}
               showsVerticalScrollIndicator={false}
-              initialNumToRender={6}
-              maxToRenderPerBatch={4}
-              windowSize={5}
+              initialNumToRender={4}
+              maxToRenderPerBatch={2}
+              windowSize={3}
+              updateCellsBatchingPeriod={50}
               removeClippedSubviews
-              renderItem={({ item }) => (
-                <Thumb
-                  assetId={item.assetId}
-                  takenAt={item.takenAt}
-                  size={cell}
-                />
-              )}
+              renderItem={renderItem}
             />
           )}
         </View>
@@ -436,9 +433,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.colors.surfaceAlt,
-  },
-  thumbOverlaySoft: {
-    backgroundColor: 'transparent',
   },
   retryLabel: {
     ...theme.type.micro,

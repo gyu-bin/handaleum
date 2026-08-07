@@ -73,7 +73,7 @@ Grain = **시군구** (서울·광역 구, 도 시·군, 일반구 시 → 구�
 | 군 **읍·면** PIP 수집 (`dongs.json`에 군 leaf 포함). 도농복합 시 읍·면은 제외 | 동만 / 시 읍면까지 | 사용자 Q=군만 | 2026-08-06 |
 | 방문 지도 = **전국 시·도 실지도** → 탭 시 L1 확대. **같은 StampKoreaMap 인스턴스 유지**(key remount/Fade 제거). 탭=Pressable hitTest. 방문 칸=`stampMapFill` | 전국 L1 / Path onPress / drill remount | 성능 | 2026-08-07 |
 | 방문 지도 grain = nation=시·도 칠, drill=L1 구·시·군 (`stamp-map-units.json`). 1동만 있어도 구 전체 칠함 | 동 단위 칠 / 시·도만 | 색칠북 가독성 | 2026-08-06 |
-| 전국 = **옅은 wash + centroid 점**만 (완료 느낌 완화). 확대 L1 채색은 유지 | 전국 풀 칠 / 동 grain | “모든 시 체크” 오해 | 2026-08-08 |
+| 전국 = **옅은 wash만** (점 없음, 완료 느낌 완화). 확대 L1 채색은 유지 | 전국 풀 칠 / 점 / 동 grain | “모든 시 체크” 오해 | 2026-08-08 |
 
 ## 경계
 
