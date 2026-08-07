@@ -16,7 +16,7 @@ import {
   readLocatedPhotosSnapshot,
   writeLocatedPhotosSnapshot,
 } from './locatedPhotosSnapshot';
-import { resetStampDongPhotoIndex } from './stampDongPhotos';
+import { resetStampDongPhotoIndex, prebuildStampDongPhotoIndex } from './stampDongPhotos';
 import {
   countCollected,
   clearAllStamps,
@@ -343,6 +343,9 @@ export async function syncStampsFromLibrary(
     'added=',
     totalAdded,
   );
+
+  // Popup leaves should not rebuild PIP on first open.
+  await prebuildStampDongPhotoIndex(photos);
 
   setProgress(
     {

@@ -18,8 +18,7 @@ function pushPhoto(map: Map<string, PhotoRef[]>, id: string, photo: PhotoRef): v
   map.set(id, [photo]);
 }
 
-async function buildIndex(): Promise<void> {
-  const photos = (await readLocatedPhotosSnapshot()) ?? [];
+function buildIndexFromPhotos(photos: PhotoRef[]): void {
   const next = new Map<string, PhotoRef[]>();
   for (const photo of photos) {
     if (!isKoreaLatLng(photo.lat, photo.lng)) {
@@ -31,12 +30,16 @@ async function buildIndex(): Promise<void> {
     }
     pushPhoto(next, stampId(hit.sido, hit.city, hit.name), photo);
   }
-  // Newest first within each leaf.
   for (const list of next.values()) {
     list.sort((a, b) => b.takenAt.localeCompare(a.takenAt));
   }
   indexByStampId = next;
   indexedAt = Date.now();
+}
+
+async function buildIndex(): Promise<void> {
+  const photos = (await readLocatedPhotosSnapshot()) ?? [];
+  buildIndexFromPhotos(photos);
 }
 
 async function ensureIndex(): Promise<void> {
@@ -51,11 +54,25 @@ async function ensureIndex(): Promise<void> {
   await indexPromise;
 }
 
-/** Drop memoized index (e.g. after a fresh library sync). */
+/** Drop memoized index (e.g. before rewriting the GPS snapshot). */
 export function resetStampDongPhotoIndex(): void {
   indexByStampId = null;
   indexedAt = 0;
   indexPromise = null;
+}
+
+/**
+ * Warm the leaf→photos map after sync / on cold start so the first dong
+ * popup does not wait on a full PIP pass.
+ */
+export async function prebuildStampDongPhotoIndex(
+  photos?: PhotoRef[],
+): Promise<void> {
+  if (photos) {
+    buildIndexFromPhotos(photos);
+    return;
+  }
+  await ensureIndex();
 }
 
 export type StampDongPhotosQuery = {
@@ -65,8 +82,8 @@ export type StampDongPhotosQuery = {
 };
 
 /**
- * Photos for a stamp leaf via offline PIP over the GPS snapshot (approach B).
- * First call builds a session index; later leaves are instant.
+ * Photos for a stamp leaf via offline PIP over the GPS snapshot.
+ * Prefers a prebuilt index; otherwise builds once per session.
  */
 export async function photosForStampLeaf(
   query: StampDongPhotosQuery,

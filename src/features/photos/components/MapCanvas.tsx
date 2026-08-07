@@ -112,7 +112,7 @@ export interface MapCanvasProps {
    * Time-slider filtering must not yank the camera on every drag frame.
    */
   frameKey: string;
-  /** Mid-segment visit-order numbers on the journey polyline. */
+  /** Journey polyline + mid-path visit-order numbers. */
   showPathOrder?: boolean;
   onTogglePathOrder?: () => void;
 }
@@ -309,7 +309,7 @@ export const MapCanvas = memo(function MapCanvas({
         onInitialized={onInitialized}
         onCameraIdle={onCameraIdle}
       >
-        {pathCoords.length >= 2 ? (
+        {showPathOrder && pathCoords.length >= 2 ? (
           <NaverMapPolylineOverlay
             coords={pathCoords}
             width={2.5}

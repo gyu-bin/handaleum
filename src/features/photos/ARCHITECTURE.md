@@ -36,6 +36,7 @@
 | 지도: **네이버 Dynamic Map** (`@mj-studio/react-native-naver-map`) + 사진 클러스터 마커. SVG는 카드/스플래시용. **dev build 필수**(Expo Go 불가) | RN Maps / SVG 인포그래픽 | 사용자 결정: 한국 지도 품질·라벨. Client ID `i20jt73shx` | 2026-07-27 |
 | 지도 줌: Naver `animateCameraTo` / `animateCameraWithTwoCoords`. 월 `frameKey` 변경 시에만 자동 프레임 | RN Maps region / SVG rebase | 네이버 SDK 카메라 API | 2026-07-27 |
 | 시 라벨: `KOREA_CITIES` + SVG. 여정 문구는 `expo-location` reverse geocode | 시 중심점 근접 매칭 | 근접 매칭 오탐 | 2026-07-18 |
+| 점선 발자취: **핀(클러스터) 중심을 첫 방문 순으로 잇는 폴리라인** + **선 위 방문 순서(1…N)**. 핀 아래 사진 장수 캡션 없음 | 사진마다 연결 / 핀 캡션 장수 | 사용자: 장수 불필요, 선에 순서 | 2026-08-07 |
 | 점선 발자취: **핀(클러스터) 중심을 첫 방문 순으로 잇는 폴리라인** (B) | 사진마다 연결(A) / 없음 | 사용자 선택 B. 이전 “전부 제거” 결정 갱신 | 2026-07-27 |
 | 시 경계선: `municipalities.json`에서 이름 끝이 `시`인 것만 | 전체 시군구 / 도만 | 확대 시 구·군 선이 깨져 보임 | 2026-07-18 |
 | 대표 사진: **핀(장소 버킷) 단위** | 월 1장 히어로만 | Discovery 1-B | 2026-07-18 |

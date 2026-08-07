@@ -8,6 +8,7 @@ import { StateView } from '@/shared/components/StateView';
 import { formatProPriceKrw, IS_MONETIZATION_LIVE } from '@/shared/constants/pricing';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
+import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 import { useCurrentMonth } from '@/features/photos/hooks/useCurrentMonth';
 
 import { InsightHero } from '../components/InsightHero';
@@ -38,13 +39,15 @@ export function InsightsScreen() {
     refetch,
   } = useMonthlyInsights(month);
 
+  const showLoading = useHeldBusy(isPending);
+
   useEffect(() => {
     if (isPro) {
       setPaywallOpen(false);
     }
   }, [isPro]);
 
-  if (isPending) {
+  if (showLoading) {
     return <LoadingView />;
   }
 

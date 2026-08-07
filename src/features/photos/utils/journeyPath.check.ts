@@ -1,5 +1,5 @@
 /**
- * Runnable check for journey path mid-segment order numbers.
+ * Runnable check for journey path visit-order numbers on the line.
  * Run: npx tsx src/features/photos/utils/journeyPath.check.ts
  */
 import assert from 'node:assert/strict';
@@ -39,12 +39,17 @@ assert.equal(coords.length, 3);
 assert.equal(coords[0]?.latitude, a.centerLat);
 
 const steps = journeyPathSteps([c, a, b]);
-assert.equal(steps.length, 2);
-assert.equal(steps[0]?.order, 2);
-assert.equal(steps[1]?.order, 3);
+assert.equal(steps.length, 3);
+assert.equal(steps[0]?.order, 1);
+assert.equal(steps[1]?.order, 2);
+assert.equal(steps[2]?.order, 3);
 assert.equal(
   steps[0]?.latitude,
-  (a.centerLat + b.centerLat) / 2,
+  a.centerLat * 0.75 + b.centerLat * 0.25,
+);
+assert.equal(
+  steps[1]?.latitude,
+  a.centerLat * 0.25 + b.centerLat * 0.75,
 );
 
 console.log('journeyPath.check: ok');

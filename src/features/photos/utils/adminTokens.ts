@@ -87,6 +87,26 @@ const KNOWN_GUN: ReadonlySet<string> = (() => {
 })();
 
 /**
+ * Real 구 only — "압구" (prefix of 압구정동) ends with 구 but is not a district.
+ * Built from cities-by-sido L1 구 lists.
+ */
+const KNOWN_GU: ReadonlySet<string> = (() => {
+  const set = new Set<string>();
+  for (const map of Object.values(
+    citiesBySido as Record<string, Record<string, string[]>>,
+  )) {
+    for (const units of Object.values(map)) {
+      for (const name of units) {
+        if (/구$/.test(name)) {
+          set.add(name);
+        }
+      }
+    }
+  }
+  return set;
+})();
+
+/**
  * Classify a candidate slice. Scanner walks left→right and takes the
  * *shortest* valid unit at each index so "강릉시교항리" → 강릉시 + 교항리.
  */
@@ -111,10 +131,8 @@ function kindFromText(text: string): AdminKind | null {
     return KNOWN_GUN.has(text) ? 'gun' : null;
   }
   if (/구$/.test(text)) {
-    if (text === '특구' || text.length < 2) {
-      return null;
-    }
-    return 'gu';
+    // Must be a real 구 — "압구" ⊂ 압구정동 must not win.
+    return KNOWN_GU.has(text) ? 'gu' : null;
   }
   if (/읍$/.test(text)) {
     return text.length >= 2 ? 'eup' : null;

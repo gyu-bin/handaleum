@@ -8,6 +8,7 @@ import { LoadingView } from '@/shared/components/LoadingView';
 import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
+import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 
 import { useOnboarding } from '@/features/onboarding/hooks/useOnboarding';
 import { IndexingBanner } from '@/features/stamps/components/IndexingBanner';
@@ -18,7 +19,6 @@ import { DEFAULT_MAP_ZOOM, MapCanvas } from '../components/MapCanvas';
 import { clusterSeedId } from '../components/MapClusterMarker';
 import { HomeNavBar } from '../components/HomeNavBar';
 import { PhotoPreviewSheet } from '../components/PhotoPreviewSheet';
-import { TimeSlider, type TimeRange } from '../components/TimeSlider';
 import { VisitChipRow } from '../components/VisitChipRow';
 import { useCurrentMonth } from '../hooks/useCurrentMonth';
 import { useJourneyPathOrder } from '../hooks/useJourneyPathOrder';
@@ -30,26 +30,12 @@ import { clusterPhotos, resetClusterCellCache } from '../services/cluster';
 import { isDevDummyPhotosEnabled } from '../services/dummyPhotos';
 import { startMonthImageWarmup } from '../services/monthImageWarmup';
 import type { MonthKey, PlaceCluster } from '../types';
-import { monthTimeBoundsIso } from '../utils/month';
 import { placeBucketKey } from '../utils/placeJourney';
 
 /** Own the progress store so scan ticks don't re-render the whole map tree. */
 function HomeIndexingBanner() {
   const progress = useStampLibraryProgress();
   return <IndexingBanner progress={progress} />;
-}
-
-function useTimeRangeForMonth(month: MonthKey): [TimeRange, (value: TimeRange) => void] {
-  const bounds = useMemo(() => monthTimeBoundsIso(month), [month]);
-  const [monthForRange, setMonthForRange] = useState(month);
-  const [timeRange, setTimeRange] = useState<TimeRange>(bounds);
-
-  if (monthForRange !== month) {
-    setMonthForRange(month);
-    setTimeRange(bounds);
-  }
-
-  return [timeRange, setTimeRange];
 }
 
 function formatMonthLabel(month: MonthKey): string {
@@ -81,29 +67,17 @@ export function MonthlyMapScreen() {
   const { data, isPending, isFetching, isError, refetch, isRefetching } = useMonthlyPhotos(month, {
     enabled: isReady && hasAccess,
   });
-  const bounds = useMemo(() => monthTimeBoundsIso(month), [month]);
-  const [timeRange, setTimeRange] = useTimeRangeForMonth(month);
   const [zoom, setZoom] = useState(DEFAULT_MAP_ZOOM);
   const [selected, setSelected] = useState<PlaceCluster | null>(null);
   // The "위치 없는 사진 / 집 제외" notices are collapsed behind a "!" so the
   // header stays quiet; they're reference info, not something to read every time.
   const [showNotices, setShowNotices] = useState(false);
 
-  const filteredPhotos = useMemo(() => {
-    if (!data) {
-      return [];
-    }
-    const fromMs = Date.parse(timeRange.from);
-    const toMs = Date.parse(timeRange.to);
-    return data.photos.filter((photo) => {
-      const t = Date.parse(photo.takenAt);
-      return t >= fromMs && t <= toMs;
-    });
-  }, [data, timeRange.from, timeRange.to]);
+  const monthPhotos = data?.photos ?? [];
 
   const clusters = useMemo(
-    () => clusterPhotos(filteredPhotos, zoom),
-    [filteredPhotos, zoom],
+    () => clusterPhotos(monthPhotos, zoom),
+    [monthPhotos, zoom],
   );
 
   // Debounce zoom→recluster so every camera-idle tick doesn't remount markers.
@@ -124,7 +98,7 @@ export function MonthlyMapScreen() {
     };
   }, []);
 
-  const { places: journeyPlaces, isResolving } = useMonthJourney(filteredPhotos, {
+  const { places: journeyPlaces, isResolving } = useMonthJourney(monthPhotos, {
     // Disk hydrate runs always; network geocode waits until the month GPS pass
     // finishes so progressive batches don't cancel/restart the queue (main jank).
     enabled: Boolean(data) && !isFetching,
@@ -195,12 +169,21 @@ export function MonthlyMapScreen() {
     ? placeBucketKey(selected.centerLat, selected.centerLng)
     : null;
 
+  const bootBusy = !isReady;
+  const dataBusy =
+    isReady &&
+    hasAccess &&
+    ((isPending && !data) ||
+      Boolean(data && data.photos.length === 0 && isFetching));
+  const showBootLoading = useHeldBusy(bootBusy);
+  const showDataLoading = useHeldBusy(dataBusy);
+
   // First-run gate before the permission gate: explain the app, then ask.
   if (!onboardingSeen) {
     return <Redirect href="/onboarding" />;
   }
 
-  if (!isReady) {
+  if (showBootLoading) {
     return <LoadingView />;
   }
 
@@ -208,12 +191,7 @@ export function MonthlyMapScreen() {
     return <Redirect href="/permission" />;
   }
 
-  if (isPending && !data) {
-    return <LoadingView />;
-  }
-
-  // Cold start: assets listed but GPS still resolving and no pins yet.
-  if (data && data.photos.length === 0 && isFetching) {
+  if (showDataLoading) {
     return <LoadingView />;
   }
 
@@ -350,9 +328,6 @@ export function MonthlyMapScreen() {
         </View>
 
         <View style={styles.footer}>
-          {data.photos.length > 0 ? (
-            <TimeSlider bounds={bounds} value={timeRange} onChange={setTimeRange} />
-          ) : null}
           <Button
             title={strings.cards.createTitle}
             variant="primary"
@@ -511,9 +486,8 @@ const styles = StyleSheet.create({
   },
   footer: {
     paddingHorizontal: theme.spacing.md,
-    paddingTop: theme.spacing.sm,
+    paddingTop: theme.spacing.xs,
     paddingBottom: theme.spacing.xs,
-    gap: theme.spacing.sm,
   },
   createBtn: {
     borderRadius: theme.radius.sm,

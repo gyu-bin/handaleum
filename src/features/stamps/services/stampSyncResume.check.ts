@@ -1,16 +1,62 @@
 /**
- * Runnable check for stamp GPS → geocode resume gating.
+ * Runnable check for stamp GPS snapshot reuse / resume gating.
  * Run: npx tsx src/features/stamps/services/stampSyncResume.check.ts
  */
 import assert from 'node:assert/strict';
 
 import {
+  STAMP_DEEP_RECHECK_MS,
   STAMP_GPS_RESUME_MS,
+  shouldReuseLocatedSnapshot,
   shouldResumeGeocodeOnly,
   shouldSkipCoarseGeocode,
 } from './stampSyncResume';
 
 const now = 1_000_000_000_000;
+
+assert.equal(
+  shouldReuseLocatedSnapshot({
+    force: false,
+    hasSnapshot: true,
+    librarySyncAt: now - 60_000,
+    now,
+  }),
+  true,
+  'fresh sync + snapshot → reuse',
+);
+
+assert.equal(
+  shouldReuseLocatedSnapshot({
+    force: false,
+    hasSnapshot: true,
+    librarySyncAt: now - STAMP_DEEP_RECHECK_MS - 1,
+    now,
+  }),
+  false,
+  'weekly deep recheck due → full GPS',
+);
+
+assert.equal(
+  shouldReuseLocatedSnapshot({
+    force: true,
+    hasSnapshot: true,
+    librarySyncAt: now - 60_000,
+    now,
+  }),
+  false,
+  'force never reuses',
+);
+
+assert.equal(
+  shouldReuseLocatedSnapshot({
+    force: false,
+    hasSnapshot: false,
+    librarySyncAt: 0,
+    now,
+  }),
+  false,
+  'no snapshot → cannot reuse',
+);
 
 assert.equal(
   shouldResumeGeocodeOnly({
@@ -20,7 +66,7 @@ assert.equal(
     force: false,
   }),
   true,
-  'incomplete geocode within window resumes',
+  'fresh GPS resumes',
 );
 
 assert.equal(
@@ -30,8 +76,8 @@ assert.equal(
     librarySyncAt: now - 30_000,
     force: false,
   }),
-  false,
-  'completed full sync newer than GPS does not resume',
+  true,
+  'fresh GPS reuses even after completed sync',
 );
 
 assert.equal(

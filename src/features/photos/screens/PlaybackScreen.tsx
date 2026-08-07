@@ -18,6 +18,7 @@ import { ScreenHeader } from '@/shared/components/ScreenHeader';
 import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
+import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 
 import { useCurrentMonth } from '../hooks/useCurrentMonth';
 import { useMonthlyPhotos } from '../hooks/useMonthlyPhotos';
@@ -299,6 +300,7 @@ export function PlaybackScreen() {
   const { width } = useWindowDimensions();
   const { month } = useCurrentMonth();
   const { data, isPending, isError, refetch } = useMonthlyPhotos(month);
+  const showLoading = useHeldBusy(isPending);
   const { covers, setCover } = usePinCovers(month);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -358,7 +360,7 @@ export function PlaybackScreen() {
     });
   };
 
-  if (isPending) {
+  if (showLoading) {
     return <LoadingView />;
   }
 

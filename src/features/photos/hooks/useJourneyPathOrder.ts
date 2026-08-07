@@ -33,8 +33,8 @@ function setSharedVisible(next: boolean): void {
 }
 
 /**
- * Persist whether mid-segment visit-order numbers show on the home map.
- * Default on (storage absent ⇒ visible).
+ * Persist whether the home-map journey polyline + order numbers show.
+ * Default on (storage absent ⇒ visible). Off hides both the line and labels.
  */
 export function useJourneyPathOrder(): {
   showPathOrder: boolean;

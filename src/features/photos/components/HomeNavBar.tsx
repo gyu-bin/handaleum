@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
 import { useStamps } from '@/features/stamps/hooks/useStamps';
+import { StampSneakerIcon } from '@/shared/components/StampSneakerIcon';
 import { theme } from '@/shared/constants/theme';
 
 export interface HomeNavItem {
@@ -88,29 +89,11 @@ function NavIcon({
   }
   if (name === 'stamp') {
     return (
-      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-        <Path
-          d="M4 6h5.426a1 1 0 0 1 .863.496l1.064 1.823a3 3 0 0 0 1.896 1.407l4.677 1.114a4 4 0 0 1 3.074 3.89v2.27a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z"
-          stroke={color}
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <Path
-          d="M14 13l1-2M10 12l1.5-3"
-          stroke={color}
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <Path
-          d="M8 18v-1a4 4 0 0 0-4-4H3"
-          stroke={color}
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </Svg>
+      <StampSneakerIcon
+        size={24}
+        color={color}
+        active={active}
+      />
     );
   }
   return (
@@ -222,8 +205,11 @@ const styles = StyleSheet.create({
     // Weight via ink label/icon only — no soft fill capsule.
   },
   iconWrap: {
-    width: 22,
-    height: 22,
+    width: 24,
+    height: 24,
+    overflow: 'visible',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   badge: {
     position: 'absolute',

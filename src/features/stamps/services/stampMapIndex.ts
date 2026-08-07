@@ -50,7 +50,7 @@ let provincesCache: StampMapProvince[] | null = null;
 
 function buildUnits(): StampMapUnit[] {
   const list = (stampMapUnitsGeo as { units: PackedUnit[] }).units;
-  return list.map((u) => ({
+  const units = list.map((u) => ({
     key: u.key,
     sido: u.sido,
     label: u.label,
@@ -60,6 +60,27 @@ function buildUnits(): StampMapUnit[] {
       coordinates: u.coordinates,
     },
   }));
+
+  // Homonyms across 시·도 (고성군 in 강원 + 경남) — prefix sido on map label.
+  const byLabel = new Map<string, StampMapUnit[]>();
+  for (const u of units) {
+    const group = byLabel.get(u.label);
+    if (group) {
+      group.push(u);
+    } else {
+      byLabel.set(u.label, [u]);
+    }
+  }
+  for (const group of byLabel.values()) {
+    if (group.length < 2) {
+      continue;
+    }
+    for (const u of group) {
+      u.label = `${u.sido} ${u.label}`;
+    }
+  }
+
+  return units;
 }
 
 function buildProvinces(): StampMapProvince[] {
@@ -85,16 +106,60 @@ export function getStampMapProvinces(): StampMapProvince[] {
   return provincesCache;
 }
 
-/** L1 keys that have at least one collected 동/읍·면. */
+/** L1 keys that have at least one collected 동/읍·면 (sido-scoped; 고성군×2). */
+export function mapVisitKey(sido: string, l1Key: string): string {
+  return `${sido}/${l1Key}`;
+}
+
 export function visitedL1Keys(collected: StampsCollected): Set<string> {
   const keys = new Set<string>();
   for (const entry of Object.values(collected)) {
     const l1 = findL1ForStamp(entry.sido, entry.city, entry.name);
     if (l1) {
-      keys.add(l1.key);
+      keys.add(mapVisitKey(entry.sido, l1.key));
     }
   }
   return keys;
+}
+
+/** 시·도 with at least one collected leaf. */
+export function visitedSidoNames(collected: StampsCollected): Set<string> {
+  const names = new Set<string>();
+  for (const entry of Object.values(collected)) {
+    names.add(entry.sido);
+  }
+  return names;
+}
+
+export function unitsForSido(sido: string): StampMapUnit[] {
+  return getStampMapUnits().filter((u) => u.sido === sido);
+}
+
+export function countVisitedL1InSido(
+  collected: StampsCollected,
+  sido: string,
+): number {
+  const visited = visitedL1Keys(collected);
+  let n = 0;
+  for (const u of unitsForSido(sido)) {
+    if (visited.has(mapVisitKey(sido, u.key))) {
+      n += 1;
+    }
+  }
+  return n;
+}
+
+export function countVisitedDongsInSido(
+  collected: StampsCollected,
+  sido: string,
+): number {
+  let n = 0;
+  for (const entry of Object.values(collected)) {
+    if (entry.sido === sido) {
+      n += 1;
+    }
+  }
+  return n;
 }
 
 export function selectionFromUnit(unit: StampMapUnit): StampMapSelection {

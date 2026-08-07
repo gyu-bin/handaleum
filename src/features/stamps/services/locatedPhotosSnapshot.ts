@@ -81,3 +81,17 @@ export async function clearLocatedPhotosSnapshot(): Promise<void> {
     console.warn('[stamps] located snapshot clear failed', error);
   }
 }
+
+/** Cheap existence check — avoid JSON parse when deciding GPS skip. */
+export async function hasLocatedPhotosSnapshot(): Promise<boolean> {
+  const uri = snapshotUri();
+  if (!uri) {
+    return false;
+  }
+  try {
+    const info = await getInfoAsync(uri);
+    return Boolean(info.exists && !info.isDirectory);
+  } catch {
+    return false;
+  }
+}

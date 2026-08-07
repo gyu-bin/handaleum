@@ -60,11 +60,15 @@ export function CardTemplateFeed({ card, width = BASE_WIDTH }: CardTemplateFeedP
 
         <View style={styles.titleBlock}>
           {comment ? (
-            <View style={styles.commentStrip}>
-              <Text style={styles.comment} numberOfLines={1}>
-                {comment}
-              </Text>
-            </View>
+            <Text
+              style={[
+                styles.comment,
+                { textAlign: card.commentAlign ?? 'left' },
+              ]}
+              numberOfLines={1}
+            >
+              {comment}
+            </Text>
           ) : null}
         </View>
 
@@ -134,12 +138,6 @@ function makeStyles(width: number, skin: PaperSkinTone) {
     titleBlock: {
       marginTop: 2 * s,
       gap: 6 * s,
-    },
-    commentStrip: {
-      backgroundColor: skin.commentStrip,
-      borderRadius: 6 * s,
-      paddingHorizontal: 10 * s,
-      paddingVertical: 7 * s,
     },
     comment: {
       color: skin.inkSoft,

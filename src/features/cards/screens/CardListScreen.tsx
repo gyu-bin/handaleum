@@ -17,6 +17,7 @@ import { ScreenHeader } from '@/shared/components/ScreenHeader';
 import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
+import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 
 import { useCards, useDeleteCards } from '../hooks/useCards';
 import type { RecapCard } from '../types';
@@ -25,6 +26,7 @@ export function CardListScreen() {
   const router = useRouter();
   const { data, isPending, isError, refetch } = useCards();
   const deleteCards = useDeleteCards();
+  const showLoading = useHeldBusy(isPending);
 
   const [editing, setEditing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -124,7 +126,7 @@ export function CardListScreen() {
     [editing],
   );
 
-  if (isPending) {
+  if (showLoading) {
     return <LoadingView />;
   }
 

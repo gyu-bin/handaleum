@@ -8,6 +8,7 @@ import { PaperGrain } from '@/shared/components/PaperGrain';
 import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
+import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 
 import { MonthPickerList } from '../components/MonthPickerList';
 import { useCurrentMonth } from '../hooks/useCurrentMonth';
@@ -20,6 +21,7 @@ export function MonthPickerScreen() {
   const router = useRouter();
   const { month, setMonth, canOpenMonth } = useCurrentMonth();
   const { data, isPending, isError, refetch, isRefetching } = useMonthSummaries();
+  const showLoading = useHeldBusy(isPending);
 
   useEffect(() => {
     if (!data) {
@@ -30,7 +32,7 @@ export function MonthPickerScreen() {
     }
   }, [data]);
 
-  if (isPending) {
+  if (showLoading) {
     return (
       <View style={styles.safe}>
         <PaperGrain style={styles.grain} />

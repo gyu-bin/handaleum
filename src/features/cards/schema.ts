@@ -7,6 +7,8 @@ export const cardTemplateSchema = z.enum(['feed', 'story']);
 
 export const paperSkinSchema = z.enum(PAPER_SKIN_IDS);
 
+export const commentAlignSchema = z.enum(['left', 'center', 'right']);
+
 export const mapSnapshotSchema = z.object({
   minLat: z.number().min(-90).max(90),
   maxLat: z.number().min(-90).max(90),
@@ -26,6 +28,8 @@ export const recapCardSchema = z.object({
   template: cardTemplateSchema,
   /** Paper background only — photos/layout unchanged. */
   paperSkin: paperSkinSchema.default('ivory'),
+  /** One-line comment horizontal alignment. */
+  commentAlign: commentAlignSchema.default('left'),
   mapSnapshot: mapSnapshotSchema,
   createdAt: z.iso.datetime(),
 });

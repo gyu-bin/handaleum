@@ -101,8 +101,8 @@ export const strings = {
     resetView: '처음으로',
     /** Toggle mid-segment visit-order numbers on the journey path. */
     pathOrderToggle: '1·2',
-    pathOrderShow: '여정 순서 켜기',
-    pathOrderHide: '여정 순서 끄기',
+    pathOrderShow: '여정 선·순서 켜기',
+    pathOrderHide: '여정 선·순서 끄기',
     /** Accessibility label for the "!" button that reveals the map notices. */
     infoToggle: '안내 보기',
     /**
@@ -264,6 +264,11 @@ export const strings = {
     paperSkinSage: '세이지',
     paperSkinBlush: '블러시',
     paperSkinInk: '잉크',
+    commentAlignLabel: '글 정렬',
+    commentAlignA11y: (align: string) => `글 ${align}`,
+    commentAlignLeft: '왼쪽',
+    commentAlignCenter: '가운데',
+    commentAlignRight: '오른쪽',
     templateLabel: '템플릿',
     photoLabel: '사진 선택',
     sortNewest: '최신순',
@@ -334,17 +339,28 @@ export const strings = {
     errorRetry: '다시 시도',
     loading: '도장 준비 중…',
     backfilling: '앨범에서 동네를 모으는 중…',
+    indexingGateTitle: '동네 도장 모으는 중',
+    indexingGateBody:
+      '홈으로 나가거나 앱을 잠가도 백그라운드에서 이어져요. 홈 지도는 그대로 쓸 수 있어요.',
+    indexingGateHint: '다른 일 하다 와도 괜찮아요',
     scanIntroTitle: '사진으로 동네 도장 모으기',
     scanIntroBody:
       '앨범 속 위치 사진으로 동 도장을 모아요. 확인을 눌러도 백그라운드에서 이어지고, 홈의 이번 달 지도는 그대로 쓸 수 있어요.',
     scanIntroConfirm: '확인',
-    mapA11y: '시군구 칸에 모은 동네가 칠해진 한반도 지도',
+    mapA11y: '모은 시·도가 칠해진 대한민국 지도',
+    mapA11ySido: (sido: string) =>
+      `${sido}에서 모은 구·시·군이 칠해진 지도`,
     mapEyebrow: '동네 도장',
     mapTitle: '모은 동네',
-    mapHint: '빈 칸은 구·시·군 · 칠해진 곳을 누르면 그곳으로 이동',
+    mapHint: '시·도를 누르면 구·시·군으로 확대돼요',
+    mapHintSido: '칠해진 구·시·군을 누르면 그곳으로 이동',
+    mapBackNation: '전국',
     mapClose: '닫기',
     mapOpen: '모은 동네 보기',
-    mapVisitCount: (n: number) => `${n}개 동을 모았어요`,
+    mapVisitCount: (dongs: number, sidos: number) =>
+      `${dongs}개 동 · ${sidos}개 시·도`,
+    mapVisitCountSido: (sido: string, dongs: number, l1: number) =>
+      `${sido} · ${dongs}개 동 · ${l1}개 구·시·군`,
     mapEmpty: '아직 모은 동이 없어요',
     leafListEmpty: '동네 목록이 없어요',
     gunLeafListEmpty: '면·읍 목록을 아직 준비 중이에요',
@@ -356,5 +372,6 @@ export const strings = {
     dongPhotosClose: '닫기',
     dongPhotosNewest: '최신순',
     dongPhotosOldest: '오래된순',
+    dongPhotoRetry: '다시 시도',
   },
 } as const;

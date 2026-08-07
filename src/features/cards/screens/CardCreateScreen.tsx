@@ -18,11 +18,14 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import Svg, { Path } from 'react-native-svg';
+
 import { LoadingView } from '@/shared/components/LoadingView';
 import { ScreenHeader } from '@/shared/components/ScreenHeader';
 import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
+import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 
 import { useCurrentMonth } from '../../photos/hooks/useCurrentMonth';
 import { useMonthlyPhotos } from '../../photos/hooks/useMonthlyPhotos';
@@ -40,6 +43,7 @@ import {
   usePhotoPlaceSections,
   type PickerSortMode,
 } from '../hooks/usePhotoPlaceSections';
+import type { CommentAlign } from '../types';
 import { formatMonthDot } from '../utils/cardMeta';
 import type { MapSnapshot } from '../types';
 
@@ -109,11 +113,65 @@ function paperSkinLabel(id: PaperSkinId): string {
   }
 }
 
+const COMMENT_ALIGNS: CommentAlign[] = ['left', 'center', 'right'];
+
+function commentAlignLabel(align: CommentAlign): string {
+  switch (align) {
+    case 'left':
+      return strings.cards.commentAlignLeft;
+    case 'center':
+      return strings.cards.commentAlignCenter;
+    case 'right':
+      return strings.cards.commentAlignRight;
+  }
+}
+
+function AlignGlyph({
+  align,
+  color,
+}: {
+  align: CommentAlign;
+  color: string;
+}) {
+  // Three bars — length/position encodes left / center / right.
+  const bars: { y: number; w: number; x?: number }[] =
+    align === 'left'
+      ? [
+          { y: 5, w: 12 },
+          { y: 9, w: 9 },
+          { y: 13, w: 11 },
+        ]
+      : align === 'center'
+        ? [
+            { y: 5, w: 12, x: 4 },
+            { y: 9, w: 8, x: 6 },
+            { y: 13, w: 10, x: 5 },
+          ]
+        : [
+            { y: 5, w: 12, x: 6 },
+            { y: 9, w: 9, x: 9 },
+            { y: 13, w: 11, x: 7 },
+          ];
+  return (
+    <Svg width={18} height={18} viewBox="0 0 20 20">
+      {bars.map((b, i) => (
+        <Path
+          key={i}
+          d={`M${b.x ?? 4} ${b.y} h${b.w}`}
+          stroke={color}
+          strokeWidth={1.6}
+          strokeLinecap="round"
+        />
+      ))}
+    </Svg>
+  );
+}
+
 /**
  * Owns hero height locally so FlatList header memo identity stays stable
  * while CollageEditor measures — avoids remount mid-drag.
  *
- * Row: [skin dots | centered card | balance spacer]. Dots never overlay paper.
+ * Row: [skin dots | centered card | align dots]. Dots never overlay paper.
  */
 function CreateCardPreview({
   assetIds,
@@ -121,6 +179,8 @@ function CreateCardPreview({
   month,
   paperSkin,
   onPaperSkinChange,
+  commentAlign,
+  onCommentAlignChange,
   comment,
   onCommentChange,
   onSwap,
@@ -133,6 +193,8 @@ function CreateCardPreview({
   month: string;
   paperSkin: PaperSkinId;
   onPaperSkinChange: (id: PaperSkinId) => void;
+  commentAlign: CommentAlign;
+  onCommentAlignChange: (next: CommentAlign) => void;
   comment: string;
   onCommentChange: (next: string) => void;
   onSwap: (a: number, b: number) => void;
@@ -229,12 +291,7 @@ function CreateCardPreview({
                 ) : null}
               </View>
 
-              <View
-                style={[
-                  styles.commentStrip,
-                  { backgroundColor: skin.commentStrip },
-                ]}
-              >
+              <View style={styles.commentStrip}>
                 <TextInput
                   value={comment}
                   onChangeText={(t) => onCommentChange(t.slice(0, COMMENT_MAX))}
@@ -242,7 +299,10 @@ function CreateCardPreview({
                   placeholderTextColor={skin.subtle}
                   maxLength={COMMENT_MAX}
                   numberOfLines={1}
-                  style={[styles.commentInput, { color: skin.inkSoft }]}
+                  style={[
+                    styles.commentInput,
+                    { color: skin.inkSoft, textAlign: commentAlign },
+                  ]}
                   returnKeyType="done"
                 />
               </View>
@@ -264,8 +324,33 @@ function CreateCardPreview({
           </View>
         </View>
 
-        {/* Mirror skin width so the card stays optically centered. */}
-        <View style={styles.skinBalance} />
+        <View
+          style={styles.alignCol}
+          accessibilityRole="radiogroup"
+          accessibilityLabel={strings.cards.commentAlignLabel}
+        >
+          {COMMENT_ALIGNS.map((align) => {
+            const selected = align === commentAlign;
+            return (
+              <Pressable
+                key={align}
+                onPress={() => onCommentAlignChange(align)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+                accessibilityLabel={strings.cards.commentAlignA11y(
+                  commentAlignLabel(align),
+                )}
+                hitSlop={6}
+                style={[styles.alignDot, selected && styles.alignDotOn]}
+              >
+                <AlignGlyph
+                  align={align}
+                  color={selected ? theme.colors.ink : theme.colors.inkSoft}
+                />
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
 
       <Text style={styles.hint}>{strings.cards.arrangeHint}</Text>
@@ -282,11 +367,13 @@ export function CardCreateScreen() {
   const { month } = useCurrentMonth();
   const { data, isPending, isError, refetch } = useMonthlyPhotos(month);
   const saveCard = useSaveCard();
+  const showLoading = useHeldBusy(isPending);
 
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   const [selectionUndoStack, setSelectionUndoStack] = useState<string[][]>([]);
   const [selectionHint, setSelectionHint] = useState<string | null>(null);
   const [paperSkin, setPaperSkin] = useState<PaperSkinId>(DEFAULT_PAPER_SKIN);
+  const [commentAlign, setCommentAlign] = useState<CommentAlign>('left');
   const [comment, setComment] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [collageDragging, setCollageDragging] = useState(false);
@@ -474,6 +561,7 @@ export function CardCreateScreen() {
         photoRefs: selectedPhotos,
         template: 'story',
         paperSkin,
+        commentAlign,
         mapSnapshot,
       });
       // Keep create under preview so back returns to 카드 만들기.
@@ -623,7 +711,7 @@ export function CardCreateScreen() {
     ],
   );
 
-  if (isPending) {
+  if (showLoading) {
     return <LoadingView />;
   }
 
@@ -682,6 +770,8 @@ export function CardCreateScreen() {
                 month={month}
                 paperSkin={paperSkin}
                 onPaperSkinChange={setPaperSkin}
+                commentAlign={commentAlign}
+                onCommentAlignChange={setCommentAlign}
                 comment={comment}
                 onCommentChange={setComment}
                 onSwap={onSwap}
@@ -862,9 +952,15 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     zIndex: 2,
   },
-  /** Same width as skinCol+gap so the card stays screen-centered. */
-  skinBalance: {
-    width: SKIN_SIDE,
+  /** Right column — comment align; same width as skinCol so card stays centered. */
+  alignCol: {
+    width: SKIN_COL_W,
+    marginLeft: SKIN_GAP,
+    gap: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    zIndex: 2,
   },
   cardSlot: {
     flex: 1,
@@ -885,7 +981,20 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: theme.colors.ink,
   },
-
+  alignDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.panelBorder,
+    backgroundColor: theme.colors.surface,
+  },
+  alignDotOn: {
+    borderWidth: 2,
+    borderColor: theme.colors.ink,
+  },
   cardPaper: {
     padding: 6,
     ...theme.shadows.card,
@@ -926,9 +1035,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   commentStrip: {
-    borderRadius: 7,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: 2,
+    paddingVertical: 6,
     minHeight: 30,
     justifyContent: 'center',
     marginBottom: 4,

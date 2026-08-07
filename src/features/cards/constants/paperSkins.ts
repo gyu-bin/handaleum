@@ -23,8 +23,6 @@ export type PaperSkinTone = {
   subtle: string;
   /** Frame + hairline rule. */
   line: string;
-  /** One-line comment strip behind text. */
-  commentStrip: string;
 };
 
 export const PAPER_SKINS: Record<PaperSkinId, PaperSkinTone> = {
@@ -35,7 +33,6 @@ export const PAPER_SKINS: Record<PaperSkinId, PaperSkinTone> = {
     inkSoft: '#5A6B7A',
     subtle: '#93A1AD',
     line: 'rgba(44,62,80,0.18)',
-    commentStrip: 'rgba(44,62,80,0.06)',
   },
   fog: {
     id: 'fog',
@@ -44,7 +41,6 @@ export const PAPER_SKINS: Record<PaperSkinId, PaperSkinTone> = {
     inkSoft: '#5A6B7A',
     subtle: '#7A8B99',
     line: 'rgba(44,62,80,0.18)',
-    commentStrip: 'rgba(44,62,80,0.06)',
   },
   sage: {
     id: 'sage',
@@ -53,7 +49,6 @@ export const PAPER_SKINS: Record<PaperSkinId, PaperSkinTone> = {
     inkSoft: '#5A6B7A',
     subtle: '#7A8B7E',
     line: 'rgba(44,62,80,0.18)',
-    commentStrip: 'rgba(44,62,80,0.06)',
   },
   blush: {
     id: 'blush',
@@ -62,7 +57,6 @@ export const PAPER_SKINS: Record<PaperSkinId, PaperSkinTone> = {
     inkSoft: '#5A6B7A',
     subtle: '#9A8582',
     line: 'rgba(44,62,80,0.18)',
-    commentStrip: 'rgba(44,62,80,0.06)',
   },
   ink: {
     id: 'ink',
@@ -71,7 +65,6 @@ export const PAPER_SKINS: Record<PaperSkinId, PaperSkinTone> = {
     inkSoft: 'rgba(247,241,232,0.78)',
     subtle: 'rgba(247,241,232,0.5)',
     line: 'rgba(247,241,232,0.28)',
-    commentStrip: 'rgba(247,241,232,0.12)',
   },
 };
 

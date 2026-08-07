@@ -13,6 +13,7 @@ import { ScreenHeader } from '@/shared/components/ScreenHeader';
 import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
+import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 
 import { useCurrentMonth } from '@/features/photos/hooks/useCurrentMonth';
 import { usePhotoPermission } from '@/features/photos/hooks/usePhotoPermission';
@@ -27,8 +28,10 @@ import { MascotPin } from '../components/MascotPin';
 import { RegionChips } from '../components/RegionChips';
 import { StampDongPhotosModal } from '../components/StampDongPhotosModal';
 import { StampEarnOverlay } from '../components/StampEarnOverlay';
+import { StampIndexingGate } from '../components/StampIndexingGate';
 import { StampMapModal } from '../components/StampMapModal';
 import { StampScanIntroModal } from '../components/StampScanIntroModal';
+import { useStampLibraryProgress } from '../hooks/useStampLibraryProgress';
 import { useStampLibrarySync } from '../hooks/useStampLibrarySync';
 import { useStamps } from '../hooks/useStamps';
 import { stampId } from '../services/dongIndex';
@@ -80,6 +83,8 @@ export function StampScreen() {
     isReady,
     status: permissionStatus,
   });
+  const indexing = useStampLibraryProgress();
+  const gateOpen = syncing;
 
   const { collected, unseen, collectedCount, markAllSeen } = useStamps();
   const [sido, setSido] = useState(SIDO_ORDER[0] ?? '서울');
@@ -98,6 +103,14 @@ export function StampScreen() {
   const celebrating = useRef(false);
   /** Map tap sets sido + L1 together — skip the chip-driven L1 reset once. */
   const keepL1OnSidoChange = useRef(false);
+
+  useEffect(() => {
+    if (!gateOpen) {
+      return;
+    }
+    setMapOpen(false);
+    setDongPhotos(null);
+  }, [gateOpen]);
 
   const onScanIntroConfirm = useCallback(() => {
     setStampsScanIntroSeen();
@@ -272,7 +285,9 @@ export function StampScreen() {
     };
   }, [animateIds, collected, leavesByL1, selectedL1, sido]);
 
-  if (!isReady) {
+  const showBootLoading = useHeldBusy(!isReady);
+
+  if (showBootLoading) {
     return (
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
         <LoadingView message={strings.stamps.loading} />
@@ -296,122 +311,128 @@ export function StampScreen() {
 
       <ScreenHeader
         title={strings.stamps.title}
-        onBack={l1Key ? () => setL1Key(null) : undefined}
+        onBack={
+          gateOpen ? undefined : l1Key ? () => setL1Key(null) : undefined
+        }
         trailing={
-          <View style={styles.trailing}>
-            {monthFirsts > 0 ? (
-              <View style={styles.pill}>
-                <Text style={styles.pillText}>
-                  {strings.stamps.newThisMonth(monthFirsts)}
-                </Text>
-              </View>
-            ) : null}
-            <Pressable
-              onPress={() => setMapOpen(true)}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel={strings.stamps.mapOpen}
-              style={({ pressed }) => [
-                styles.mapBtn,
-                pressed && styles.mapBtnPressed,
-              ]}
-            >
-              <MapIcon color={theme.colors.ink} />
-            </Pressable>
-          </View>
+          gateOpen ? null : (
+            <View style={styles.trailing}>
+              {monthFirsts > 0 ? (
+                <View style={styles.pill}>
+                  <Text style={styles.pillText}>
+                    {strings.stamps.newThisMonth(monthFirsts)}
+                  </Text>
+                </View>
+              ) : null}
+              <Pressable
+                onPress={() => setMapOpen(true)}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel={strings.stamps.mapOpen}
+                style={({ pressed }) => [
+                  styles.mapBtn,
+                  pressed && styles.mapBtnPressed,
+                ]}
+              >
+                <MapIcon color={theme.colors.ink} />
+              </Pressable>
+            </View>
+          )
         }
       />
 
-      <StampDongPhotosModal
-        query={dongPhotos}
-        onClose={() => setDongPhotos(null)}
-      />
-
-      <StampMapModal
-        visible={mapOpen}
-        collected={collected}
-        onClose={() => setMapOpen(false)}
-        onSelect={({ sido: nextSido, l1Key: nextL1 }) => {
-          if (nextSido !== sido) {
-            keepL1OnSidoChange.current = nextL1 != null;
-            setSido(nextSido);
-          }
-          setL1Key(nextL1);
-        }}
-      />
-
-      {!l1Key ? (
-        <RegionChips sidos={SIDO_ORDER} selected={sido} onSelect={setSido} />
-      ) : null}
-
-      <View style={styles.progressBlock}>
-        <Text style={styles.progressLabel}>
-          {selectedL1
-            ? strings.stamps.cityProgressLabel(selectedL1.label)
-            : strings.stamps.progressLabel(sido)}
-          {selectedL1 && leafSection
-            ? strings.stamps.progress(leafSection.collected, leafSection.total)
-            : strings.stamps.progress(sidoCollected, sidoTotal)}
-        </Text>
-        <View style={styles.track}>
-          <View
-            style={[
-              styles.fill,
-              {
-                width: `${
-                  selectedL1 && leafSection
-                    ? leafSection.total === 0
-                      ? 0
-                      : Math.min(
-                          100,
-                          (leafSection.collected / leafSection.total) * 100,
-                        )
-                    : progressPct
-                }%`,
-              },
-            ]}
-          />
-        </View>
-        {syncing ? (
-          <Text style={styles.syncHint}>{strings.stamps.backfilling}</Text>
-        ) : null}
-      </View>
-
-      {empty && !l1Key ? (
-        <View style={styles.emptyWrap}>
-          <MascotPin size={48} />
-          <StateView
-            title={
-              syncing ? strings.stamps.backfilling : strings.stamps.emptyTitle
-            }
-            description={
-              syncing ? strings.stamps.scanIntroBody : strings.stamps.empty
-            }
-          />
-        </View>
-      ) : selectedL1 && leafSection ? (
-        leafSection.total === 0 ? (
-          <View style={styles.emptyWrap}>
-            <StateView
-              title={selectedL1.label}
-              description={
-                selectedL1.kind === 'gun'
-                  ? strings.stamps.gunLeafListEmpty
-                  : strings.stamps.leafListEmpty
-              }
-            />
-          </View>
-        ) : (
-          <CityStampSections
-            sections={[leafSection]}
-            replayNonce={replayNonce}
-            onSelectCollected={onSelectCollected}
-          />
-        )
+      {gateOpen ? (
+        <StampIndexingGate progress={indexing} />
       ) : (
-        <ScrollView>
-          <CityList cities={l1Rows} onSelect={setL1Key} />
-        </ScrollView>
+        <>
+          <StampDongPhotosModal
+            query={dongPhotos}
+            onClose={() => setDongPhotos(null)}
+          />
+
+          <StampMapModal
+            visible={mapOpen}
+            collected={collected}
+            onClose={() => setMapOpen(false)}
+            onSelect={({ sido: nextSido, l1Key: nextL1 }) => {
+              if (nextSido !== sido) {
+                keepL1OnSidoChange.current = nextL1 != null;
+                setSido(nextSido);
+              }
+              setL1Key(nextL1);
+            }}
+          />
+
+          {!l1Key ? (
+            <RegionChips sidos={SIDO_ORDER} selected={sido} onSelect={setSido} />
+          ) : null}
+
+          <View style={styles.progressBlock}>
+            <Text style={styles.progressLabel}>
+              {selectedL1
+                ? strings.stamps.cityProgressLabel(selectedL1.label)
+                : strings.stamps.progressLabel(sido)}
+              {selectedL1 && leafSection
+                ? strings.stamps.progress(
+                    leafSection.collected,
+                    leafSection.total,
+                  )
+                : strings.stamps.progress(sidoCollected, sidoTotal)}
+            </Text>
+            <View style={styles.track}>
+              <View
+                style={[
+                  styles.fill,
+                  {
+                    width: `${
+                      selectedL1 && leafSection
+                        ? leafSection.total === 0
+                          ? 0
+                          : Math.min(
+                              100,
+                              (leafSection.collected / leafSection.total) * 100,
+                            )
+                        : progressPct
+                    }%`,
+                  },
+                ]}
+              />
+            </View>
+          </View>
+
+          {empty && !l1Key ? (
+            <View style={styles.emptyWrap}>
+              <MascotPin size={48} />
+              <StateView
+                title={strings.stamps.emptyTitle}
+                description={strings.stamps.empty}
+              />
+            </View>
+          ) : selectedL1 && leafSection ? (
+            leafSection.total === 0 ? (
+              <View style={styles.emptyWrap}>
+                <StateView
+                  title={selectedL1.label}
+                  description={
+                    selectedL1.kind === 'gun'
+                      ? strings.stamps.gunLeafListEmpty
+                      : strings.stamps.leafListEmpty
+                  }
+                />
+              </View>
+            ) : (
+              <CityStampSections
+                sections={[leafSection]}
+                replayNonce={replayNonce}
+                onSelectCollected={onSelectCollected}
+              />
+            )
+          ) : (
+            <ScrollView>
+              <CityList cities={l1Rows} onSelect={setL1Key} />
+            </ScrollView>
+          )}
+        </>
       )}
     </SafeAreaView>
   );
@@ -465,11 +486,6 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.sans,
     color: theme.colors.inkSoft,
     fontWeight: '500',
-  },
-  syncHint: {
-    ...theme.type.micro,
-    fontFamily: theme.fonts.sans,
-    color: theme.colors.subtle,
   },
   track: {
     height: 1,

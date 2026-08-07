@@ -8,6 +8,33 @@
 /** Same window as stampLibrarySyncRunner SYNC_COOLDOWN_MS. */
 export const STAMP_GPS_RESUME_MS = 6 * 60 * 60 * 1000;
 
+/** Weekly full MediaLibrary walk (iCloud no-GPS catch-up). */
+export const STAMP_DEEP_RECHECK_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Approach A: reuse on-disk GPS list instead of re-listing the album.
+ * Skip when user forces a rescan or the weekly deep recheck is due.
+ */
+export function shouldReuseLocatedSnapshot(input: {
+  force: boolean;
+  hasSnapshot: boolean;
+  librarySyncAt: number;
+  now: number;
+  deepRecheckMs?: number;
+}): boolean {
+  if (input.force || !input.hasSnapshot) {
+    return false;
+  }
+  const deepMs = input.deepRecheckMs ?? STAMP_DEEP_RECHECK_MS;
+  if (
+    input.librarySyncAt > 0 &&
+    input.now - input.librarySyncAt >= deepMs
+  ) {
+    return false;
+  }
+  return true;
+}
+
 export function shouldResumeGeocodeOnly(input: {
   now: number;
   gpsScanAt: number;
@@ -31,8 +58,8 @@ export function shouldResumeGeocodeOnly(input: {
   if (input.now - input.gpsScanAt >= windowMs) {
     return false;
   }
-  // GPS finished more recently than a completed full sync (or never finished).
-  return input.librarySyncAt < input.gpsScanAt;
+  // Fresh GPS on disk — reuse whether or not dong match finished.
+  return true;
 }
 
 /**

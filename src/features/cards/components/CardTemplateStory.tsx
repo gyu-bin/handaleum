@@ -79,11 +79,15 @@ export function CardTemplateStory({
 
         <View style={styles.titleBlock}>
           {comment ? (
-            <View style={styles.commentStrip}>
-              <Text style={styles.comment} numberOfLines={1}>
-                {comment}
-              </Text>
-            </View>
+            <Text
+              style={[
+                styles.comment,
+                { textAlign: card.commentAlign ?? 'left' },
+              ]}
+              numberOfLines={1}
+            >
+              {comment}
+            </Text>
           ) : null}
         </View>
 
@@ -154,12 +158,6 @@ function makeStyles(width: number, skin: PaperSkinTone) {
     },
     titleBlock: {
       gap: 4 * s,
-    },
-    commentStrip: {
-      backgroundColor: skin.commentStrip,
-      borderRadius: 4 * s,
-      paddingHorizontal: 8 * s,
-      paddingVertical: 5 * s,
     },
     comment: {
       color: skin.inkSoft,

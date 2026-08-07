@@ -1,18 +1,10 @@
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, {
-  Easing,
-  ReduceMotion,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-} from 'react-native-reanimated';
-import { useEffect } from 'react';
 
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
+import { BikeLoader } from './BikeLoader';
 import { PaperGrain } from './PaperGrain';
 
 export interface LoadingViewProps {
@@ -20,39 +12,20 @@ export interface LoadingViewProps {
   message?: string;
 }
 
-const ICON = require('../../../assets/images/icon.png');
-const ICON_SIZE = 96;
-
 /**
- * Brand loading — same clay icon as splash/app icon, soft breath.
+ * Brand loading — stroke-draw bike on cream paper (min hold is call-site via useHeldBusy).
  */
-export function LoadingView({ message = strings.common.loading }: LoadingViewProps) {
-  const breath = useSharedValue(0);
-
-  useEffect(() => {
-    breath.value = withRepeat(
-      withTiming(1, {
-        duration: 1400,
-        easing: Easing.inOut(Easing.quad),
-        reduceMotion: ReduceMotion.Never,
-      }),
-      -1,
-      true,
-    );
-  }, [breath]);
-
-  const iconStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: 0.96 + breath.value * 0.04 }],
-    opacity: 0.88 + breath.value * 0.12,
-  }));
-
+export function LoadingView({
+  message = strings.common.loading,
+}: LoadingViewProps) {
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <PaperGrain style={styles.grain} />
       <View style={styles.center}>
-        <Animated.View style={[styles.iconWrap, iconStyle]}>
-          <Image source={ICON} style={styles.icon} accessibilityIgnoresInvertColors />
-        </Animated.View>
+        <BikeLoader width={132} />
+        <Text style={styles.brand} accessibilityRole="header">
+          {strings.brand}
+        </Text>
         <Text style={styles.message}>{message}</Text>
       </View>
     </SafeAreaView>
@@ -65,29 +38,29 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   grain: {
-    opacity: 0.35,
+    opacity: 0.28,
   },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: theme.spacing.md,
+    gap: theme.spacing.sm,
     paddingHorizontal: theme.spacing.lg,
+    marginTop: -24,
   },
-  iconWrap: {
-    width: ICON_SIZE,
-    height: ICON_SIZE,
-    borderRadius: ICON_SIZE * 0.2237,
-    overflow: 'hidden',
-  },
-  icon: {
-    width: ICON_SIZE,
-    height: ICON_SIZE,
+  brand: {
+    marginTop: theme.spacing.md,
+    fontFamily: theme.fonts.sans,
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: 4,
+    color: theme.colors.splashMark,
   },
   message: {
-    ...theme.type.body,
+    ...theme.type.micro,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.inkSoft,
+    color: theme.colors.subtle,
     textAlign: 'center',
+    letterSpacing: 0.3,
   },
 });

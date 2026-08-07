@@ -18,6 +18,7 @@ import { ScreenHeader } from '@/shared/components/ScreenHeader';
 import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
+import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 
 import { CardTemplateStory } from '../components/CardTemplateStory';
 import { useCard, useDeleteCard } from '../hooks/useCards';
@@ -50,6 +51,7 @@ export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
   const { from } = useLocalSearchParams<{ from?: string | string[] }>();
   const fromCreate = (Array.isArray(from) ? from[0] : from) === 'create';
   const { data, isPending, isError, refetch } = useCard(cardId);
+  const showLoading = useHeldBusy(isPending);
   const deleteCard = useDeleteCard();
   const captureTarget = useRef<View>(null);
   const exportReadyRef = useRef(false);
@@ -181,7 +183,7 @@ export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
     ]);
   };
 
-  if (isPending) {
+  if (showLoading) {
     return <LoadingView />;
   }
 
@@ -215,6 +217,7 @@ export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
     photoRefs: data.photoRefs,
     template: data.template,
     paperSkin: data.paperSkin,
+    commentAlign: data.commentAlign,
     mapSnapshot: data.mapSnapshot,
   };
 

@@ -1,0 +1,124 @@
+<h2>「이 날짜까지」 UI 샘플</h2>
+<p class="subtitle">지도 아래 · 크림 종이 + 잉크. 클릭해서 마음에 드는 방향을 골라 주세요.</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#F7F1E8;padding:16px 14px 14px;">
+      <div style="background:#FFFBF5;border:1px solid #E8E4DC;border-radius:10px;padding:14px 14px 12px;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;">
+          <span style="font-size:11px;color:#93A1AD;letter-spacing:0.3px;">여기까지 보기</span>
+          <span style="font-size:15px;font-weight:700;color:#2C3E50;">8월 18일</span>
+        </div>
+        <div style="position:relative;height:36px;display:flex;align-items:flex-end;gap:2px;margin-bottom:4px;">
+          <div style="flex:1;height:8px;background:#EFE6DA;border-radius:2px;"></div>
+          <div style="flex:1;height:14px;background:#EFE6DA;border-radius:2px;"></div>
+          <div style="flex:1;height:22px;background:#2C3E50;border-radius:2px;opacity:0.85;"></div>
+          <div style="flex:1;height:18px;background:#2C3E50;border-radius:2px;opacity:0.85;"></div>
+          <div style="flex:1;height:28px;background:#2C3E50;border-radius:2px;"></div>
+          <div style="flex:1;height:12px;background:#2C3E50;border-radius:2px;opacity:0.7;"></div>
+          <div style="flex:1;height:20px;background:#EFE6DA;border-radius:2px;"></div>
+          <div style="flex:1;height:10px;background:#EFE6DA;border-radius:2px;"></div>
+          <div style="position:absolute;left:62%;top:0;bottom:0;width:2px;background:#2C3E50;"></div>
+          <div style="position:absolute;left:calc(62% - 7px);top:0;width:16px;height:16px;border-radius:50%;background:#FFFBF5;border:2px solid #2C3E50;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:#93A1AD;margin-top:6px;">
+          <span>1일</span><span>사진 많은 날 ↑</span><span>31일</span>
+        </div>
+      </div>
+      <div style="margin-top:10px;height:40px;border-radius:10px;background:#2C3E50;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;">카드 만들기</div>
+    </div>
+    <div class="card-body">
+      <h3>A · 밀도 타임라인</h3>
+      <p>날짜별 사진 양을 막대로. “언제 많이 찍었는지”가 한눈에. 끝점만 드래그.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#F7F1E8;padding:16px 14px 14px;">
+      <div style="background:#FFFBF5;border:1px solid #E8E4DC;border-radius:10px;padding:12px 14px 14px;">
+        <div style="font-size:11px;color:#93A1AD;margin-bottom:4px;">이 순간까지</div>
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:10px;">
+          <div>
+            <div style="font-size:28px;font-weight:700;color:#2C3E50;letter-spacing:-0.8px;line-height:1.1;">8.18</div>
+            <div style="font-size:12px;color:#5A6B7A;margin-top:2px;">오후 3:20 · 14곳</div>
+          </div>
+          <div style="flex:1;max-width:140px;">
+            <div style="height:6px;background:#EFE6DA;border-radius:99px;overflow:hidden;">
+              <div style="width:58%;height:100%;background:#2C3E50;border-radius:99px;"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:#93A1AD;">
+              <span>月初</span><span>月末</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:10px;height:40px;border-radius:10px;background:#2C3E50;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;">카드 만들기</div>
+    </div>
+    <div class="card-body">
+      <h3>B · 날짜 히어로</h3>
+      <p>큰 날짜가 주인공. 슬라이더는 보조. 분 단위 대신 “그날 / 그 시각” 톤.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#F7F1E8;padding:16px 14px 14px;">
+      <div style="background:#FFFBF5;border:1px solid #E8E4DC;border-radius:10px;padding:12px 12px 12px;">
+        <div style="display:flex;gap:6px;margin-bottom:12px;">
+          <span style="flex:1;text-align:center;padding:8px 0;border-radius:8px;font-size:12px;font-weight:600;background:#2C3E50;color:#FFFBF5;">초순</span>
+          <span style="flex:1;text-align:center;padding:8px 0;border-radius:8px;font-size:12px;font-weight:500;background:#EFE6DA;color:#5A6B7A;">중순</span>
+          <span style="flex:1;text-align:center;padding:8px 0;border-radius:8px;font-size:12px;font-weight:500;background:#EFE6DA;color:#5A6B7A;">하순</span>
+          <span style="flex:1;text-align:center;padding:8px 0;border-radius:8px;font-size:12px;font-weight:500;border:1px solid #E8E4DC;color:#5A6B7A;">전체</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+          <span style="font-size:11px;color:#93A1AD;">세부 조절</span>
+          <span style="font-size:13px;font-weight:600;color:#2C3E50;">~ 8월 10일</span>
+        </div>
+        <div style="height:4px;background:#EFE6DA;border-radius:2px;position:relative;">
+          <div style="width:33%;height:100%;background:#2C3E50;border-radius:2px;"></div>
+          <div style="position:absolute;left:33%;top:50%;margin:-9px 0 0 -9px;width:18px;height:18px;border-radius:50%;background:#FFFBF5;border:2px solid #2C3E50;"></div>
+        </div>
+      </div>
+      <div style="margin-top:10px;height:40px;border-radius:10px;background:#2C3E50;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;">카드 만들기</div>
+    </div>
+    <div class="card-body">
+      <h3>C · 구간 칩 + 미세 슬라이더</h3>
+      <p>초·중·하순으로 먼저 점프, 필요할 때만 슬라이더. 한 손 조작에 유리.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="d" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#F7F1E8;padding:16px 14px 14px;">
+      <div style="background:#FFFBF5;border:1px solid #E8E4DC;border-radius:10px;padding:12px 14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <span style="font-size:11px;color:#93A1AD;">여정 컷</span>
+          <span style="font-size:12px;font-weight:600;color:#2C3E50;">1일 → <span style="border-bottom:2px solid #2C3E50;">18일</span></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:0;justify-content:space-between;padding:4px 0 2px;">
+          <span style="width:7px;height:7px;border-radius:50%;background:#2C3E50;"></span>
+          <span style="flex:1;height:2px;background:#2C3E50;opacity:0.35;"></span>
+          <span style="width:7px;height:7px;border-radius:50%;background:#2C3E50;"></span>
+          <span style="flex:1;height:2px;background:#2C3E50;opacity:0.35;"></span>
+          <span style="width:10px;height:10px;border-radius:50%;background:#2C3E50;box-shadow:0 0 0 3px rgba(44,62,80,0.15);"></span>
+          <span style="flex:1;height:2px;background:#E8E4DC;"></span>
+          <span style="width:7px;height:7px;border-radius:50%;background:#E8E4DC;"></span>
+          <span style="flex:1;height:2px;background:#E8E4DC;"></span>
+          <span style="width:7px;height:7px;border-radius:50%;background:#E8E4DC;"></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:10px;color:#93A1AD;">
+          <span>시작</span>
+          <span style="color:#2C3E50;font-weight:600;">여기까지 · 핀 14</span>
+          <span>말</span>
+        </div>
+      </div>
+      <div style="margin-top:10px;height:40px;border-radius:10px;background:#2C3E50;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;">카드 만들기</div>
+    </div>
+    <div class="card-body">
+      <h3>D · 여정 비드</h3>
+      <p>지도 경로 메타포. “컷 지점”이 명확. 분 단위 대신 방문/일자 단위.</p>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:20px;">추천: <strong>A</strong>(정보량) 또는 <strong>B</strong>(저널 톤). 지금 UI는 기능은 맞는데 라벨·시·분이 지도보다 앞서 보여서 도구 느낌이 납니다.</p>

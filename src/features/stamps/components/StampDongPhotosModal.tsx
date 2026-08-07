@@ -27,6 +27,7 @@ const GAP = 10;
 const H_PAD = theme.spacing.md;
 
 type SortMode = 'newest' | 'oldest';
+type ThumbPhase = 'resolving' | 'decoding' | 'ready' | 'error';
 
 function formatTakenAt(iso: string): string {
   const t = Date.parse(iso);
@@ -50,40 +51,86 @@ function Thumb({
   size: number;
 }) {
   const [uri, setUri] = useState<string | null>(null);
+  const [phase, setPhase] = useState<ThumbPhase>('resolving');
+  const [retryNonce, setRetryNonce] = useState(0);
+
   useEffect(() => {
     let cancelled = false;
+    setPhase('resolving');
+    setUri(null);
     void resolveAssetUri(assetId)
       .then((next) => {
-        if (!cancelled) {
-          setUri(next);
+        if (cancelled) {
+          return;
         }
+        if (!next) {
+          setPhase('error');
+          return;
+        }
+        setUri(next);
+        setPhase('decoding');
       })
       .catch(() => {
         if (!cancelled) {
-          setUri(null);
+          setPhase('error');
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [assetId]);
+  }, [assetId, retryNonce]);
+
+  const onRetry = useCallback(() => {
+    setRetryNonce((n) => n + 1);
+  }, []);
 
   const dateLabel = formatTakenAt(takenAt);
+  const busy = phase === 'resolving' || phase === 'decoding';
 
   return (
     <View style={{ width: size }}>
-      <View style={[styles.thumb, { width: size, height: size }]}>
-        {uri ? (
+      <Pressable
+        onPress={phase === 'error' ? onRetry : undefined}
+        disabled={phase !== 'error'}
+        accessibilityRole={phase === 'error' ? 'button' : undefined}
+        accessibilityLabel={
+          phase === 'error' ? strings.stamps.dongPhotoRetry : undefined
+        }
+        style={[styles.thumb, { width: size, height: size }]}
+      >
+        {uri && phase !== 'error' ? (
           <Image
             source={{ uri }}
             style={{ width: size, height: size }}
             contentFit="cover"
             recyclingKey={assetId}
+            cachePolicy="memory-disk"
+            onLoad={() => setPhase('ready')}
+            onError={() => {
+              setUri(null);
+              setPhase('error');
+            }}
           />
-        ) : (
-          <View style={[styles.thumbPlaceholder, { width: size, height: size }]} />
-        )}
-      </View>
+        ) : null}
+
+        {busy ? (
+          <View
+            style={[
+              styles.thumbOverlay,
+              phase === 'decoding' && styles.thumbOverlaySoft,
+            ]}
+            pointerEvents="none"
+          >
+            <ActivityIndicator color={theme.colors.inkSoft} />
+          </View>
+        ) : null}
+
+        {phase === 'error' ? (
+          <View style={styles.thumbOverlay}>
+            <Text style={styles.retryLabel}>{strings.stamps.dongPhotoRetry}</Text>
+          </View>
+        ) : null}
+      </Pressable>
       {dateLabel ? (
         <Text style={styles.takenAt} numberOfLines={1}>
           {dateLabel}
@@ -145,6 +192,13 @@ export function StampDongPhotosModal({
       cancelled = true;
     };
   }, [query]);
+
+  useEffect(() => {
+    if (visible) {
+      return;
+    }
+    void Image.clearMemoryCache();
+  }, [visible]);
 
   const sortedPhotos = useMemo(() => {
     if (photos.length <= 1) {
@@ -261,6 +315,10 @@ export function StampDongPhotosModal({
               columnWrapperStyle={styles.row}
               contentContainerStyle={styles.grid}
               showsVerticalScrollIndicator={false}
+              initialNumToRender={6}
+              maxToRenderPerBatch={4}
+              windowSize={5}
+              removeClippedSubviews
               renderItem={({ item }) => (
                 <Thumb
                   assetId={item.assetId}
@@ -370,9 +428,23 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     overflow: 'hidden',
     backgroundColor: theme.colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  thumbPlaceholder: {
+  thumbOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: theme.colors.surfaceAlt,
+  },
+  thumbOverlaySoft: {
+    backgroundColor: 'transparent',
+  },
+  retryLabel: {
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.inkSoft,
+    fontWeight: '600',
   },
   takenAt: {
     ...theme.type.micro,

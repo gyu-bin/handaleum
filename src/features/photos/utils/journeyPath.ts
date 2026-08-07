@@ -2,7 +2,7 @@ import type { PlaceCluster } from '../types';
 
 export type PathCoord = { latitude: number; longitude: number };
 
-/** Midpoint on the journey polyline with the arrival pin's visit order. */
+/** Point on the journey polyline with a visit-order number (1…N). */
 export type PathOrderStep = PathCoord & { order: number };
 
 /**
@@ -50,8 +50,8 @@ export function journeyPathCoords(clusters: PlaceCluster[]): PathCoord[] {
 }
 
 /**
- * Midpoints of each hop with the arrival visit number (2…N).
- * Same ordering as `journeyPathCoords` — numbers grow in travel direction.
+ * Visit-order labels on the polyline (not under photo pins).
+ * 1 sits a short walk from the first pin; 2…N sit near each arrival along the hop.
  */
 export function journeyPathSteps(clusters: PlaceCluster[]): PathOrderStep[] {
   const coords = orderedPathCoords(clusters);
@@ -60,12 +60,20 @@ export function journeyPathSteps(clusters: PlaceCluster[]): PathOrderStep[] {
   }
 
   const steps: PathOrderStep[] = [];
+  const first = coords[0]!;
+  const second = coords[1]!;
+  steps.push({
+    latitude: first.latitude * 0.75 + second.latitude * 0.25,
+    longitude: first.longitude * 0.75 + second.longitude * 0.25,
+    order: 1,
+  });
+
   for (let i = 0; i < coords.length - 1; i++) {
     const a = coords[i]!;
     const b = coords[i + 1]!;
     steps.push({
-      latitude: (a.latitude + b.latitude) / 2,
-      longitude: (a.longitude + b.longitude) / 2,
+      latitude: a.latitude * 0.25 + b.latitude * 0.75,
+      longitude: a.longitude * 0.25 + b.longitude * 0.75,
       order: i + 2,
     });
   }

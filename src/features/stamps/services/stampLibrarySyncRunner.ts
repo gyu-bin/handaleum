@@ -2,14 +2,12 @@ import {
   isPinExportBusy,
   setFullAlbumScanBusy,
 } from '@/features/photos/services/mediaLibrary';
-import { isDevDummyPhotosEnabled } from '@/features/photos/services/dummyPhotos';
 import {
   releaseIndexingBackground,
   retainIndexingBackground,
 } from '@/features/photos/services/indexingBackground';
 import { clearPlaceResolveCache } from '@/features/photos/services/placeResolve';
 import {
-  getStampsGpsScanAt,
   getStampsLibrarySyncAt,
   getStampsPlaceParseRev,
   setStampsCoarseGeocodeAt,
@@ -19,15 +17,20 @@ import {
   STAMPS_PLACE_PARSE_REV,
 } from '@/lib/storage';
 
-import { clearLocatedPhotosSnapshot } from './locatedPhotosSnapshot';
+import {
+  clearLocatedPhotosSnapshot,
+  hasLocatedPhotosSnapshot,
+} from './locatedPhotosSnapshot';
 import {
   resetStampLibraryProgress,
   syncStampsFromLibrary,
   type StampLibrarySyncResult,
 } from './stampBackfill';
+import { prebuildStampDongPhotoIndex } from './stampDongPhotos';
 import {
+  STAMP_DEEP_RECHECK_MS,
   STAMP_GPS_RESUME_MS,
-  shouldResumeGeocodeOnly,
+  shouldReuseLocatedSnapshot,
 } from './stampSyncResume';
 
 type Listener = (syncing: boolean) => void;
@@ -89,7 +92,7 @@ export type StartStampLibrarySyncOptions = {
 
 /**
  * Single-flight full-album stamp sync.
- * GPS → offline dong PIP (no CLGeocoder). Resumes from GPS snapshot when killed.
+ * GPS → offline dong PIP. Reuses located snapshot when present (Approach A).
  */
 export function startStampLibrarySync(
   options?: StartStampLibrarySyncOptions,
@@ -101,53 +104,53 @@ export function startStampLibrarySync(
   const parseRevStale = getStampsPlaceParseRev() < STAMPS_PLACE_PARSE_REV;
   const userForce = options?.force === true;
   const now = Date.now();
+  const librarySyncAt = getStampsLibrarySyncAt();
 
   if (!userForce && !parseRevStale) {
-    const last = getStampsLibrarySyncAt();
-    if (last > 0 && now - last < SYNC_COOLDOWN_MS) {
+    if (librarySyncAt > 0 && now - librarySyncAt < SYNC_COOLDOWN_MS) {
+      // Warm dong popup index without touching MediaLibrary.
+      void prebuildStampDongPhotoIndex();
       return Promise.resolve({ added: 0, photoCount: 0 });
     }
   }
 
-  const resumeGeocodeOnly =
-    !isDevDummyPhotosEnabled() &&
-    shouldResumeGeocodeOnly({
-      now,
-      gpsScanAt: getStampsGpsScanAt(),
-      librarySyncAt: getStampsLibrarySyncAt(),
+  const run = (async () => {
+    const hasSnap = await hasLocatedPhotosSnapshot();
+    const resumeGeocodeOnly = shouldReuseLocatedSnapshot({
       force: userForce,
-      parseRevRescan: parseRevStale,
+      hasSnapshot: hasSnap,
+      librarySyncAt,
+      now,
+      deepRecheckMs: STAMP_DEEP_RECHECK_MS,
     });
 
-  syncing = true;
-  setFullAlbumScanBusy(true);
-  retainIndexingBackground();
-  emit();
-  const run = (async () => {
-    if (userForce || isDevDummyPhotosEnabled()) {
-      clearPlaceResolveCache();
-      setStampsGpsScanAt(0);
-      setStampsCoarseGeocodeAt(0);
-      await clearLocatedPhotosSnapshot();
-    } else if (parseRevStale) {
-      clearPlaceResolveCache();
-      setStampsCoarseGeocodeAt(0);
-    }
+    syncing = true;
+    setFullAlbumScanBusy(true);
+    retainIndexingBackground();
+    emit();
 
-    return syncStampsFromLibrary({ resumeGeocodeOnly });
-  })()
-    .then((result) => {
+    try {
+      // Only user-forced rescan drops the GPS snapshot (Approach A).
+      if (userForce) {
+        clearPlaceResolveCache();
+        setStampsGpsScanAt(0);
+        setStampsCoarseGeocodeAt(0);
+        await clearLocatedPhotosSnapshot();
+      } else if (parseRevStale) {
+        clearPlaceResolveCache();
+        setStampsCoarseGeocodeAt(0);
+      }
+
+      const result = await syncStampsFromLibrary({ resumeGeocodeOnly });
       setStampsLibrarySyncAt(Date.now());
       if (result.photoCount > 0) {
         setStampsPlaceParseRev(STAMPS_PLACE_PARSE_REV);
       }
       return result;
-    })
-    .catch((error): StampLibrarySyncResult => {
+    } catch (error) {
       console.warn('[stamps] library sync failed', error);
       return { added: 0, photoCount: 0 };
-    })
-    .finally(() => {
+    } finally {
       inflight = null;
       syncing = false;
       setFullAlbumScanBusy(false);
@@ -158,7 +161,9 @@ export function startStampLibrarySync(
           resetStampLibraryProgress();
         }
       }, 400);
-    });
+    }
+  })();
+
   inflight = run;
   return run;
 }

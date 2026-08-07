@@ -3,8 +3,6 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { NaverMapMarkerOverlay } from '@mj-studio/react-native-naver-map';
 import type { MapImageProp } from '@mj-studio/react-native-naver-map';
 
-import { theme } from '@/shared/constants/theme';
-
 import {
   peekAssetFileUri,
   resolveAssetFileUri,
@@ -155,8 +153,6 @@ function MapClusterMarkerInner({
     return lastHttpRef.current ?? PLACEHOLDER_IMAGE;
   }, [framedUri, photoUri, displayAssetId, cardSize]);
 
-  const count = cluster.photos.length;
-
   return (
     <NaverMapMarkerOverlay
       latitude={cluster.centerLat}
@@ -167,17 +163,6 @@ function MapClusterMarkerInner({
       zIndex={selected ? 3 : 2}
       isHideCollidedSymbols
       image={image}
-      caption={
-        count > 1
-          ? {
-              text: String(count),
-              color: theme.colors.ink,
-              haloColor: theme.colors.background,
-              textSize: 11,
-              offset: 2,
-            }
-          : undefined
-      }
       onTap={() => onSelect(cluster)}
     />
   );
