@@ -1,5 +1,5 @@
 import { memo, useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
   ReduceMotion,
@@ -14,16 +14,14 @@ import Svg, { Circle, G, Path, Polyline } from 'react-native-svg';
 import { theme } from '@/shared/constants/theme';
 
 /**
- * Uiverse.io bike loader by fanishah — wheels spin on the UI thread forever.
- * Do not drive spin from an eased draw cycle: ease-in-out + 1→0 reset looks
- * like the bike “stops” mid-load.
+ * Uiverse.io bike loader — wheels spin on UI-thread Views forever.
+ * Rasterize spinning layers so JS load (album sync) does not hitch the spin.
  */
 const never = { reduceMotion: ReduceMotion.Never as const };
-/** One full wheel turn — linear, seamless at the wrap. */
-const SPIN_MS = 1100;
+/** Slightly slower = fewer wrap hits, reads smoother under load. */
+const SPIN_MS = 1400;
 const VB_W = 48;
 const VB_H = 30;
-/** Tire r=9 → box that contains tire + spokes. */
 const WHEEL_VB = 20;
 
 export interface BikeLoaderProps {
@@ -90,6 +88,11 @@ function PedalMark({ color, size }: { color: string; size: number }) {
   );
 }
 
+const spinLayerProps =
+  Platform.OS === 'ios'
+    ? ({ shouldRasterizeIOS: true } as const)
+    : ({ renderToHardwareTextureAndroid: true } as const);
+
 /**
  * Brand loading mark — frame stays drawn; wheels/pedals never stop spinning.
  */
@@ -103,9 +106,8 @@ export const BikeLoader = memo(function BikeLoader({
   const wheelPx = WHEEL_VB * sx;
 
   useEffect(() => {
-    // Continuous 0→1 linear; rotate uses *360 so the wrap is seamless.
     spin.value = withRepeat(
-      withTiming(1, { duration: SPIN_MS, easing: Easing.linear, ...never }),
+      withTiming(360, { duration: SPIN_MS, easing: Easing.linear, ...never }),
       -1,
       false,
     );
@@ -114,11 +116,12 @@ export const BikeLoader = memo(function BikeLoader({
     };
   }, [spin]);
 
+  // Numeric degrees (not template string) — smoother UI-thread updates.
   const wheelSpinStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${spin.value * 360}deg` }],
+    transform: [{ rotate: `${spin.value}deg` }],
   }));
   const pedalSpinStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${67.5 + spin.value * 360}deg` }],
+    transform: [{ rotate: `${67.5 + spin.value}deg` }],
   }));
 
   const left = {
@@ -140,7 +143,6 @@ export const BikeLoader = memo(function BikeLoader({
       accessibilityElementsHidden
       collapsable={false}
     >
-      {/* Frame only — no dash cycle (that pause read as “stopped”). */}
       <Svg width={width} height={height} viewBox={`0 0 ${VB_W} ${VB_H}`}>
         <G
           fill="none"
@@ -157,17 +159,35 @@ export const BikeLoader = memo(function BikeLoader({
       </Svg>
 
       <Animated.View
-        style={[styles.spinPart, left, { width: wheelPx, height: wheelPx }, wheelSpinStyle]}
+        {...spinLayerProps}
+        style={[
+          styles.spinPart,
+          left,
+          { width: wheelPx, height: wheelPx },
+          wheelSpinStyle,
+        ]}
       >
         <WheelMark color={color} size={wheelPx} />
       </Animated.View>
       <Animated.View
-        style={[styles.spinPart, mid, { width: wheelPx, height: wheelPx }, pedalSpinStyle]}
+        {...spinLayerProps}
+        style={[
+          styles.spinPart,
+          mid,
+          { width: wheelPx, height: wheelPx },
+          pedalSpinStyle,
+        ]}
       >
         <PedalMark color={color} size={wheelPx} />
       </Animated.View>
       <Animated.View
-        style={[styles.spinPart, right, { width: wheelPx, height: wheelPx }, wheelSpinStyle]}
+        {...spinLayerProps}
+        style={[
+          styles.spinPart,
+          right,
+          { width: wheelPx, height: wheelPx },
+          wheelSpinStyle,
+        ]}
       >
         <WheelMark color={color} size={wheelPx} />
       </Animated.View>

@@ -3,22 +3,19 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from 'react';
 import {
   FlatList,
-  type ListRenderItemInfo,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LoadingView } from '@/shared/components/LoadingView';
@@ -33,18 +30,29 @@ import { useMonthlyPhotos } from '../hooks/useMonthlyPhotos';
 import { usePinCovers } from '../hooks/usePinCovers';
 import { clusterPhotos } from '../services/cluster';
 import { resolveAssetUri } from '../services/mediaLibrary';
-import { startMonthImageWarmup } from '../services/monthImageWarmup';
-import type { MonthKey, PhotoRef, PlaceCluster } from '../types';
+import type { PhotoRef, PlaceCluster } from '../types';
 import {
   placeBucketKey,
   resolveClusterDetailLabel,
 } from '../utils/placeJourney';
 
 const GRID_COLS = 3;
-/** Cap thumbs on the active page — nested FlatList was killing swipe FPS. */
-const GRID_MAX = 9;
 const HERO_SIZE = 256;
 const THUMB_SIZE = 128;
+
+type ThumbRow = { key: string; photos: PhotoRef[] };
+
+function chunkThumbs(photos: PhotoRef[]): ThumbRow[] {
+  const rows: ThumbRow[] = [];
+  for (let i = 0; i < photos.length; i += GRID_COLS) {
+    const slice = photos.slice(i, i + GRID_COLS);
+    rows.push({
+      key: `r-${slice[0]?.assetId ?? i}`,
+      photos: slice,
+    });
+  }
+  return rows;
+}
 
 const GridThumb = memo(function GridThumb({
   photo,
@@ -97,6 +105,7 @@ const GridThumb = memo(function GridThumb({
           contentFit="cover"
           recyclingKey={photo.assetId}
           cachePolicy="memory-disk"
+          transition={0}
         />
       ) : (
         <View style={[styles.gridImage, styles.placeholder]} />
@@ -111,24 +120,19 @@ const GridThumb = memo(function GridThumb({
 });
 
 /**
- * Heavy place page — mount grid / geocode / warmup only when settled on this page.
- * During horizontal paging every slide is a light shell.
+ * One place chapter — vertical FlatList of every photo in the cluster.
+ * Not nested in a horizontal pager (that trapped scroll at ~1 screen of thumbs).
  */
 const ClusterSlide = memo(function ClusterSlide({
   cluster,
   width,
   coverAssetId,
   onSetCover,
-  month,
-  isActive,
 }: {
   cluster: PlaceCluster;
   width: number;
   coverAssetId?: string | null;
   onSetCover: (placeKey: string, assetId: string) => void;
-  month: MonthKey;
-  /** Settled active page only — full UI. Others = shell. */
-  isActive: boolean;
 }) {
   const placeKey = placeBucketKey(cluster.centerLat, cluster.centerLng);
   const [activeId, setActiveId] = useState(
@@ -157,23 +161,13 @@ const ClusterSlide = memo(function ClusterSlide({
   const activePhoto =
     cluster.photos.find((p) => p.assetId === activeId) ?? cluster.photos[0];
 
-  const pagePhotos = useMemo(
-    () => (isActive ? cluster.photos.slice(0, GRID_MAX) : []),
-    [cluster.photos, isActive],
+  const thumbRows = useMemo(
+    () => chunkThumbs(cluster.photos),
+    [cluster.photos],
   );
 
   useEffect(() => {
-    if (!isActive || pagePhotos.length === 0) {
-      return;
-    }
-    startMonthImageWarmup({
-      month,
-      assetIds: pagePhotos.map((p) => p.assetId),
-    });
-  }, [isActive, month, pagePhotos]);
-
-  useEffect(() => {
-    if (!isActive || !activePhoto) {
+    if (!activePhoto) {
       return;
     }
     let cancelled = false;
@@ -189,35 +183,35 @@ const ClusterSlide = memo(function ClusterSlide({
     return () => {
       cancelled = true;
     };
-  }, [activePhoto, isActive]);
+  }, [activePhoto]);
 
   useEffect(() => {
-    if (!isActive) {
-      return;
-    }
     let cancelled = false;
-    setLabelLoading(true);
-    const pin = activePhoto ?? cluster.photos[0];
-    const lat = pin?.lat ?? cluster.centerLat;
-    const lng = pin?.lng ?? cluster.centerLng;
-    void resolveClusterDetailLabel(lat, lng)
-      .then((label) => {
-        if (!cancelled) {
-          setPlaceLabel(label);
-          setLabelLoading(false);
-        }
-      })
-      .catch((error) => {
-        console.warn('ClusterSlide label failed', error);
-        if (!cancelled) {
-          setPlaceLabel(null);
-          setLabelLoading(false);
-        }
-      });
+    const t = setTimeout(() => {
+      setLabelLoading(true);
+      const pin = activePhoto ?? cluster.photos[0];
+      const lat = pin?.lat ?? cluster.centerLat;
+      const lng = pin?.lng ?? cluster.centerLng;
+      void resolveClusterDetailLabel(lat, lng)
+        .then((label) => {
+          if (!cancelled) {
+            setPlaceLabel(label);
+            setLabelLoading(false);
+          }
+        })
+        .catch((error) => {
+          console.warn('ClusterSlide label failed', error);
+          if (!cancelled) {
+            setPlaceLabel(null);
+            setLabelLoading(false);
+          }
+        });
+    }, 120);
     return () => {
       cancelled = true;
+      clearTimeout(t);
     };
-  }, [activePhoto, cluster, isActive]);
+  }, [activePhoto, cluster]);
 
   const onSelectPhoto = useCallback(
     (assetId: string) => {
@@ -227,61 +221,31 @@ const ClusterSlide = memo(function ClusterSlide({
     [onSetCover, placeKey],
   );
 
-  const placeText = !isActive
-    ? (placeLabel ?? strings.playback.placeLoading)
-    : labelLoading
-      ? strings.playback.placeLoading
-      : (placeLabel ?? strings.playback.placeUnknown);
+  const placeText = labelLoading
+    ? strings.playback.placeLoading
+    : (placeLabel ?? strings.playback.placeUnknown);
 
   const chapterDay = cluster.photos[0]?.takenAt
     ? strings.playback.chapterDay(cluster.photos[0].takenAt)
     : '';
 
-  const titleBlock = (
-    <View style={styles.titleRow}>
-      <Text style={styles.place} numberOfLines={2}>
-        {placeText}
-      </Text>
-      <View style={styles.metaCol}>
-        {chapterDay ? (
-          <Text style={styles.meta} numberOfLines={1}>
-            {chapterDay}
-          </Text>
-        ) : null}
-        <Text style={styles.meta} numberOfLines={1}>
-          {strings.map.clusterCount(cluster.photos.length)}
+  const listHeader = (
+    <View>
+      <View style={styles.titleRow}>
+        <Text style={styles.place} numberOfLines={2}>
+          {placeText}
         </Text>
+        <View style={styles.metaCol}>
+          {chapterDay ? (
+            <Text style={styles.meta} numberOfLines={1}>
+              {chapterDay}
+            </Text>
+          ) : null}
+          <Text style={styles.meta} numberOfLines={1}>
+            {strings.map.clusterCount(cluster.photos.length)}
+          </Text>
+        </View>
       </View>
-    </View>
-  );
-
-  if (!isActive) {
-    return (
-      <View style={[styles.slide, styles.gridContent, { width }]}>
-        {titleBlock}
-        <View
-          style={[
-            styles.imageWrap,
-            styles.hero,
-            styles.placeholder,
-            { width: contentW },
-          ]}
-        />
-      </View>
-    );
-  }
-
-  // Vertical ScrollView — plain View overflow made down-swipes look like a blink
-  // (parent pager stole the gesture / remounted the shell).
-  return (
-    <ScrollView
-      style={[styles.slide, { width }]}
-      contentContainerStyle={styles.gridContent}
-      showsVerticalScrollIndicator={false}
-      nestedScrollEnabled
-      keyboardShouldPersistTaps="handled"
-    >
-      {titleBlock}
       <View style={styles.imageWrap}>
         {uri ? (
           <Image
@@ -291,35 +255,54 @@ const ClusterSlide = memo(function ClusterSlide({
             cachePolicy="memory-disk"
             recyclingKey={`${activeId}-${HERO_SIZE}`}
             priority="high"
+            transition={0}
           />
         ) : (
           <View style={[styles.hero, styles.placeholder, { width: contentW }]} />
         )}
       </View>
       {cluster.photos.length > 1 ? (
-        <>
-          <Text style={styles.gridHint}>{strings.playback.gridHint}</Text>
-          <View style={[styles.gridRowWrap, { gap }]}>
-            {pagePhotos.map((item) => (
-              <GridThumb
-                key={item.assetId}
-                photo={item}
-                size={cell}
-                selected={item.assetId === activeId}
-                isCover={item.assetId === (coverAssetId ?? activeId)}
-                onPress={() => onSelectPhoto(item.assetId)}
-              />
-            ))}
-          </View>
-        </>
+        <Text style={styles.gridHint}>{strings.playback.gridHint}</Text>
       ) : null}
-    </ScrollView>
+    </View>
+  );
+
+  const coverId = coverAssetId ?? activeId;
+
+  return (
+    <FlatList
+      style={styles.list}
+      data={thumbRows}
+      keyExtractor={(row) => row.key}
+      ListHeaderComponent={listHeader}
+      contentContainerStyle={styles.gridContent}
+      showsVerticalScrollIndicator={false}
+      initialNumToRender={8}
+      maxToRenderPerBatch={4}
+      windowSize={7}
+      updateCellsBatchingPeriod={40}
+      removeClippedSubviews
+      renderItem={({ item: row }) => (
+        <View style={[styles.gridRowWrap, { gap, marginBottom: gap }]}>
+          {row.photos.map((photo) => (
+            <GridThumb
+              key={photo.assetId}
+              photo={photo}
+              size={cell}
+              selected={photo.assetId === activeId}
+              isCover={photo.assetId === coverId}
+              onPress={() => onSelectPhoto(photo.assetId)}
+            />
+          ))}
+        </View>
+      )}
+    />
   );
 });
 
 /**
- * Place-chapter view: horizontal pages per place (no autoplay).
- * Order = month day 1 → end (cluster by first photo, photos already time-sorted).
+ * Place-chapter view: one place at a time (full photo grid scrolls vertically).
+ * Swipe horizontally or use ‹ › to change place — no nested pagers.
  */
 export function PlaybackScreen() {
   const { width } = useWindowDimensions();
@@ -328,10 +311,6 @@ export function PlaybackScreen() {
   const showLoading = useHeldBusy(isPending);
   const { covers, setCover } = usePinCovers(month);
   const [index, setIndex] = useState(0);
-  /** While paging, every slide stays a shell — nested grids kill swipe FPS. */
-  const [isPaging, setIsPaging] = useState(false);
-  const listRef = useRef<FlatList<PlaceCluster>>(null);
-  const settledXRef = useRef(0);
 
   const clusters = useMemo(() => {
     if (!data) {
@@ -346,69 +325,40 @@ export function PlaybackScreen() {
 
   useEffect(() => {
     setIndex(0);
-    setIsPaging(false);
-    settledXRef.current = 0;
-    listRef.current?.scrollToOffset({ offset: 0, animated: false });
   }, [month]);
-
-  useEffect(() => {
-    settledXRef.current = index * width;
-  }, [index, width]);
-
-  const renderPlace = useCallback(
-    ({ item, index: itemIndex }: ListRenderItemInfo<PlaceCluster>) => {
-      const key = placeBucketKey(item.centerLat, item.centerLng);
-      return (
-        <ClusterSlide
-          cluster={item}
-          width={width}
-          coverAssetId={covers[key] ?? null}
-          onSetCover={setCover}
-          month={month}
-          isActive={!isPaging && itemIndex === index}
-        />
-      );
-    },
-    [covers, index, isPaging, month, setCover, width],
-  );
-
-  const onScrollEnd = useCallback(
-    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const next = Math.round(e.nativeEvent.contentOffset.x / width);
-      setIndex(Math.max(0, Math.min(next, clusters.length - 1)));
-      setIsPaging(false);
-    },
-    [clusters.length, width],
-  );
-
-  /** Shell only after a real horizontal page move — not on vertical pan. */
-  const onHorizScroll = useCallback(
-    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const x = e.nativeEvent.contentOffset.x;
-      if (Math.abs(x - settledXRef.current) > width * 0.1) {
-        setIsPaging(true);
-      }
-    },
-    [width],
-  );
 
   const goTo = useCallback(
     (next: number) => {
       if (next < 0 || next >= clusters.length) {
         return;
       }
-      setIsPaging(true);
-      try {
-        listRef.current?.scrollToIndex({ index: next, animated: true });
-      } catch (error) {
-        console.warn('playback goTo failed', next, error);
-        listRef.current?.scrollToOffset({
-          offset: next * width,
-          animated: true,
-        });
-      }
+      setIndex(next);
     },
-    [clusters.length, width],
+    [clusters.length],
+  );
+
+  const goPrev = useCallback(() => {
+    goTo(index - 1);
+  }, [goTo, index]);
+
+  const goNext = useCallback(() => {
+    goTo(index + 1);
+  }, [goTo, index]);
+
+  const placeSwipe = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX([-28, 28])
+        .failOffsetY([-20, 20])
+        .onEnd((e) => {
+          'worklet';
+          if (e.translationX < -56 || e.velocityX < -600) {
+            runOnJS(goNext)();
+          } else if (e.translationX > 56 || e.velocityX > 600) {
+            runOnJS(goPrev)();
+          }
+        }),
+    [goNext, goPrev],
   );
 
   if (showLoading) {
@@ -438,51 +388,29 @@ export function PlaybackScreen() {
     );
   }
 
+  const cluster = clusters[index]!;
+  const placeKey = placeBucketKey(cluster.centerLat, cluster.centerLng);
   const canPrev = index > 0;
   const canNext = index < clusters.length - 1;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <ScreenHeader title={strings.playback.title} />
-      <FlatList
-        ref={listRef}
-        style={styles.list}
-        data={clusters}
-        keyExtractor={(item) => item.id}
-        horizontal
-        pagingEnabled
-        directionalLockEnabled
-        showsHorizontalScrollIndicator={false}
-        onScroll={onHorizScroll}
-        scrollEventThrottle={16}
-        onMomentumScrollEnd={onScrollEnd}
-        extraData={`${index}:${isPaging ? 1 : 0}`}
-        initialNumToRender={1}
-        maxToRenderPerBatch={1}
-        windowSize={2}
-        removeClippedSubviews
-        updateCellsBatchingPeriod={50}
-        getItemLayout={(_, i) => ({
-          length: width,
-          offset: width * i,
-          index: i,
-        })}
-        onScrollToIndexFailed={({ index: failedIndex }) => {
-          requestAnimationFrame(() => {
-            listRef.current?.scrollToOffset({
-              offset: Math.max(0, failedIndex) * width,
-              animated: false,
-            });
-            setIndex(Math.max(0, Math.min(failedIndex, clusters.length - 1)));
-            setIsPaging(false);
-          });
-        }}
-        renderItem={renderPlace}
-      />
+      <GestureDetector gesture={placeSwipe}>
+        <View style={styles.list}>
+          <ClusterSlide
+            key={cluster.id}
+            cluster={cluster}
+            width={width}
+            coverAssetId={covers[placeKey] ?? null}
+            onSetCover={setCover}
+          />
+        </View>
+      </GestureDetector>
       {clusters.length > 1 ? (
         <View style={styles.pager}>
           <Pressable
-            onPress={() => goTo(index - 1)}
+            onPress={goPrev}
             disabled={!canPrev}
             hitSlop={8}
             accessibilityRole="button"
@@ -499,7 +427,7 @@ export function PlaybackScreen() {
             {index + 1} / {clusters.length}
           </Text>
           <Pressable
-            onPress={() => goTo(index + 1)}
+            onPress={goNext}
             disabled={!canNext}
             hitSlop={8}
             accessibilityRole="button"
@@ -566,16 +494,10 @@ const styles = StyleSheet.create({
     minWidth: 64,
     textAlign: 'center',
   },
-  slide: {
-    flex: 1,
-  },
   gridContent: {
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.md,
     paddingBottom: theme.spacing.lg,
-  },
-  headerBlock: {
-    marginBottom: theme.spacing.xs,
   },
   titleRow: {
     flexDirection: 'row',
@@ -611,7 +533,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   hero: {
-    aspectRatio: 4 / 5,
+    aspectRatio: 1,
     borderRadius: theme.radius.card,
     backgroundColor: theme.colors.surfaceAlt,
   },
@@ -628,9 +550,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     width: '100%',
-  },
-  gridRow: {
-    marginBottom: theme.spacing.sm,
   },
   gridThumb: {
     borderRadius: theme.radius.sm,

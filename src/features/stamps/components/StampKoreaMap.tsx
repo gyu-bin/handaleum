@@ -23,11 +23,11 @@ import { theme } from '@/shared/constants/theme';
 import type { StampsCollected } from '../types';
 import {
   getStampMapProvinces,
+  getStampMapUnits,
   mapVisitKey,
   selectionFromUnit,
   unitsForSido,
   visitedL1Keys,
-  visitedSidoNames,
   type StampMapSelection,
 } from '../services/stampMapIndex';
 import { stampMapFill } from '../utils/stampMapFill';
@@ -47,10 +47,10 @@ const CELL = {
   nationRimW: 1.25,
   nationEmptyStrokeOp: 0.1,
   nationEmptyStrokeW: 0.55,
-  nationFilledStrokeOp: 0.1,
-  nationFilledStrokeW: 0.45,
-  /** Soften pastel so a visited 시·도 does not read as "fully stamped". */
-  nationWashOp: 0.38,
+  /** Visited L1 patches on the nation map (not whole 시·도). */
+  nationL1WashOp: 0.72,
+  nationL1StrokeOp: 0.08,
+  nationL1StrokeW: 0.35,
   hinterlandOp: 0.22,
 } as const;
 const FOCUS_BBOX = {
@@ -75,11 +75,15 @@ export interface StampKoreaMapProps {
   style?: ViewStyle;
 }
 
-type NationHit = {
+type NationSidoHit = {
   name: string;
   geometry: PackedGeometry;
   d: string;
-  filled: boolean;
+};
+
+type NationL1Patch = {
+  visitKey: string;
+  d: string;
   fill: string;
 };
 
@@ -94,8 +98,8 @@ type L1Hit = {
 };
 
 /**
- * Real Korea atlas — nation = soft visit wash only; drill = L1 cells.
- * Taps go through {@link StampKoreaMapHandle.hitTest} (ResumableZoom steals Path onPress).
+ * Real Korea atlas — nation paints visited L1 patches only (not whole 시·도);
+ * drill paints that 시·도의 L1 cells. Taps = hitTest.
  */
 export const StampKoreaMap = memo(
   forwardRef<StampKoreaMapHandle, StampKoreaMapProps>(function StampKoreaMap(
@@ -118,7 +122,6 @@ export const StampKoreaMap = memo(
     const southKorea = koreaGeo.korea as unknown as PackedGeometry;
     const provinces = getStampMapProvinces();
     const visitedL1 = useMemo(() => visitedL1Keys(collected), [collected]);
-    const visitedSido = useMemo(() => visitedSidoNames(collected), [collected]);
 
     const focusProvince = useMemo(() => {
       if (mode !== 'sido' || !focusSido) {
@@ -154,7 +157,8 @@ export const StampKoreaMap = memo(
       [projection, southKorea],
     );
 
-    const nationDrawn = useMemo((): NationHit[] => {
+    /** 시·도 outlines only — never fill a whole province for one 동. */
+    const nationSidos = useMemo((): NationSidoHit[] => {
       if (!projection || mode !== 'nation') {
         return [];
       }
@@ -162,10 +166,28 @@ export const StampKoreaMap = memo(
         name: p.name,
         geometry: p.geometry,
         d: geometryToPath(p.geometry, projection.project),
-        filled: visitedSido.has(p.name),
-        fill: stampMapFill(p.name),
       }));
-    }, [mode, projection, provinces, visitedSido]);
+    }, [mode, projection, provinces]);
+
+    /** Visited 구·시·군 patches at national scale. */
+    const nationL1Patches = useMemo((): NationL1Patch[] => {
+      if (!projection || mode !== 'nation' || visitedL1.size === 0) {
+        return [];
+      }
+      const patches: NationL1Patch[] = [];
+      for (const u of getStampMapUnits()) {
+        const visitKey = mapVisitKey(u.sido, u.key);
+        if (!visitedL1.has(visitKey)) {
+          continue;
+        }
+        patches.push({
+          visitKey,
+          d: geometryToPath(u.geometry, projection.project),
+          fill: stampMapFill(visitKey),
+        });
+      }
+      return patches;
+    }, [mode, projection, visitedL1]);
 
     const l1Drawn = useMemo((): L1Hit[] => {
       if (!projection || mode !== 'sido' || !focusSido) {
@@ -201,7 +223,7 @@ export const StampKoreaMap = memo(
           }
           const [lng, lat] = projection.unproject([x, y]);
           if (mode === 'nation') {
-            for (const p of nationDrawn) {
+            for (const p of nationSidos) {
               if (pointInGeometry(lng, lat, p.geometry)) {
                 return { sido: p.name, l1Key: null };
               }
@@ -216,7 +238,7 @@ export const StampKoreaMap = memo(
           return null;
         },
       }),
-      [l1Drawn, mode, nationDrawn, projection],
+      [l1Drawn, mode, nationSidos, projection],
     );
 
     const a11y =
@@ -245,23 +267,27 @@ export const StampKoreaMap = memo(
                 <Path d={koreaPath} fill={theme.colors.land} />
 
                 <G mask="url(#koreaMask)">
-                  {nationDrawn.map((p) => (
+                  {nationSidos.map((p) => (
                     <Path
                       key={p.name}
                       d={p.d}
-                      fill={p.filled ? p.fill : CELL.emptyFill}
-                      fillOpacity={p.filled ? CELL.nationWashOp : 1}
+                      fill={CELL.emptyFill}
                       stroke={theme.colors.ink}
-                      strokeWidth={
-                        p.filled
-                          ? CELL.nationFilledStrokeW
-                          : CELL.nationEmptyStrokeW
-                      }
-                      strokeOpacity={
-                        p.filled
-                          ? CELL.nationFilledStrokeOp
-                          : CELL.nationEmptyStrokeOp
-                      }
+                      strokeWidth={CELL.nationEmptyStrokeW}
+                      strokeOpacity={CELL.nationEmptyStrokeOp}
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                    />
+                  ))}
+                  {nationL1Patches.map((p) => (
+                    <Path
+                      key={p.visitKey}
+                      d={p.d}
+                      fill={p.fill}
+                      fillOpacity={CELL.nationL1WashOp}
+                      stroke={theme.colors.ink}
+                      strokeWidth={CELL.nationL1StrokeW}
+                      strokeOpacity={CELL.nationL1StrokeOp}
                       strokeLinejoin="round"
                       strokeLinecap="round"
                     />
@@ -280,7 +306,6 @@ export const StampKoreaMap = memo(
               </>
             ) : (
               <>
-                {/* Soft hinterland — no hard wireframe of the whole peninsula */}
                 <Path
                   d={koreaPath}
                   fill={theme.colors.landDeep}
