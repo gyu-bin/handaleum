@@ -241,12 +241,23 @@ export const strings = {
   playback: {
     title: '몰아보기',
     empty: '이 달에는 보여줄 사진이 없습니다',
-    play: '자동 재생',
-    pause: '멈춤',
     placeLoading: '위치 확인 중…',
     placeUnknown: '위치 없음',
     stripHint: '같은 장소 · 탭하면 대표 사진',
-    gridHint: '같은 장소 · 탭하면 대표 사진',
+    gridHint: '탭하면 대표 사진',
+    prevPlace: '이전 장소',
+    nextPlace: '다음 장소',
+    chapterDay: (iso: string) => {
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) {
+        return '';
+      }
+      return d.toLocaleDateString('ko-KR', {
+        month: 'long',
+        day: 'numeric',
+        weekday: 'short',
+      });
+    },
   },
   cards: {
     listTitle: '내 회고',

@@ -91,162 +91,15 @@ function iosAddr(
 /** __DEV__ map/CPU stress. Set back to 1 after stress testing. */
 export const DUMMY_STRESS_MULT = 1;
 
+/**
+ * Slim demo set — few places, many photos (playback / pin sheet stress).
+ * ponytail: expand hubs again if stamp/map density demos need them.
+ */
 const HUBS: DummyHub[] = [
-  // —— Seoul ——
-  {
-    lat: 37.5665,
-    lng: 126.978,
-    count: 5,
-    label: '서울시청',
-    address: iosAddr({
-      region: '서울특별시',
-      city: '서울특별시',
-      district: '중구',
-      street: '태평로1가',
-      name: '서울시청',
-      postalCode: '04524',
-      formattedAddress: '대한민국 서울특별시 중구 태평로1가',
-    }),
-  },
-  {
-    lat: 37.5007,
-    lng: 127.0365,
-    count: 5,
-    label: '강남',
-    address: iosAddr({
-      region: '서울특별시',
-      city: '서울특별시',
-      district: '강남구',
-      street: '역삼동',
-      name: '역삼동',
-      postalCode: '06236',
-      formattedAddress: '대한민국 서울특별시 강남구 역삼동',
-    }),
-  },
-  {
-    lat: 37.527,
-    lng: 127.0286,
-    count: 3,
-    label: '압구정',
-    address: iosAddr({
-      region: '서울특별시',
-      city: '서울특별시',
-      district: '강남구',
-      street: '압구정동',
-      name: '압구정동',
-      postalCode: '06001',
-      formattedAddress: '대한민국 서울특별시 강남구 압구정동',
-    }),
-  },
-  {
-    lat: 37.5563,
-    lng: 126.9236,
-    count: 4,
-    label: '홍대',
-    address: iosAddr({
-      region: '서울특별시',
-      city: '서울특별시',
-      district: '마포구',
-      street: '서교동',
-      name: '서교동',
-      postalCode: '04057',
-      formattedAddress: '대한민국 서울특별시 마포구 서교동',
-    }),
-  },
-  {
-    lat: 37.5605,
-    lng: 126.923,
-    count: 3,
-    label: '연남',
-    address: iosAddr({
-      region: '서울특별시',
-      city: '서울특별시',
-      district: '마포구',
-      street: '연남동',
-      name: '연남동',
-      postalCode: '03998',
-      formattedAddress: '대한민국 서울특별시 마포구 연남동',
-    }),
-  },
-  {
-    lat: 37.5446,
-    lng: 127.0559,
-    count: 4,
-    label: '성수',
-    address: iosAddr({
-      region: '서울특별시',
-      city: '서울특별시',
-      district: '성동구',
-      street: '성수동1가',
-      name: '성수동1가',
-      postalCode: '04779',
-      formattedAddress: '대한민국 서울특별시 성동구 성수동1가',
-    }),
-  },
-  {
-    lat: 37.5112,
-    lng: 127.0981,
-    count: 3,
-    label: '잠실',
-    address: iosAddr({
-      region: '서울특별시',
-      city: '서울특별시',
-      district: '송파구',
-      street: '잠실동',
-      name: '잠실동',
-      postalCode: '05510',
-      formattedAddress: '대한민국 서울특별시 송파구 잠실동',
-    }),
-  },
-  {
-    lat: 37.5796,
-    lng: 126.977,
-    count: 3,
-    label: '경복궁',
-    address: iosAddr({
-      region: '서울특별시',
-      city: '서울특별시',
-      district: '종로구',
-      street: '세종로',
-      name: '경복궁',
-      postalCode: '03045',
-      formattedAddress: '대한민국 서울특별시 종로구 세종로',
-    }),
-  },
-  {
-    lat: 37.5826,
-    lng: 126.983,
-    count: 3,
-    label: '북촌',
-    address: iosAddr({
-      region: '서울특별시',
-      city: '서울특별시',
-      district: '종로구',
-      street: '가회동',
-      name: '가회동',
-      postalCode: '03057',
-      formattedAddress: '대한민국 서울특별시 종로구 가회동',
-    }),
-  },
-  {
-    lat: 37.4842,
-    lng: 126.9297,
-    count: 3,
-    label: '신림',
-    address: iosAddr({
-      region: '서울특별시',
-      city: '서울특별시',
-      district: '관악구',
-      street: '신림동',
-      name: '신림동',
-      postalCode: '08758',
-      formattedAddress: '대한민국 서울특별시 관악구 신림동',
-    }),
-  },
   {
     lat: 37.5345,
     lng: 126.9946,
-    count: 3,
+    count: 120,
     label: '이태원',
     address: iosAddr({
       region: '서울특별시',
@@ -259,25 +112,54 @@ const HUBS: DummyHub[] = [
     }),
   },
   {
-    lat: 37.5219,
-    lng: 126.9245,
-    count: 3,
-    label: '여의도',
+    lat: 37.5446,
+    lng: 127.0559,
+    count: 80,
+    label: '성수',
     address: iosAddr({
       region: '서울특별시',
       city: '서울특별시',
-      district: '영등포구',
-      street: '여의도동',
-      name: '여의도동',
-      postalCode: '07325',
-      formattedAddress: '대한민국 서울특별시 영등포구 여의도동',
+      district: '성동구',
+      street: '성수동1가',
+      name: '성수동1가',
+      postalCode: '04779',
+      formattedAddress: '대한민국 서울특별시 성동구 성수동1가',
     }),
   },
-  // —— Gyeonggi ——
+  {
+    lat: 37.5563,
+    lng: 126.9236,
+    count: 60,
+    label: '홍대',
+    address: iosAddr({
+      region: '서울특별시',
+      city: '서울특별시',
+      district: '마포구',
+      street: '서교동',
+      name: '서교동',
+      postalCode: '04057',
+      formattedAddress: '대한민국 서울특별시 마포구 서교동',
+    }),
+  },
+  {
+    lat: 37.5007,
+    lng: 127.0365,
+    count: 40,
+    label: '강남',
+    address: iosAddr({
+      region: '서울특별시',
+      city: '서울특별시',
+      district: '강남구',
+      street: '역삼동',
+      name: '역삼동',
+      postalCode: '06236',
+      formattedAddress: '대한민국 서울특별시 강남구 역삼동',
+    }),
+  },
   {
     lat: 37.3947,
     lng: 127.1112,
-    count: 4,
+    count: 30,
     label: '판교',
     address: iosAddr({
       region: '경기도',
@@ -287,260 +169,6 @@ const HUBS: DummyHub[] = [
       name: '삼평동',
       postalCode: '13494',
       formattedAddress: '대한민국 경기도 성남시 분당구 삼평동',
-    }),
-  },
-  {
-    lat: 37.2636,
-    lng: 127.0286,
-    count: 3,
-    label: '수원',
-    address: iosAddr({
-      region: '경기도',
-      city: '수원시',
-      subregion: '영통구',
-      street: '원천동',
-      name: '원천동',
-      postalCode: '16512',
-      formattedAddress: '대한민국 경기도 수원시 영통구 원천동',
-    }),
-  },
-  {
-    lat: 37.6584,
-    lng: 126.832,
-    count: 3,
-    label: '고양',
-    address: iosAddr({
-      region: '경기도',
-      city: '고양시',
-      subregion: '일산동구',
-      street: '장항동',
-      name: '장항동',
-      postalCode: '10403',
-      formattedAddress: '대한민국 경기도 고양시 일산동구 장항동',
-    }),
-  },
-  {
-    lat: 37.2411,
-    lng: 127.1776,
-    count: 2,
-    label: '용인',
-    address: iosAddr({
-      region: '경기도',
-      city: '용인시',
-      subregion: '수지구',
-      street: '풍덕천동',
-      name: '풍덕천동',
-      postalCode: '16827',
-      formattedAddress: '대한민국 경기도 용인시 수지구 풍덕천동',
-    }),
-  },
-  {
-    lat: 37.5034,
-    lng: 126.766,
-    count: 2,
-    label: '부천',
-    address: iosAddr({
-      region: '경기도',
-      city: '부천시',
-      street: '중동',
-      name: '중동',
-      postalCode: '14547',
-      formattedAddress: '대한민국 경기도 부천시 중동',
-    }),
-  },
-  {
-    lat: 37.3943,
-    lng: 126.9568,
-    count: 2,
-    label: '안양',
-    address: iosAddr({
-      region: '경기도',
-      city: '안양시',
-      subregion: '동안구',
-      street: '평촌동',
-      name: '평촌동',
-      postalCode: '14071',
-      formattedAddress: '대한민국 경기도 안양시 동안구 평촌동',
-    }),
-  },
-  {
-    lat: 37.7599,
-    lng: 126.7802,
-    count: 2,
-    label: '파주',
-    address: iosAddr({
-      region: '경기도',
-      city: '파주시',
-      street: '야당동',
-      name: '야당동',
-      postalCode: '10881',
-      formattedAddress: '대한민국 경기도 파주시 야당동',
-    }),
-  },
-  {
-    lat: 37.8315,
-    lng: 127.5095,
-    count: 2,
-    label: '가평',
-    address: iosAddr({
-      region: '경기도',
-      city: '가평군',
-      district: '가평읍',
-      name: '읍내리',
-      street: '읍내리',
-      postalCode: '12416',
-      formattedAddress: '대한민국 경기도 가평군 가평읍 읍내리',
-    }),
-  },
-  {
-    lat: 37.5394,
-    lng: 127.2145,
-    count: 2,
-    label: '하남',
-    address: iosAddr({
-      region: '경기도',
-      city: '하남시',
-      street: '신장동',
-      name: '신장동',
-      postalCode: '12942',
-      formattedAddress: '대한민국 경기도 하남시 신장동',
-    }),
-  },
-  // —— More Seoul leaves (denser 발도장) ——
-  {
-    lat: 37.5665,
-    lng: 126.991,
-    count: 3,
-    label: '을지로',
-    address: iosAddr({
-      region: '서울특별시',
-      city: '서울특별시',
-      district: '중구',
-      street: '을지로2가',
-      name: '을지로2가',
-      postalCode: '04537',
-      formattedAddress: '대한민국 서울특별시 중구 을지로2가',
-    }),
-  },
-  {
-    lat: 37.5704,
-    lng: 126.992,
-    count: 3,
-    label: '종로',
-    address: iosAddr({
-      region: '서울특별시',
-      city: '서울특별시',
-      district: '종로구',
-      street: '종로3가',
-      name: '종로3가',
-      postalCode: '03188',
-      formattedAddress: '대한민국 서울특별시 종로구 종로3가',
-    }),
-  },
-  {
-    lat: 37.5045,
-    lng: 127.049,
-    count: 3,
-    label: '선릉',
-    address: iosAddr({
-      region: '서울특별시',
-      city: '서울특별시',
-      district: '강남구',
-      street: '삼성동',
-      name: '삼성동',
-      postalCode: '06164',
-      formattedAddress: '대한민국 서울특별시 강남구 삼성동',
-    }),
-  },
-  {
-    lat: 37.5112,
-    lng: 127.022,
-    count: 3,
-    label: '논현',
-    address: iosAddr({
-      region: '서울특별시',
-      city: '서울특별시',
-      district: '강남구',
-      street: '논현동',
-      name: '논현동',
-      postalCode: '06120',
-      formattedAddress: '대한민국 서울특별시 강남구 논현동',
-    }),
-  },
-  {
-    lat: 37.5485,
-    lng: 126.912,
-    count: 2,
-    label: '합정',
-    address: iosAddr({
-      region: '서울특별시',
-      city: '서울특별시',
-      district: '마포구',
-      street: '합정동',
-      name: '합정동',
-      postalCode: '04015',
-      formattedAddress: '대한민국 서울특별시 마포구 합정동',
-    }),
-  },
-  {
-    lat: 37.5571,
-    lng: 126.936,
-    count: 2,
-    label: '신촌',
-    address: iosAddr({
-      region: '서울특별시',
-      city: '서울특별시',
-      district: '서대문구',
-      street: '창천동',
-      name: '창천동',
-      postalCode: '03789',
-      formattedAddress: '대한민국 서울특별시 서대문구 창천동',
-    }),
-  },
-  {
-    lat: 37.4979,
-    lng: 126.927,
-    count: 2,
-    label: '노량진',
-    address: iosAddr({
-      region: '서울특별시',
-      city: '서울특별시',
-      district: '동작구',
-      street: '노량진동',
-      name: '노량진동',
-      postalCode: '06911',
-      formattedAddress: '대한민국 서울특별시 동작구 노량진동',
-    }),
-  },
-  {
-    lat: 37.6542,
-    lng: 127.0568,
-    count: 2,
-    label: '노원',
-    address: iosAddr({
-      region: '서울특별시',
-      city: '서울특별시',
-      district: '노원구',
-      street: '상계동',
-      name: '상계동',
-      postalCode: '01695',
-      formattedAddress: '대한민국 서울특별시 노원구 상계동',
-    }),
-  },
-  // —— Incheon (수도권) ——
-  {
-    lat: 37.4485,
-    lng: 126.701,
-    count: 2,
-    label: '인천시청',
-    address: iosAddr({
-      region: '인천광역시',
-      city: '인천광역시',
-      district: '남동구',
-      street: '구월동',
-      name: '구월동',
-      postalCode: '21554',
-      formattedAddress: '대한민국 인천광역시 남동구 구월동',
     }),
   },
 ];
@@ -564,10 +192,15 @@ export function setDevDummyPhotosEnabled(enabled: boolean): void {
 }
 
 /** Small deterministic scatter so pins don't stack on one pixel. */
-function jitter(i: number, axis: 0 | 1): number {
+function jitter(i: number, axis: 0 | 1, tight = false): number {
   const a = ((i * 17 + axis * 9) % 11) - 5;
-  // Wider scatter under stress so clustering / remount paths get exercise.
-  return a * (DUMMY_STRESS_MULT > 1 ? 0.008 : 0.004);
+  // Tight: keep a fat hub inside one playback cluster cell (~0.006°).
+  const step = tight
+    ? 0.00035
+    : DUMMY_STRESS_MULT > 1
+      ? 0.008
+      : 0.004;
+  return a * step;
 }
 
 function hubCount(hub: DummyHub): number {
@@ -583,13 +216,14 @@ export function buildDummyMonthlyPhotos(month: MonthKey): MonthlyPhotos {
 
   for (const hub of HUBS) {
     const n = hubCount(hub);
+    const tight = n >= 50;
     for (let k = 0; k < n; k += 1) {
       const t = startMs + Math.floor(((i + 1) / (total + 1)) * span);
       photos.push({
         assetId: `${DUMMY_ASSET_PREFIX}${month}:${i}`,
         takenAt: new Date(t).toISOString(),
-        lat: hub.lat + jitter(i, 0),
-        lng: hub.lng + jitter(i, 1),
+        lat: hub.lat + jitter(i, 0, tight),
+        lng: hub.lng + jitter(i, 1, tight),
       });
       i += 1;
     }

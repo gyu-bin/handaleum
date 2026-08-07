@@ -211,6 +211,10 @@ function ClusterSlide({
     ? strings.playback.placeLoading
     : (placeLabel ?? strings.playback.placeUnknown);
 
+  const chapterDay = cluster.photos[0]?.takenAt
+    ? strings.playback.chapterDay(cluster.photos[0].takenAt)
+    : '';
+
   const loadMore = useCallback(() => {
     setVisibleCount((n) =>
       n >= cluster.photos.length
@@ -226,6 +230,22 @@ function ClusterSlide({
         cluster.photos.length <= 1 && styles.gridContent,
       ]}
     >
+      <View style={styles.titleRow}>
+        <Text style={styles.place} numberOfLines={2}>
+          {placeText}
+        </Text>
+        <View style={styles.metaCol}>
+          {chapterDay ? (
+            <Text style={styles.meta} numberOfLines={1}>
+              {chapterDay}
+            </Text>
+          ) : null}
+          <Text style={styles.meta} numberOfLines={1}>
+            {strings.map.clusterCount(cluster.photos.length)}
+          </Text>
+        </View>
+      </View>
+
       <View style={styles.imageWrap}>
         {uri ? (
           <Image
@@ -240,15 +260,7 @@ function ClusterSlide({
           <View style={[styles.hero, styles.placeholder, { width: contentW }]} />
         )}
       </View>
-      <Text style={styles.place} numberOfLines={2}>
-        {placeText}
-      </Text>
-      <Text style={styles.meta}>
-        {strings.map.clusterCount(cluster.photos.length)}
-      </Text>
-      <Text style={styles.date}>
-        {new Date(activePhoto?.takenAt ?? '').toLocaleString('ko-KR')}
-      </Text>
+
       {cluster.photos.length > 1 ? (
         <Text style={styles.gridHint}>{strings.playback.gridHint}</Text>
       ) : null}
@@ -289,12 +301,9 @@ function ClusterSlide({
   );
 }
 
-/** Dwell time per place when auto-playing, in ms. */
-const AUTOPLAY_MS = 2800;
-
 /**
- * Storytelling view: horizontal pages per place. Each page shows a large
- * cover photo and a 3-column grid of photos at that place.
+ * Place-chapter view: horizontal pages per place (no autoplay).
+ * Order = month day 1 → end (cluster by first photo, photos already time-sorted).
  */
 export function PlaybackScreen() {
   const { width } = useWindowDimensions();
@@ -303,62 +312,23 @@ export function PlaybackScreen() {
   const showLoading = useHeldBusy(isPending);
   const { covers, setCover } = usePinCovers(month);
   const [index, setIndex] = useState(0);
-  const [playing, setPlaying] = useState(false);
   const listRef = useRef<FlatList<PlaceCluster>>(null);
-  const indexRef = useRef(0);
-  indexRef.current = index;
 
   const clusters = useMemo(() => {
     if (!data) {
       return [];
     }
-    return clusterPhotos(data.photos, 14).sort(
-      (a, b) =>
-        Date.parse(a.photos[0]!.takenAt) - Date.parse(b.photos[0]!.takenAt),
-    );
+    return clusterPhotos(data.photos, 14).sort((a, b) => {
+      const a0 = a.photos[0]?.takenAt ?? '';
+      const b0 = b.photos[0]?.takenAt ?? '';
+      return a0.localeCompare(b0);
+    });
   }, [data]);
 
   useEffect(() => {
     setIndex(0);
-    setPlaying(false);
     listRef.current?.scrollToOffset({ offset: 0, animated: false });
   }, [month]);
-
-  useEffect(() => {
-    if (!playing) {
-      return;
-    }
-    const timer = setInterval(() => {
-      const next = indexRef.current + 1;
-      if (next >= clusters.length) {
-        setPlaying(false);
-        return;
-      }
-      try {
-        listRef.current?.scrollToIndex({ index: next, animated: true });
-        setIndex(next);
-      } catch (error) {
-        console.warn('playback scrollToIndex failed', next, error);
-        setPlaying(false);
-      }
-    }, AUTOPLAY_MS);
-    return () => clearInterval(timer);
-  }, [playing, clusters.length]);
-
-  const togglePlay = () => {
-    setPlaying((prev) => {
-      if (!prev && index >= clusters.length - 1) {
-        try {
-          listRef.current?.scrollToIndex({ index: 0, animated: false });
-        } catch (error) {
-          console.warn('playback restart scrollToIndex failed', error);
-          listRef.current?.scrollToOffset({ offset: 0, animated: false });
-        }
-        setIndex(0);
-      }
-      return !prev;
-    });
-  };
 
   if (showLoading) {
     return <LoadingView />;
@@ -389,45 +359,45 @@ export function PlaybackScreen() {
 
   const onScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const next = Math.round(e.nativeEvent.contentOffset.x / width);
-    setIndex(next);
+    setIndex(Math.max(0, Math.min(next, clusters.length - 1)));
   };
+
+  const goTo = useCallback(
+    (next: number) => {
+      if (next < 0 || next >= clusters.length) {
+        return;
+      }
+      try {
+        listRef.current?.scrollToIndex({ index: next, animated: true });
+        setIndex(next);
+      } catch (error) {
+        console.warn('playback goTo failed', next, error);
+        listRef.current?.scrollToOffset({
+          offset: next * width,
+          animated: true,
+        });
+        setIndex(next);
+      }
+    },
+    [clusters.length, width],
+  );
+
+  const canPrev = index > 0;
+  const canNext = index < clusters.length - 1;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <PaperGrain style={styles.grain} />
-      <ScreenHeader
-        title={strings.playback.title}
-        trailing={
-          <View style={styles.trailing}>
-            <Pressable
-              onPress={togglePlay}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={
-                playing ? strings.playback.pause : strings.playback.play
-              }
-              style={({ pressed }) => [
-                styles.playBtn,
-                pressed && styles.playBtnPressed,
-              ]}
-            >
-              <Text style={styles.playIcon}>{playing ? '❚❚' : '▶'}</Text>
-            </Pressable>
-            <Text style={styles.counter}>
-              {index + 1}/{clusters.length}
-            </Text>
-          </View>
-        }
-      />
+      <ScreenHeader title={strings.playback.title} />
       <FlatList
         ref={listRef}
+        style={styles.list}
         data={clusters}
         keyExtractor={(item) => item.id}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={onScrollEnd}
-        onScrollBeginDrag={() => setPlaying(false)}
         getItemLayout={(_, i) => ({
           length: width,
           offset: width * i,
@@ -455,6 +425,41 @@ export function PlaybackScreen() {
           );
         }}
       />
+      {clusters.length > 1 ? (
+        <View style={styles.pager}>
+          <Pressable
+            onPress={() => goTo(index - 1)}
+            disabled={!canPrev}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={strings.playback.prevPlace}
+            style={({ pressed }) => [
+              styles.arrowBtn,
+              !canPrev && styles.arrowBtnDisabled,
+              pressed && canPrev && styles.arrowBtnPressed,
+            ]}
+          >
+            <Text style={styles.arrowGlyph}>‹</Text>
+          </Pressable>
+          <Text style={styles.pagerCount}>
+            {index + 1} / {clusters.length}
+          </Text>
+          <Pressable
+            onPress={() => goTo(index + 1)}
+            disabled={!canNext}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={strings.playback.nextPlace}
+            style={({ pressed }) => [
+              styles.arrowBtn,
+              !canNext && styles.arrowBtnDisabled,
+              pressed && canNext && styles.arrowBtnPressed,
+            ]}
+          >
+            <Text style={styles.arrowGlyph}>›</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -467,47 +472,92 @@ const styles = StyleSheet.create({
   grain: {
     opacity: 0.28,
   },
-  trailing: {
+  list: {
+    flex: 1,
+  },
+  pager: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    justifyContent: 'center',
+    gap: theme.spacing.lg,
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
   },
-  playBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: theme.radius.md,
+  arrowBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.colors.terracottaSoft,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.line,
+    backgroundColor: theme.colors.surface,
   },
-  playBtnPressed: {
-    opacity: 0.6,
+  arrowBtnPressed: {
+    backgroundColor: theme.tint.faint,
   },
-  playIcon: {
-    fontSize: 12,
-    color: theme.colors.terracotta,
-    fontWeight: '700',
+  arrowBtnDisabled: {
+    opacity: 0.28,
   },
-  counter: {
-    ...theme.type.body,
+  arrowGlyph: {
+    fontSize: 28,
+    lineHeight: 30,
+    color: theme.colors.ink,
+    fontWeight: '300',
+    marginTop: -2,
+  },
+  pagerCount: {
+    ...theme.type.label,
     fontFamily: theme.fonts.sans,
     color: theme.colors.inkSoft,
-    fontWeight: '700',
+    fontWeight: '600',
+    minWidth: 64,
+    textAlign: 'center',
   },
   slide: {
     flex: 1,
   },
   gridContent: {
     paddingHorizontal: theme.spacing.lg,
-    paddingBottom: theme.spacing.xl,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.lg,
   },
   headerBlock: {
-    marginBottom: theme.spacing.sm,
+    marginBottom: theme.spacing.xs,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: theme.spacing.md,
+  },
+  place: {
+    ...theme.type.title,
+    flex: 1,
+    fontSize: 24,
+    lineHeight: 30,
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.ink,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+  },
+  metaCol: {
+    alignItems: 'flex-end',
+    paddingTop: 4,
+    maxWidth: '42%',
+  },
+  meta: {
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.inkSoft,
+    fontWeight: '500',
+    textAlign: 'right',
   },
   imageWrap: {
+    marginTop: theme.spacing.md,
     borderRadius: theme.radius.card,
     backgroundColor: theme.colors.surface,
-    ...theme.shadows.card,
+    overflow: 'hidden',
   },
   hero: {
     aspectRatio: 4 / 5,
@@ -517,29 +567,10 @@ const styles = StyleSheet.create({
   placeholder: {
     backgroundColor: theme.colors.surfaceAlt,
   },
-  place: {
-    ...theme.type.title,
-    fontFamily: theme.fonts.sans,
-    marginTop: theme.spacing.md,
-    color: theme.colors.ink,
-    fontWeight: '800',
-  },
-  meta: {
-    ...theme.type.label,
-    fontFamily: theme.fonts.sans,
-    marginTop: 4,
-    color: theme.colors.inkSoft,
-    fontWeight: '600',
-  },
-  date: {
-    ...theme.type.label,
-    marginTop: 2,
-    color: theme.colors.subtle,
-  },
   gridHint: {
     ...theme.type.micro,
-    marginTop: theme.spacing.md,
-    marginBottom: theme.spacing.sm,
+    marginTop: theme.spacing.sm,
+    marginBottom: theme.spacing.xs,
     color: theme.colors.subtle,
   },
   gridRow: {
@@ -548,14 +579,14 @@ const styles = StyleSheet.create({
   gridThumb: {
     borderRadius: theme.radius.sm,
     overflow: 'hidden',
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: theme.colors.line,
   },
   gridThumbSelected: {
-    borderColor: theme.colors.terracotta,
+    borderColor: theme.colors.ink,
   },
   gridThumbCover: {
-    borderColor: theme.colors.terracotta,
+    borderColor: theme.colors.ink,
   },
   gridImage: {
     width: '100%',
@@ -565,10 +596,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 4,
     bottom: 4,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
     borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.terracotta,
+    backgroundColor: theme.tint.full,
   },
   gridBadgeText: {
     ...theme.type.micro,

@@ -31,7 +31,8 @@
 | **UI=Dawn Survey / Plan A** (크림 + 단일 ink·serif 히어로만) / **Map=dawn-blue** (land/water/accent·핀 유지). `terracotta` 토큰은 ink alias. 맵 팔레트 교체 금지 | 전면 저널 맵 리틴트 / UI terracotta 복귀 | 사용자 A안 2026-08-05. philosophy 정렬 | 2026-08-05 |
 | 월 선택 = **저널 UI: 연도 스테퍼 + 1–12월 2열** (0장 비활성) | 전체 월 스크롤 / 연도 칩 | 사용자 시안(옵션 C) | 2026-08-02 |
 | GPS 없는 사진 완전 제외, 카운트만 표시 | lat/lng optional로 카드 포함 허용 | 사용자 결정. "위치 있는 사진만 표시" 안내로 처리 | 2026-07-17 |
-| 몰아보기 수동 스와이프 우선 | 자동 재생 | 가정. 자동 재생은 이후 추가 비용이 쌈 | 2026-07-17 |
+| 몰아보기 = **장소 페이지** (히어로+그리드). 자동재생 없음. 순서=첫 사진 takenAt 오름차순(달 초→말). 지도 연동 비범위 | 지도 이동형 / ▶ 자동 스와이프 | 2026-08-07 A 정리 | 2026-08-07 |
+| 몰아보기 수동 스와이프만 | 자동 재생 | 자동재생 무의미 판정 | 2026-08-07 |
 | 클러스터링은 순수 함수 (services/cluster.ts) | 지도 라이브러리 내장 클러스터 | 저장 금지 원칙 + 테스트 용이 | 2026-07-17 |
 | 지도: **네이버 Dynamic Map** (`@mj-studio/react-native-naver-map`) + 사진 클러스터 마커. SVG는 카드/스플래시용. **dev build 필수**(Expo Go 불가) | RN Maps / SVG 인포그래픽 | 사용자 결정: 한국 지도 품질·라벨. Client ID `i20jt73shx` | 2026-07-27 |
 | 지도 줌: Naver `animateCameraTo` / `animateCameraWithTwoCoords`. 월 `frameKey` 변경 시에만 자동 프레임 | RN Maps region / SVG rebase | 네이버 SDK 카메라 API | 2026-07-27 |
@@ -88,5 +89,6 @@
 - Expo Go로 홈 맵 실행 (네이버맵은 development build 필요)
 - MapLibre / 커스텀 타일셋
 - 전국 시군구·일반구 경계 (특별시·광역시 자치구만 `districts.json` — 카드 SVG용)
-- 몰아보기 자동 재생 (1차 릴리즈)
+- 몰아보기 자동 재생 (제거됨 · 재도입 보류)
+- 몰아보기 지도 이동형 스토리
 - 카드 플로우 전면 개편
