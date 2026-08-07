@@ -395,16 +395,13 @@ export function CardCreateScreen() {
     [scrollY],
   );
 
-  // Outer slot height tracks the mini-card so the sheet rises without clipping.
-  const stickyPreviewStyle = useAnimatedStyle(() => {
-    const t = collapseProgress(scrollY.value);
-    const scale = interpolate(t, [0, 1], [1, PREVIEW_COLLAPSED_SCALE]);
-    return {
-      height: previewMaxH * scale,
-    };
-  });
+  // Outer keeps a fixed layout height — animating height was Yoga thrash on scroll.
+  // Inner scales; sheet climbs via translateY only.
+  const stickyPreviewStyle = useMemo(
+    () => [{ height: previewMaxH } as const],
+    [previewMaxH],
+  );
 
-  // Inner keeps full layout size and only scales — collage/skins/footer stay intact.
   const stickyPreviewInnerStyle = useAnimatedStyle(() => {
     const t = collapseProgress(scrollY.value);
     const scale = interpolate(t, [0, 1], [1, PREVIEW_COLLAPSED_SCALE]);
@@ -417,7 +414,9 @@ export function CardCreateScreen() {
   const gridSheetStyle = useAnimatedStyle(() => {
     const t = collapseProgress(scrollY.value);
     return {
-      marginTop: interpolate(t, [0, 1], [0, -GRID_COVER_Y]),
+      transform: [
+        { translateY: interpolate(t, [0, 1], [0, -GRID_COVER_Y]) },
+      ],
       borderTopLeftRadius: interpolate(t, [0, 1], [12, 16]),
       borderTopRightRadius: interpolate(t, [0, 1], [12, 16]),
       shadowOpacity: interpolate(t, [0, 1], [0.04, 0.1]),

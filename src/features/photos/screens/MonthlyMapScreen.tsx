@@ -88,7 +88,7 @@ export function MonthlyMapScreen() {
     }
     zoomTimerRef.current = setTimeout(() => {
       setZoom(next);
-    }, 180);
+    }, 280);
   }, []);
   useEffect(() => {
     return () => {
@@ -175,8 +175,8 @@ export function MonthlyMapScreen() {
     hasAccess &&
     ((isPending && !data) ||
       Boolean(data && data.photos.length === 0 && isFetching));
-  const showBootLoading = useHeldBusy(bootBusy);
-  const showDataLoading = useHeldBusy(dataBusy);
+  const showBootLoading = useHeldBusy(bootBusy, 1800);
+  const showDataLoading = useHeldBusy(dataBusy, 500);
 
   // First-run gate before the permission gate: explain the app, then ask.
   if (!onboardingSeen) {

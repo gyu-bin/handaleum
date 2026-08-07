@@ -14,6 +14,7 @@ export interface LoadingViewProps {
 
 /**
  * Brand loading — stroke-draw bike on cream paper (min hold is call-site via useHeldBusy).
+ * Grain stays static; bike spin is linear so device FPS doesn't hitch on eased wheels.
  */
 export function LoadingView({
   message = strings.common.loading,
@@ -21,7 +22,7 @@ export function LoadingView({
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <PaperGrain style={styles.grain} />
-      <View style={styles.center}>
+      <View style={styles.center} collapsable={false}>
         <BikeLoader width={132} />
         <Text style={styles.brand} accessibilityRole="header">
           {strings.brand}

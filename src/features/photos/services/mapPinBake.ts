@@ -22,6 +22,8 @@ const listeners = new Set<() => void>();
 
 /** Bound baked PNG path cache — month switches used to retain every pin forever. */
 const BAKE_CACHE_MAX = 96;
+/** Cap pending bakes — excess fall back to raw thumbs so zoom doesn't stall. */
+const BAKE_QUEUE_MAX = 20;
 
 function cacheBake(key: string, uri: string) {
   if (cache.has(key)) {
@@ -43,6 +45,28 @@ function emit() {
 
 function bakeKey(photoUri: string, selected: boolean, cardSize: number): string {
   return `${photoUri}|${selected ? 1 : 0}|${cardSize}`;
+}
+
+function trimQueue() {
+  while (queue.length > BAKE_QUEUE_MAX) {
+    // Drop the oldest non-selected from the back (selected sit at front).
+    let dropAt = -1;
+    for (let i = queue.length - 1; i >= 0; i -= 1) {
+      if (!queue[i]!.selected) {
+        dropAt = i;
+        break;
+      }
+    }
+    if (dropAt < 0) {
+      break;
+    }
+    const [dropped] = queue.splice(dropAt, 1);
+    if (!dropped) {
+      break;
+    }
+    inflight.delete(dropped.key);
+    dropped.resolve(null);
+  }
 }
 
 function pump() {
@@ -131,6 +155,7 @@ export function requestMapPinBake(
     } else {
       queue.push(pending);
     }
+    trimQueue();
     pump();
   });
   inflight.set(key, work);

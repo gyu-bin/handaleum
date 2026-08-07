@@ -1,6 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   FlatList,
+  type ListRenderItemInfo,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Pressable,
@@ -8,6 +16,7 @@ import {
   Text,
   useWindowDimensions,
   View,
+  type ViewToken,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -33,10 +42,12 @@ import {
 } from '../utils/placeJourney';
 
 const GRID_COLS = 3;
-/** Photos appended per scroll page in the place grid. */
-const PAGE_SIZE = 50;
+/** First paint + each load-more page — keep small on device. */
+const PAGE_SIZE = 18;
+const HERO_SIZE = 512;
+const THUMB_SIZE = 256;
 
-function GridThumb({
+const GridThumb = memo(function GridThumb({
   photo,
   size,
   selected,
@@ -52,7 +63,7 @@ function GridThumb({
   const [uri, setUri] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
-    void resolveAssetUri(photo.assetId, { imageSize: 512 })
+    void resolveAssetUri(photo.assetId, { imageSize: THUMB_SIZE })
       .then((next) => {
         if (!cancelled) {
           setUri(next);
@@ -98,20 +109,27 @@ function GridThumb({
       ) : null}
     </Pressable>
   );
-}
+});
 
-function ClusterSlide({
+/**
+ * Heavy place page — only mount grid / geocode / warmup when nearby.
+ * Off-screen slides stay a light shell so horizontal paging stays smooth.
+ */
+const ClusterSlide = memo(function ClusterSlide({
   cluster,
   width,
   coverAssetId,
   onSetCover,
   month,
+  isNearby,
 }: {
   cluster: PlaceCluster;
   width: number;
   coverAssetId?: string | null;
   onSetCover: (placeKey: string, assetId: string) => void;
   month: MonthKey;
+  /** Active page ±1 — full UI. Farther pages = shell only. */
+  isNearby: boolean;
 }) {
   const placeKey = placeBucketKey(cluster.centerLat, cluster.centerLng);
   const [activeId, setActiveId] = useState(
@@ -146,23 +164,26 @@ function ClusterSlide({
     cluster.photos.find((p) => p.assetId === activeId) ?? cluster.photos[0];
 
   const pagePhotos = useMemo(
-    () => cluster.photos.slice(0, visibleCount),
-    [cluster.photos, visibleCount],
+    () => (isNearby ? cluster.photos.slice(0, visibleCount) : []),
+    [cluster.photos, isNearby, visibleCount],
   );
 
   useEffect(() => {
+    if (!isNearby || pagePhotos.length === 0) {
+      return;
+    }
     startMonthImageWarmup({
       month,
       assetIds: pagePhotos.map((p) => p.assetId),
     });
-  }, [month, pagePhotos]);
+  }, [isNearby, month, pagePhotos]);
 
   useEffect(() => {
-    if (!activePhoto) {
+    if (!isNearby || !activePhoto) {
       return;
     }
     let cancelled = false;
-    void resolveAssetUri(activePhoto.assetId, { imageSize: 1080 })
+    void resolveAssetUri(activePhoto.assetId, { imageSize: HERO_SIZE })
       .then((next) => {
         if (!cancelled) {
           setUri(next);
@@ -174,11 +195,13 @@ function ClusterSlide({
     return () => {
       cancelled = true;
     };
-  }, [activePhoto]);
+  }, [activePhoto, isNearby]);
 
   useEffect(() => {
+    if (!isNearby) {
+      return;
+    }
     let cancelled = false;
-    setPlaceLabel(null);
     setLabelLoading(true);
     const pin = activePhoto ?? cluster.photos[0];
     const lat = pin?.lat ?? cluster.centerLat;
@@ -200,16 +223,21 @@ function ClusterSlide({
     return () => {
       cancelled = true;
     };
-  }, [activePhoto, cluster]);
+  }, [activePhoto, cluster, isNearby]);
 
-  const onSelectPhoto = (assetId: string) => {
-    setActiveId(assetId);
-    onSetCover(placeKey, assetId);
-  };
+  const onSelectPhoto = useCallback(
+    (assetId: string) => {
+      setActiveId(assetId);
+      onSetCover(placeKey, assetId);
+    },
+    [onSetCover, placeKey],
+  );
 
-  const placeText = labelLoading
-    ? strings.playback.placeLoading
-    : (placeLabel ?? strings.playback.placeUnknown);
+  const placeText = !isNearby
+    ? (placeLabel ?? strings.playback.placeLoading)
+    : labelLoading
+      ? strings.playback.placeLoading
+      : (placeLabel ?? strings.playback.placeUnknown);
 
   const chapterDay = cluster.photos[0]?.takenAt
     ? strings.playback.chapterDay(cluster.photos[0].takenAt)
@@ -223,6 +251,40 @@ function ClusterSlide({
     );
   }, [cluster.photos.length]);
 
+  const titleBlock = (
+    <View style={styles.titleRow}>
+      <Text style={styles.place} numberOfLines={2}>
+        {placeText}
+      </Text>
+      <View style={styles.metaCol}>
+        {chapterDay ? (
+          <Text style={styles.meta} numberOfLines={1}>
+            {chapterDay}
+          </Text>
+        ) : null}
+        <Text style={styles.meta} numberOfLines={1}>
+          {strings.map.clusterCount(cluster.photos.length)}
+        </Text>
+      </View>
+    </View>
+  );
+
+  if (!isNearby) {
+    return (
+      <View style={[styles.slide, styles.gridContent, { width }]}>
+        {titleBlock}
+        <View
+          style={[
+            styles.imageWrap,
+            styles.hero,
+            styles.placeholder,
+            { width: contentW },
+          ]}
+        />
+      </View>
+    );
+  }
+
   const header = (
     <View
       style={[
@@ -230,22 +292,7 @@ function ClusterSlide({
         cluster.photos.length <= 1 && styles.gridContent,
       ]}
     >
-      <View style={styles.titleRow}>
-        <Text style={styles.place} numberOfLines={2}>
-          {placeText}
-        </Text>
-        <View style={styles.metaCol}>
-          {chapterDay ? (
-            <Text style={styles.meta} numberOfLines={1}>
-              {chapterDay}
-            </Text>
-          ) : null}
-          <Text style={styles.meta} numberOfLines={1}>
-            {strings.map.clusterCount(cluster.photos.length)}
-          </Text>
-        </View>
-      </View>
-
+      {titleBlock}
       <View style={styles.imageWrap}>
         {uri ? (
           <Image
@@ -253,14 +300,13 @@ function ClusterSlide({
             style={[styles.hero, { width: contentW }]}
             contentFit="cover"
             cachePolicy="memory-disk"
-            recyclingKey={`${activeId}-1080`}
+            recyclingKey={`${activeId}-${HERO_SIZE}`}
             priority="high"
           />
         ) : (
           <View style={[styles.hero, styles.placeholder, { width: contentW }]} />
         )}
       </View>
-
       {cluster.photos.length > 1 ? (
         <Text style={styles.gridHint}>{strings.playback.gridHint}</Text>
       ) : null}
@@ -282,8 +328,9 @@ function ClusterSlide({
           showsVerticalScrollIndicator={false}
           nestedScrollEnabled
           initialNumToRender={PAGE_SIZE}
-          maxToRenderPerBatch={12}
-          windowSize={7}
+          maxToRenderPerBatch={9}
+          windowSize={3}
+          removeClippedSubviews
           onEndReached={loadMore}
           onEndReachedThreshold={0.4}
           renderItem={({ item }) => (
@@ -299,7 +346,7 @@ function ClusterSlide({
       )}
     </View>
   );
-}
+});
 
 /**
  * Place-chapter view: horizontal pages per place (no autoplay).
@@ -313,6 +360,8 @@ export function PlaybackScreen() {
   const { covers, setCover } = usePinCovers(month);
   const [index, setIndex] = useState(0);
   const listRef = useRef<FlatList<PlaceCluster>>(null);
+  const indexRef = useRef(0);
+  indexRef.current = index;
 
   const clusters = useMemo(() => {
     if (!data) {
@@ -329,6 +378,39 @@ export function PlaybackScreen() {
     setIndex(0);
     listRef.current?.scrollToOffset({ offset: 0, animated: false });
   }, [month]);
+
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      const first = viewableItems.find((v) => v.isViewable && v.index != null);
+      if (first?.index == null) {
+        return;
+      }
+      if (first.index !== indexRef.current) {
+        setIndex(first.index);
+      }
+    },
+  ).current;
+
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 55,
+  }).current;
+
+  const renderPlace = useCallback(
+    ({ item, index: itemIndex }: ListRenderItemInfo<PlaceCluster>) => {
+      const key = placeBucketKey(item.centerLat, item.centerLng);
+      return (
+        <ClusterSlide
+          cluster={item}
+          width={width}
+          coverAssetId={covers[key] ?? null}
+          onSetCover={setCover}
+          month={month}
+          isNearby={Math.abs(itemIndex - index) <= 1}
+        />
+      );
+    },
+    [covers, index, month, setCover, width],
+  );
 
   if (showLoading) {
     return <LoadingView />;
@@ -398,6 +480,14 @@ export function PlaybackScreen() {
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={onScrollEnd}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
+        extraData={index}
+        initialNumToRender={1}
+        maxToRenderPerBatch={1}
+        windowSize={3}
+        removeClippedSubviews
+        updateCellsBatchingPeriod={16}
         getItemLayout={(_, i) => ({
           length: width,
           offset: width * i,
@@ -412,18 +502,7 @@ export function PlaybackScreen() {
             setIndex(Math.max(0, Math.min(failedIndex, clusters.length - 1)));
           });
         }}
-        renderItem={({ item }) => {
-          const key = placeBucketKey(item.centerLat, item.centerLng);
-          return (
-            <ClusterSlide
-              cluster={item}
-              width={width}
-              coverAssetId={covers[key] ?? null}
-              onSetCover={setCover}
-              month={month}
-            />
-          );
-        }}
+        renderItem={renderPlace}
       />
       {clusters.length > 1 ? (
         <View style={styles.pager}>
@@ -608,4 +687,3 @@ const styles = StyleSheet.create({
     fontSize: 9,
   },
 });
-

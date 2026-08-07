@@ -71,7 +71,7 @@ Grain = **시군구** (서울·광역 구, 도 시·군, 일반구 시 → 구�
 | 방문 동 탭 → 큰 사진 팝업. 소스=GPS 스냅샷 + PIP (스키마에 assetId 없음) | 수집 시 assetId 저장 | 사용자 B 확정 | 2026-08-06 |
 | 발도장 헤더 타이틀 **화면 중앙** (절대 배치) | flex 균형만 | 사용자 요청 | 2026-08-06 |
 | 군 **읍·면** PIP 수집 (`dongs.json`에 군 leaf 포함). 도농복합 시 읍·면은 제외 | 동만 / 시 읍면까지 | 사용자 Q=군만 | 2026-08-06 |
-| 방문 지도 = **전국 시·도 실지도** → 탭 시 L1 확대. 탭=Pressable hitTest(핀치 줌 제거: ResumableZoom이 탭 삼킴). 방문 칸=`stampMapFill` 고정 파스텔 | 전국 L1 / 단일 ink / Path onPress | 사용자: 탭·색 다양 | 2026-08-07 |
+| 방문 지도 = **전국 시·도 실지도** → 탭 시 L1 확대. **같은 StampKoreaMap 인스턴스 유지**(key remount/Fade 제거). 탭=Pressable hitTest. 방문 칸=`stampMapFill` | 전국 L1 / Path onPress / drill remount | 성능 | 2026-08-07 |
 | 방문 지도 grain = nation=시·도 칠, drill=L1 구·시·군 (`stamp-map-units.json`). 1동만 있어도 구 전체 칠함 | 동 단위 칠 / 시·도만 | 색칠북 가독성 | 2026-08-06 |
 
 ## 경계

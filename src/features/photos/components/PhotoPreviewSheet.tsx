@@ -21,7 +21,7 @@ import { placeBucketKey, resolveClusterDetailLabel } from '../utils/placeJourney
 import { useCurrentMonth } from '../hooks/useCurrentMonth';
 
 /** Photos appended per scroll page in the pin sheet grid. */
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 18;
 
 export interface PhotoPreviewSheetProps {
   /** null closes the sheet */
@@ -221,9 +221,9 @@ export function PhotoPreviewSheet({
             keyExtractor={(item) => item.assetId}
             numColumns={3}
             contentContainerStyle={styles.list}
-            initialNumToRender={PAGE_SIZE}
-            maxToRenderPerBatch={12}
-            windowSize={7}
+            initialNumToRender={12}
+            maxToRenderPerBatch={9}
+            windowSize={5}
             updateCellsBatchingPeriod={50}
             removeClippedSubviews
             onEndReached={loadMore}

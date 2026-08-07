@@ -7,7 +7,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { strings } from '@/shared/constants/strings';
@@ -166,39 +165,32 @@ export function StampMapModal({
 
         <View style={styles.mapStage} onLayout={onMapLayout}>
           {mapSize.width > 0 && mapSize.height > 0 ? (
-            <Animated.View
-              key={focusSido ?? 'nation'}
+            <Pressable
               style={styles.flex}
-              entering={FadeIn.duration(280)}
-              exiting={FadeOut.duration(140)}
+              onPress={(e) => {
+                onMapPress(
+                  e.nativeEvent.locationX,
+                  e.nativeEvent.locationY,
+                );
+              }}
+              accessibilityRole="image"
+              accessibilityLabel={
+                focusSido
+                  ? strings.stamps.mapA11ySido(focusSido)
+                  : strings.stamps.mapA11y
+              }
             >
-              <Pressable
-                style={styles.flex}
-                onPress={(e) => {
-                  onMapPress(
-                    e.nativeEvent.locationX,
-                    e.nativeEvent.locationY,
-                  );
+              <StampKoreaMap
+                ref={mapRef}
+                collected={collected}
+                mode={focusSido ? 'sido' : 'nation'}
+                focusSido={focusSido ?? undefined}
+                style={{
+                  width: mapSize.width,
+                  height: mapSize.height,
                 }}
-                accessibilityRole="image"
-                accessibilityLabel={
-                  focusSido
-                    ? strings.stamps.mapA11ySido(focusSido)
-                    : strings.stamps.mapA11y
-                }
-              >
-                <StampKoreaMap
-                  ref={mapRef}
-                  collected={collected}
-                  mode={focusSido ? 'sido' : 'nation'}
-                  focusSido={focusSido ?? undefined}
-                  style={{
-                    width: mapSize.width,
-                    height: mapSize.height,
-                  }}
-                />
-              </Pressable>
-            </Animated.View>
+              />
+            </Pressable>
           ) : null}
         </View>
 

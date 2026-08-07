@@ -52,4 +52,12 @@ assert.equal(
   a.centerLat * 0.25 + b.centerLat * 0.75,
 );
 
+const many = Array.from({ length: 40 }, (_, i) =>
+  cluster(37 + i * 0.01, 127 + i * 0.01, `2026-01-${String(i + 1).padStart(2, '0')}T10:00:00.000Z`),
+);
+const capped = journeyPathSteps(many);
+assert.ok(capped.length <= 24, `expected ≤24 order markers, got ${capped.length}`);
+assert.equal(capped[0]?.order, 1);
+assert.equal(capped[capped.length - 1]?.order, 40);
+
 console.log('journeyPath.check: ok');

@@ -52,7 +52,10 @@ export function journeyPathCoords(clusters: PlaceCluster[]): PathCoord[] {
 /**
  * Visit-order labels on the polyline (not under photo pins).
  * 1 sits a short walk from the first pin; 2…N sit near each arrival along the hop.
+ * Caps marker count so dense months don't flood Naver overlays.
  */
+const PATH_ORDER_MARKER_MAX = 24;
+
 export function journeyPathSteps(clusters: PlaceCluster[]): PathOrderStep[] {
   const coords = orderedPathCoords(clusters);
   if (coords.length < 2) {
@@ -77,5 +80,25 @@ export function journeyPathSteps(clusters: PlaceCluster[]): PathOrderStep[] {
       order: i + 2,
     });
   }
-  return steps;
+
+  if (steps.length <= PATH_ORDER_MARKER_MAX) {
+    return steps;
+  }
+
+  // Keep first + last, evenly sample the middle so order still reads as a trip.
+  const out: PathOrderStep[] = [steps[0]!];
+  const midBudget = PATH_ORDER_MARKER_MAX - 2;
+  const lastIdx = steps.length - 1;
+  for (let k = 1; k <= midBudget; k++) {
+    const idx = Math.round((k * lastIdx) / (midBudget + 1));
+    const step = steps[idx]!;
+    if (out[out.length - 1]?.order !== step.order) {
+      out.push(step);
+    }
+  }
+  const last = steps[lastIdx]!;
+  if (out[out.length - 1]?.order !== last.order) {
+    out.push(last);
+  }
+  return out;
 }
