@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  InteractionManager,
   Modal,
   Pressable,
   StyleSheet,
@@ -10,10 +11,11 @@ import {
   View,
   type ListRenderItemInfo,
 } from 'react-native';
-import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useGridThumbUri } from '@/features/photos/hooks/useGridThumbUri';
+import { AssetThumbImage } from '@/features/photos/components/AssetThumbImage';
+import { usePauseGridThumbWarmOnScroll } from '@/features/photos/hooks/usePauseGridThumbWarmOnScroll';
+import { warmGridThumbs } from '@/features/photos/services/mediaLibrary';
 import type { PhotoRef } from '@/features/photos/types';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
@@ -57,51 +59,15 @@ const Thumb = memo(function Thumb({
   dateLabel: string;
   size: number;
 }) {
-  const [retryNonce, setRetryNonce] = useState(0);
-  const [failed, setFailed] = useState(false);
-  const uri = useGridThumbUri(assetId, THUMB_SIZE, retryNonce);
-
-  useEffect(() => {
-    setFailed(false);
-  }, [assetId, retryNonce]);
-
-  const onRetry = useCallback(() => {
-    setFailed(false);
-    setRetryNonce((n) => n + 1);
-  }, []);
-
   return (
     <View style={{ width: size }}>
-      <Pressable
-        onPress={failed ? onRetry : undefined}
-        disabled={!failed}
-        accessibilityRole={failed ? 'button' : undefined}
-        accessibilityLabel={
-          failed ? strings.stamps.dongPhotoRetry : undefined
-        }
-        style={[styles.thumb, { width: size, height: size }]}
-      >
-        {uri && !failed ? (
-          <Image
-            source={{ uri }}
-            style={{ width: size, height: size }}
-            contentFit="cover"
-            recyclingKey={`${assetId}-${THUMB_SIZE}`}
-            cachePolicy="memory-disk"
-            transition={0}
-            priority="low"
-            onError={() => {
-              setFailed(true);
-            }}
-          />
-        ) : null}
-
-        {failed ? (
-          <View style={styles.thumbOverlay}>
-            <Text style={styles.retryLabel}>{strings.stamps.dongPhotoRetry}</Text>
-          </View>
-        ) : null}
-      </Pressable>
+      <View style={[styles.thumb, { width: size, height: size }]}>
+        <AssetThumbImage
+          assetId={assetId}
+          size={size}
+          imageSize={THUMB_SIZE}
+        />
+      </View>
       {dateLabel ? (
         <Text style={styles.takenAt} numberOfLines={1}>
           {dateLabel}
@@ -125,6 +91,7 @@ export function StampDongPhotosModal({
 }: StampDongPhotosModalProps) {
   const insets = useSafeAreaInsets();
   const { width: windowW } = useWindowDimensions();
+  const thumbWarmScroll = usePauseGridThumbWarmOnScroll();
   const [loading, setLoading] = useState(false);
   const [photos, setPhotos] = useState<PhotoRef[]>([]);
   const [sortMode, setSortMode] = useState<SortMode>('newest');
@@ -163,6 +130,19 @@ export function StampDongPhotosModal({
       cancelled = true;
     };
   }, [query]);
+
+  useEffect(() => {
+    if (photos.length === 0) {
+      return;
+    }
+    const handle = InteractionManager.runAfterInteractions(() => {
+      warmGridThumbs(
+        photos.map((p) => p.assetId),
+        48,
+      );
+    });
+    return () => handle.cancel();
+  }, [photos]);
 
   const rows = useMemo((): ThumbRow[] => {
     if (photos.length === 0) {
@@ -290,12 +270,15 @@ export function StampDongPhotosModal({
               columnWrapperStyle={styles.row}
               contentContainerStyle={styles.grid}
               showsVerticalScrollIndicator={false}
-              initialNumToRender={8}
-              maxToRenderPerBatch={6}
-              windowSize={7}
-              updateCellsBatchingPeriod={40}
+              initialNumToRender={4}
+              maxToRenderPerBatch={1}
+              windowSize={3}
+              updateCellsBatchingPeriod={100}
               removeClippedSubviews={false}
               renderItem={renderItem}
+              onScrollBeginDrag={thumbWarmScroll.onScrollBeginDrag}
+              onScrollEndDrag={thumbWarmScroll.onScrollEndDrag}
+              onMomentumScrollEnd={thumbWarmScroll.onMomentumScrollEnd}
             />
           )}
         </View>
@@ -400,18 +383,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  thumbOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.surfaceAlt,
-  },
-  retryLabel: {
-    ...theme.type.micro,
-    fontFamily: theme.fonts.sans,
-    color: theme.colors.inkSoft,
-    fontWeight: '600',
   },
   takenAt: {
     ...theme.type.micro,

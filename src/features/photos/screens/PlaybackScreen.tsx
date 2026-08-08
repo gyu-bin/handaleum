@@ -3,10 +3,12 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import {
   FlatList,
+  InteractionManager,
   Platform,
   type ListRenderItemInfo,
   Pressable,
@@ -25,14 +27,16 @@ import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 
+import { AssetThumbImage } from '../components/AssetThumbImage';
 import { useCurrentMonth } from '../hooks/useCurrentMonth';
-import { useGridThumbUri } from '../hooks/useGridThumbUri';
 import { useMonthlyPhotos } from '../hooks/useMonthlyPhotos';
+import { usePauseGridThumbWarmOnScroll } from '../hooks/usePauseGridThumbWarmOnScroll';
 import { usePinCovers } from '../hooks/usePinCovers';
 import { clusterPhotos } from '../services/cluster';
 import {
   resolveAssetUri,
   syncAssetDisplayUri,
+  warmGridThumbs,
 } from '../services/mediaLibrary';
 import type { PhotoRef, PlaceCluster } from '../types';
 import {
@@ -42,7 +46,6 @@ import {
 
 const GRID_COLS = 3;
 const HERO_SIZE = 256;
-const THUMB_SIZE = 128;
 const ROW_GAP = theme.spacing.sm;
 
 type ThumbRow = { key: string; photos: PhotoRef[] };
@@ -60,19 +63,21 @@ function chunkThumbs(photos: PhotoRef[]): ThumbRow[] {
 }
 
 const GridThumb = memo(function GridThumb({
-  photo,
+  assetId,
   size,
   selected,
   isCover,
-  onPress,
+  onSelectPhoto,
 }: {
-  photo: PhotoRef;
+  assetId: string;
   size: number;
   selected: boolean;
   isCover: boolean;
-  onPress: () => void;
+  onSelectPhoto: (assetId: string) => void;
 }) {
-  const uri = useGridThumbUri(photo.assetId, THUMB_SIZE);
+  const onPress = useCallback(() => {
+    onSelectPhoto(assetId);
+  }, [assetId, onSelectPhoto]);
 
   return (
     <Pressable
@@ -88,19 +93,7 @@ const GridThumb = memo(function GridThumb({
         isCover && styles.gridThumbCover,
       ]}
     >
-      {uri ? (
-        <Image
-          source={{ uri }}
-          style={styles.gridImage}
-          contentFit="cover"
-          recyclingKey={photo.assetId}
-          cachePolicy="memory-disk"
-          transition={0}
-          priority="low"
-        />
-      ) : (
-        <View style={[styles.gridImage, styles.placeholder]} />
-      )}
+      <AssetThumbImage assetId={assetId} size={size} style={styles.gridImage} />
       {isCover ? (
         <View style={styles.gridBadge}>
           <Text style={styles.gridBadgeText}>{strings.map.coverBadge}</Text>
@@ -128,11 +121,11 @@ const ThumbRowView = memo(function ThumbRowView({
       {row.photos.map((photo) => (
         <GridThumb
           key={photo.assetId}
-          photo={photo}
+          assetId={photo.assetId}
           size={cell}
           selected={photo.assetId === activeId}
           isCover={photo.assetId === coverId}
-          onPress={() => onSelectPhoto(photo.assetId)}
+          onSelectPhoto={onSelectPhoto}
         />
       ))}
     </View>
@@ -160,6 +153,12 @@ const ClusterSlide = memo(function ClusterSlide({
   const [asyncHeroUri, setAsyncHeroUri] = useState<string | null>(null);
   const [placeLabel, setPlaceLabel] = useState<string | null>(null);
   const [labelLoading, setLabelLoading] = useState(true);
+  const scrollingRef = useRef(false);
+  const pendingLabelRef = useRef<{
+    label: string | null;
+    loading: boolean;
+  } | null>(null);
+  const thumbWarmScroll = usePauseGridThumbWarmOnScroll();
 
   const pad = theme.spacing.lg;
   const contentW = width - pad * 2;
@@ -176,6 +175,17 @@ const ClusterSlide = memo(function ClusterSlide({
       '';
     setActiveId(next);
   }, [cluster, coverAssetId]);
+
+  // Pre-bake small file thumbs after mount — recycle uses file://, not ph://.
+  useEffect(() => {
+    const handle = InteractionManager.runAfterInteractions(() => {
+      warmGridThumbs(
+        cluster.photos.map((p) => p.assetId),
+        64,
+      );
+    });
+    return () => handle.cancel();
+  }, [cluster]);
 
   const activePhoto =
     cluster.photos.find((p) => p.assetId === activeId) ?? cluster.photos[0];
@@ -213,30 +223,48 @@ const ClusterSlide = memo(function ClusterSlide({
   useEffect(() => {
     let cancelled = false;
     const t = setTimeout(() => {
-      setLabelLoading(true);
       const pin = activePhoto ?? cluster.photos[0];
       const lat = pin?.lat ?? cluster.centerLat;
       const lng = pin?.lng ?? cluster.centerLng;
+      const apply = (label: string | null, loading: boolean) => {
+        if (scrollingRef.current) {
+          pendingLabelRef.current = { label, loading };
+          return;
+        }
+        setPlaceLabel(label);
+        setLabelLoading(loading);
+      };
+      if (!scrollingRef.current) {
+        setLabelLoading(true);
+      }
       void resolveClusterDetailLabel(lat, lng)
         .then((label) => {
           if (!cancelled) {
-            setPlaceLabel(label);
-            setLabelLoading(false);
+            apply(label, false);
           }
         })
         .catch((error) => {
           console.warn('ClusterSlide label failed', error);
           if (!cancelled) {
-            setPlaceLabel(null);
-            setLabelLoading(false);
+            apply(null, false);
           }
         });
-    }, 200);
+    }, 280);
     return () => {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [activePhoto, cluster]);
+  }, [activePhoto, cluster.centerLat, cluster.centerLng, cluster.photos]);
+
+  const flushPendingLabel = useCallback(() => {
+    const pending = pendingLabelRef.current;
+    if (!pending) {
+      return;
+    }
+    pendingLabelRef.current = null;
+    setPlaceLabel(pending.label);
+    setLabelLoading(pending.loading);
+  }, []);
 
   const onSelectPhoto = useCallback(
     (assetId: string) => {
@@ -256,9 +284,32 @@ const ClusterSlide = memo(function ClusterSlide({
 
   const coverId = coverAssetId ?? activeId;
 
-  const listHeader = useMemo(
-    () => (
-      <View>
+  const renderRow = useCallback(
+    ({ item }: ListRenderItemInfo<ThumbRow>) => (
+      <ThumbRowView
+        row={item}
+        cell={cell}
+        activeId={activeId}
+        coverId={coverId}
+        onSelectPhoto={onSelectPhoto}
+      />
+    ),
+    [activeId, cell, coverId, onSelectPhoto],
+  );
+
+  const getItemLayout = useCallback(
+    (_: ArrayLike<ThumbRow> | null | undefined, index: number) => ({
+      length: rowHeight,
+      offset: rowHeight * index,
+      index,
+    }),
+    [rowHeight],
+  );
+
+  return (
+    <View style={styles.list}>
+      {/* Hero outside FlatList — label/uri updates must not relayout the grid. */}
+      <View style={styles.chapterHead}>
         <View style={styles.titleRow}>
           <Text style={styles.place} numberOfLines={2}>
             {placeText}
@@ -284,6 +335,7 @@ const ClusterSlide = memo(function ClusterSlide({
               recyclingKey={`${activeId}-${HERO_SIZE}`}
               priority="high"
               transition={0}
+              allowDownscaling
             />
           ) : (
             <View
@@ -295,56 +347,39 @@ const ClusterSlide = memo(function ClusterSlide({
           <Text style={styles.gridHint}>{strings.playback.gridHint}</Text>
         ) : null}
       </View>
-    ),
-    [
-      activeId,
-      chapterDay,
-      cluster.photos.length,
-      contentW,
-      placeText,
-      uri,
-    ],
-  );
 
-  const renderRow = useCallback(
-    ({ item }: ListRenderItemInfo<ThumbRow>) => (
-      <ThumbRowView
-        row={item}
-        cell={cell}
-        activeId={activeId}
-        coverId={coverId}
-        onSelectPhoto={onSelectPhoto}
+      <FlatList
+        style={styles.thumbList}
+        data={thumbRows}
+        keyExtractor={(row) => row.key}
+        contentContainerStyle={styles.gridContent}
+        showsVerticalScrollIndicator={false}
+        initialNumToRender={3}
+        maxToRenderPerBatch={1}
+        windowSize={3}
+        updateCellsBatchingPeriod={100}
+        removeClippedSubviews={Platform.OS === 'android'}
+        getItemLayout={getItemLayout}
+        renderItem={renderRow}
+        extraData={`${activeId}:${coverId}`}
+        onScrollBeginDrag={() => {
+          scrollingRef.current = true;
+          thumbWarmScroll.onScrollBeginDrag();
+        }}
+        onScrollEndDrag={() => {
+          thumbWarmScroll.onScrollEndDrag();
+          setTimeout(() => {
+            scrollingRef.current = false;
+            flushPendingLabel();
+          }, 80);
+        }}
+        onMomentumScrollEnd={() => {
+          scrollingRef.current = false;
+          thumbWarmScroll.onMomentumScrollEnd();
+          flushPendingLabel();
+        }}
       />
-    ),
-    [activeId, cell, coverId, onSelectPhoto],
-  );
-
-  const getItemLayout = useCallback(
-    (_: ArrayLike<ThumbRow> | null | undefined, index: number) => ({
-      length: rowHeight,
-      offset: rowHeight * index,
-      index,
-    }),
-    [rowHeight],
-  );
-
-  return (
-    <FlatList
-      style={styles.list}
-      data={thumbRows}
-      keyExtractor={(row) => row.key}
-      ListHeaderComponent={listHeader}
-      contentContainerStyle={styles.gridContent}
-      showsVerticalScrollIndicator={false}
-      initialNumToRender={6}
-      maxToRenderPerBatch={3}
-      windowSize={5}
-      updateCellsBatchingPeriod={50}
-      removeClippedSubviews={Platform.OS === 'android'}
-      getItemLayout={getItemLayout}
-      renderItem={renderRow}
-      extraData={`${activeId}:${coverId}`}
-    />
+    </View>
   );
 });
 
@@ -516,9 +551,16 @@ const styles = StyleSheet.create({
     minWidth: 64,
     textAlign: 'center',
   },
-  gridContent: {
+  chapterHead: {
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.md,
+  },
+  thumbList: {
+    flex: 1,
+  },
+  gridContent: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.xs,
     paddingBottom: theme.spacing.lg,
   },
   titleRow: {

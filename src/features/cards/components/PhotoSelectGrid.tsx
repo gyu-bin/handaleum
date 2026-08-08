@@ -1,7 +1,8 @@
-import { memo, useCallback, useMemo, type ReactElement } from 'react';
+import { memo, useCallback, useEffect, useMemo, type ReactElement } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  InteractionManager,
   Platform,
   type ListRenderItemInfo,
   Pressable,
@@ -12,15 +13,14 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { Image } from 'expo-image';
 
 import { theme } from '@/shared/constants/theme';
 
-import { useGridThumbUri } from '../../photos/hooks/useGridThumbUri';
+import { AssetThumbImage } from '../../photos/components/AssetThumbImage';
+import { usePauseGridThumbWarmOnScroll } from '../../photos/hooks/usePauseGridThumbWarmOnScroll';
+import { warmGridThumbs } from '../../photos/services/mediaLibrary';
 import type { PhotoRef } from '../../photos/types';
 import type { PlacePhotoSection } from '../../photos/utils/placeJourney';
-
-const THUMB_SIZE = 128;
 
 export interface PhotoSelectGridProps {
   photos: PhotoRef[];
@@ -93,29 +93,21 @@ const Cell = memo(function Cell({
   size: number;
   onToggle: (assetId: string) => void;
 }) {
-  const uri = useGridThumbUri(photo.assetId, THUMB_SIZE);
+  const onPress = useCallback(() => {
+    onToggle(photo.assetId);
+  }, [onToggle, photo.assetId]);
+
+  const inner = Math.max(1, size - 4);
 
   return (
     <Pressable
-      onPress={() => onToggle(photo.assetId)}
+      onPress={onPress}
       style={{ width: size, height: size, padding: 2 }}
       accessibilityRole="checkbox"
       accessibilityState={{ checked: selected }}
     >
       <View style={styles.tile}>
-        {uri ? (
-          <Image
-            source={{ uri }}
-            style={styles.image}
-            contentFit="cover"
-            recyclingKey={photo.assetId}
-            cachePolicy="memory-disk"
-            transition={0}
-            priority="low"
-          />
-        ) : (
-          <View style={[styles.image, styles.placeholder]} />
-        )}
+        <AssetThumbImage assetId={photo.assetId} size={inner} />
         {selected ? (
           <>
             <View style={styles.tileRing} pointerEvents="none" />
@@ -152,6 +144,7 @@ export function PhotoSelectGrid({
 }: PhotoSelectGridProps) {
   const { width } = useWindowDimensions();
   const size = (width - theme.spacing.lg * 2) / COLS;
+  const thumbWarmScroll = usePauseGridThumbWarmOnScroll();
   const selected = useMemo(
     () => new Set(selectedAssetIds),
     [selectedAssetIds],
@@ -161,6 +154,17 @@ export function PhotoSelectGrid({
     () => (sections != null ? rowsFromSections(sections) : rowsFromPhotos(photos)),
     [photos, sections],
   );
+
+  useEffect(() => {
+    const ids =
+      sections != null
+        ? sections.flatMap((s) => s.data.map((p) => p.assetId))
+        : photos.map((p) => p.assetId);
+    const handle = InteractionManager.runAfterInteractions(() => {
+      warmGridThumbs(ids, 64);
+    });
+    return () => handle.cancel();
+  }, [photos, sections]);
 
   const header = (
     <View>
@@ -215,12 +219,15 @@ export function PhotoSelectGrid({
       ListHeaderComponent={header}
       ListFooterComponent={ListFooterComponent}
       contentContainerStyle={contentContainerStyle}
-      initialNumToRender={6}
-      maxToRenderPerBatch={3}
-      windowSize={5}
-      updateCellsBatchingPeriod={50}
+      initialNumToRender={4}
+      maxToRenderPerBatch={1}
+      windowSize={3}
+      updateCellsBatchingPeriod={100}
       removeClippedSubviews={Platform.OS === 'android'}
       renderItem={renderItem}
+      onScrollBeginDrag={thumbWarmScroll.onScrollBeginDrag}
+      onScrollEndDrag={thumbWarmScroll.onScrollEndDrag}
+      onMomentumScrollEnd={thumbWarmScroll.onMomentumScrollEnd}
     />
   );
 }
@@ -235,14 +242,6 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.sm,
     overflow: 'hidden',
     backgroundColor: theme.colors.surfaceAlt,
-  },
-  image: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: theme.colors.surfaceAlt,
-  },
-  placeholder: {
-    opacity: 0.5,
   },
   tileRing: {
     position: 'absolute',

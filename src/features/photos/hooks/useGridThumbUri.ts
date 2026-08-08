@@ -7,14 +7,15 @@ import {
 } from '../services/mediaLibrary';
 
 /**
- * Grid cell URI — sync path only on the hot scroll path.
- * Never runs ImageManipulator / pin-thumb export here (that stalls scroll).
- * iOS/dummy: sync string, zero setState. Android: one resolve when cache misses.
+ * Grid cell URI for the scroll hot path.
+ * - Sync string when possible (iOS ph:// / warm file:// / dummy) — no setState.
+ * - Android cache miss: one resolve + setState.
+ * - Does NOT schedule file-thumb warm (that runs only via warmGridThumbs while
+ *   scroll is idle — per-cell warm during fling hitched the UI).
  */
 export function useGridThumbUri(
   assetId: string,
   imageSize: DummyImageSize = 128,
-  /** Bump to re-run Android resolve after a failed decode. */
   retryNonce = 0,
 ): string | null {
   const syncUri = syncAssetDisplayUri(assetId, imageSize);

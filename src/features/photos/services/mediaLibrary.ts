@@ -53,11 +53,17 @@ const LOCATION_BATCH = 8;
 /** Cap simultaneous ImageManipulator exports (map pin thumbs). */
 const PIN_EXPORT_CONCURRENCY = 2;
 /** Cap simultaneous Android URI lookups while scrolling grids. */
-const ANDROID_URI_CONCURRENCY = 6;
+const ANDROID_URI_CONCURRENCY = 2;
 /** Bound in-memory URI maps so multi-month sessions don't grow forever. */
 const URI_CACHE_MAX = 400;
-/** Visible pins + zoom backlog — keep warm so remounts don't re-export. */
-const FILE_URI_CACHE_MAX = 220;
+/** Pins + grid scroll backlog — warm file thumbs so remounts skip ph:// decode. */
+const FILE_URI_CACHE_MAX = 360;
+/** Idle grid warm — keep at 1 so scroll never competes with a manipulator storm. */
+const GRID_THUMB_WARM_CONCURRENCY = 1;
+const limitGridThumbWarm = createConcurrencyLimiter(GRID_THUMB_WARM_CONCURRENCY);
+const gridThumbWarmQueued = new Set<string>();
+/** While true, do not start new ImageManipulator thumbs (scroll / fling). */
+let gridThumbWarmPaused = false;
 
 
 const limitPinExport = createConcurrencyLimiter(PIN_EXPORT_CONCURRENCY);
@@ -954,4 +960,51 @@ export async function resolveAssetFileUri(assetId: string): Promise<string | nul
 
   fileUriInflight.set(assetId, work);
   return work;
+}
+
+/**
+ * Pause/resume idle thumb export while the user is scrolling a photo grid.
+ * In-flight manipulator work (at most 1) may finish; nothing new starts.
+ */
+export function setGridThumbWarmPaused(paused: boolean): void {
+  gridThumbWarmPaused = paused;
+}
+
+/**
+ * Idle-warm 128px file thumbs for grid cells. Fills {@link peekAssetFileUri}
+ * only — callers must NOT setState on completion (that hitches scroll).
+ * Recycled cells pick up file:// via {@link syncAssetDisplayUri}.
+ */
+export function scheduleGridThumbWarm(assetId: string): void {
+  if (isDummyAssetId(assetId)) {
+    return;
+  }
+  if (gridThumbWarmPaused) {
+    return;
+  }
+  if (peekAssetFileUri(assetId) || gridThumbWarmQueued.has(assetId)) {
+    return;
+  }
+  gridThumbWarmQueued.add(assetId);
+  void limitGridThumbWarm(async () => {
+    try {
+      if (gridThumbWarmPaused) {
+        return;
+      }
+      await resolveAssetFileUri(assetId);
+    } finally {
+      gridThumbWarmQueued.delete(assetId);
+    }
+  });
+}
+
+/** After interactions — warm the first N ids for a screen (Playback / card grid). */
+export function warmGridThumbs(assetIds: string[], limit = 48): void {
+  if (gridThumbWarmPaused) {
+    return;
+  }
+  const slice = assetIds.slice(0, Math.max(0, limit));
+  for (const id of slice) {
+    scheduleGridThumbWarm(id);
+  }
 }
