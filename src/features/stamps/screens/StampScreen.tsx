@@ -101,8 +101,6 @@ export function StampScreen() {
   );
   const celebratedIds = useRef(new Set<string>());
   const celebrating = useRef(false);
-  /** Map tap sets sido + L1 together — skip the chip-driven L1 reset once. */
-  const keepL1OnSidoChange = useRef(false);
 
   useEffect(() => {
     if (!gateOpen) {
@@ -118,10 +116,6 @@ export function StampScreen() {
   }, []);
 
   useEffect(() => {
-    if (keepL1OnSidoChange.current) {
-      keepL1OnSidoChange.current = false;
-      return;
-    }
     setL1Key(null);
   }, [sido]);
 
@@ -285,7 +279,7 @@ export function StampScreen() {
     };
   }, [animateIds, collected, leavesByL1, selectedL1, sido]);
 
-  const showBootLoading = useHeldBusy(!isReady, 2500);
+  const showBootLoading = useHeldBusy(!isReady, 1500);
 
   if (showBootLoading) {
     return (
@@ -354,13 +348,6 @@ export function StampScreen() {
             visible={mapOpen}
             collected={collected}
             onClose={() => setMapOpen(false)}
-            onSelect={({ sido: nextSido, l1Key: nextL1 }) => {
-              if (nextSido !== sido) {
-                keepL1OnSidoChange.current = nextL1 != null;
-                setSido(nextSido);
-              }
-              setL1Key(nextL1);
-            }}
           />
 
           {!l1Key ? (

@@ -7,6 +7,8 @@ import {
 } from 'react';
 import {
   FlatList,
+  Platform,
+  type ListRenderItemInfo,
   Pressable,
   StyleSheet,
   Text,
@@ -14,8 +16,6 @@ import {
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { runOnJS } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LoadingView } from '@/shared/components/LoadingView';
@@ -26,10 +26,14 @@ import { theme } from '@/shared/constants/theme';
 import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 
 import { useCurrentMonth } from '../hooks/useCurrentMonth';
+import { useGridThumbUri } from '../hooks/useGridThumbUri';
 import { useMonthlyPhotos } from '../hooks/useMonthlyPhotos';
 import { usePinCovers } from '../hooks/usePinCovers';
 import { clusterPhotos } from '../services/cluster';
-import { resolveAssetUri } from '../services/mediaLibrary';
+import {
+  resolveAssetUri,
+  syncAssetDisplayUri,
+} from '../services/mediaLibrary';
 import type { PhotoRef, PlaceCluster } from '../types';
 import {
   placeBucketKey,
@@ -39,6 +43,7 @@ import {
 const GRID_COLS = 3;
 const HERO_SIZE = 256;
 const THUMB_SIZE = 128;
+const ROW_GAP = theme.spacing.sm;
 
 type ThumbRow = { key: string; photos: PhotoRef[] };
 
@@ -67,22 +72,7 @@ const GridThumb = memo(function GridThumb({
   isCover: boolean;
   onPress: () => void;
 }) {
-  const [uri, setUri] = useState<string | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    void resolveAssetUri(photo.assetId, { imageSize: THUMB_SIZE })
-      .then((next) => {
-        if (!cancelled) {
-          setUri(next);
-        }
-      })
-      .catch((error) => {
-        console.warn('GridThumb uri failed', photo.assetId, error);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [photo.assetId]);
+  const uri = useGridThumbUri(photo.assetId, THUMB_SIZE);
 
   return (
     <Pressable
@@ -106,6 +96,7 @@ const GridThumb = memo(function GridThumb({
           recyclingKey={photo.assetId}
           cachePolicy="memory-disk"
           transition={0}
+          priority="low"
         />
       ) : (
         <View style={[styles.gridImage, styles.placeholder]} />
@@ -119,9 +110,37 @@ const GridThumb = memo(function GridThumb({
   );
 });
 
+const ThumbRowView = memo(function ThumbRowView({
+  row,
+  cell,
+  activeId,
+  coverId,
+  onSelectPhoto,
+}: {
+  row: ThumbRow;
+  cell: number;
+  activeId: string;
+  coverId: string;
+  onSelectPhoto: (assetId: string) => void;
+}) {
+  return (
+    <View style={[styles.gridRowWrap, { gap: ROW_GAP, marginBottom: ROW_GAP }]}>
+      {row.photos.map((photo) => (
+        <GridThumb
+          key={photo.assetId}
+          photo={photo}
+          size={cell}
+          selected={photo.assetId === activeId}
+          isCover={photo.assetId === coverId}
+          onPress={() => onSelectPhoto(photo.assetId)}
+        />
+      ))}
+    </View>
+  );
+});
+
 /**
- * One place chapter — vertical FlatList of every photo in the cluster.
- * Not nested in a horizontal pager (that trapped scroll at ~1 screen of thumbs).
+ * One place chapter — vertical FlatList of every photo (not nested in a pager).
  */
 const ClusterSlide = memo(function ClusterSlide({
   cluster,
@@ -138,14 +157,14 @@ const ClusterSlide = memo(function ClusterSlide({
   const [activeId, setActiveId] = useState(
     () => coverAssetId ?? cluster.photos[0]?.assetId ?? '',
   );
-  const [uri, setUri] = useState<string | null>(null);
+  const [asyncHeroUri, setAsyncHeroUri] = useState<string | null>(null);
   const [placeLabel, setPlaceLabel] = useState<string | null>(null);
   const [labelLoading, setLabelLoading] = useState(true);
 
   const pad = theme.spacing.lg;
-  const gap = theme.spacing.sm;
   const contentW = width - pad * 2;
-  const cell = (contentW - gap * (GRID_COLS - 1)) / GRID_COLS;
+  const cell = (contentW - ROW_GAP * (GRID_COLS - 1)) / GRID_COLS;
+  const rowHeight = cell + ROW_GAP;
 
   useEffect(() => {
     const next =
@@ -166,15 +185,21 @@ const ClusterSlide = memo(function ClusterSlide({
     [cluster.photos],
   );
 
+  const syncHeroUri = activePhoto
+    ? syncAssetDisplayUri(activePhoto.assetId, HERO_SIZE)
+    : null;
+  const uri = syncHeroUri ?? asyncHeroUri;
+
   useEffect(() => {
-    if (!activePhoto) {
+    if (!activePhoto || syncHeroUri) {
       return;
     }
     let cancelled = false;
+    setAsyncHeroUri(null);
     void resolveAssetUri(activePhoto.assetId, { imageSize: HERO_SIZE })
       .then((next) => {
         if (!cancelled) {
-          setUri(next);
+          setAsyncHeroUri(next);
         }
       })
       .catch((error) => {
@@ -183,7 +208,7 @@ const ClusterSlide = memo(function ClusterSlide({
     return () => {
       cancelled = true;
     };
-  }, [activePhoto]);
+  }, [activePhoto, syncHeroUri]);
 
   useEffect(() => {
     let cancelled = false;
@@ -206,7 +231,7 @@ const ClusterSlide = memo(function ClusterSlide({
             setLabelLoading(false);
           }
         });
-    }, 120);
+    }, 200);
     return () => {
       cancelled = true;
       clearTimeout(t);
@@ -229,45 +254,79 @@ const ClusterSlide = memo(function ClusterSlide({
     ? strings.playback.chapterDay(cluster.photos[0].takenAt)
     : '';
 
-  const listHeader = (
-    <View>
-      <View style={styles.titleRow}>
-        <Text style={styles.place} numberOfLines={2}>
-          {placeText}
-        </Text>
-        <View style={styles.metaCol}>
-          {chapterDay ? (
-            <Text style={styles.meta} numberOfLines={1}>
-              {chapterDay}
-            </Text>
-          ) : null}
-          <Text style={styles.meta} numberOfLines={1}>
-            {strings.map.clusterCount(cluster.photos.length)}
+  const coverId = coverAssetId ?? activeId;
+
+  const listHeader = useMemo(
+    () => (
+      <View>
+        <View style={styles.titleRow}>
+          <Text style={styles.place} numberOfLines={2}>
+            {placeText}
           </Text>
+          <View style={styles.metaCol}>
+            {chapterDay ? (
+              <Text style={styles.meta} numberOfLines={1}>
+                {chapterDay}
+              </Text>
+            ) : null}
+            <Text style={styles.meta} numberOfLines={1}>
+              {strings.map.clusterCount(cluster.photos.length)}
+            </Text>
+          </View>
         </View>
+        <View style={styles.imageWrap}>
+          {uri ? (
+            <Image
+              source={{ uri }}
+              style={[styles.hero, { width: contentW }]}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              recyclingKey={`${activeId}-${HERO_SIZE}`}
+              priority="high"
+              transition={0}
+            />
+          ) : (
+            <View
+              style={[styles.hero, styles.placeholder, { width: contentW }]}
+            />
+          )}
+        </View>
+        {cluster.photos.length > 1 ? (
+          <Text style={styles.gridHint}>{strings.playback.gridHint}</Text>
+        ) : null}
       </View>
-      <View style={styles.imageWrap}>
-        {uri ? (
-          <Image
-            source={{ uri }}
-            style={[styles.hero, { width: contentW }]}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-            recyclingKey={`${activeId}-${HERO_SIZE}`}
-            priority="high"
-            transition={0}
-          />
-        ) : (
-          <View style={[styles.hero, styles.placeholder, { width: contentW }]} />
-        )}
-      </View>
-      {cluster.photos.length > 1 ? (
-        <Text style={styles.gridHint}>{strings.playback.gridHint}</Text>
-      ) : null}
-    </View>
+    ),
+    [
+      activeId,
+      chapterDay,
+      cluster.photos.length,
+      contentW,
+      placeText,
+      uri,
+    ],
   );
 
-  const coverId = coverAssetId ?? activeId;
+  const renderRow = useCallback(
+    ({ item }: ListRenderItemInfo<ThumbRow>) => (
+      <ThumbRowView
+        row={item}
+        cell={cell}
+        activeId={activeId}
+        coverId={coverId}
+        onSelectPhoto={onSelectPhoto}
+      />
+    ),
+    [activeId, cell, coverId, onSelectPhoto],
+  );
+
+  const getItemLayout = useCallback(
+    (_: ArrayLike<ThumbRow> | null | undefined, index: number) => ({
+      length: rowHeight,
+      offset: rowHeight * index,
+      index,
+    }),
+    [rowHeight],
+  );
 
   return (
     <FlatList
@@ -277,32 +336,21 @@ const ClusterSlide = memo(function ClusterSlide({
       ListHeaderComponent={listHeader}
       contentContainerStyle={styles.gridContent}
       showsVerticalScrollIndicator={false}
-      initialNumToRender={8}
-      maxToRenderPerBatch={4}
-      windowSize={7}
-      updateCellsBatchingPeriod={40}
-      removeClippedSubviews
-      renderItem={({ item: row }) => (
-        <View style={[styles.gridRowWrap, { gap, marginBottom: gap }]}>
-          {row.photos.map((photo) => (
-            <GridThumb
-              key={photo.assetId}
-              photo={photo}
-              size={cell}
-              selected={photo.assetId === activeId}
-              isCover={photo.assetId === coverId}
-              onPress={() => onSelectPhoto(photo.assetId)}
-            />
-          ))}
-        </View>
-      )}
+      initialNumToRender={6}
+      maxToRenderPerBatch={3}
+      windowSize={5}
+      updateCellsBatchingPeriod={50}
+      removeClippedSubviews={Platform.OS === 'android'}
+      getItemLayout={getItemLayout}
+      renderItem={renderRow}
+      extraData={`${activeId}:${coverId}`}
     />
   );
 });
 
 /**
- * Place-chapter view: one place at a time (full photo grid scrolls vertically).
- * Swipe horizontally or use ‹ › to change place — no nested pagers.
+ * Place-chapter view: one place at a time; ‹ › changes place.
+ * Vertical list is never nested in a horizontal pager.
  */
 export function PlaybackScreen() {
   const { width } = useWindowDimensions();
@@ -335,30 +383,6 @@ export function PlaybackScreen() {
       setIndex(next);
     },
     [clusters.length],
-  );
-
-  const goPrev = useCallback(() => {
-    goTo(index - 1);
-  }, [goTo, index]);
-
-  const goNext = useCallback(() => {
-    goTo(index + 1);
-  }, [goTo, index]);
-
-  const placeSwipe = useMemo(
-    () =>
-      Gesture.Pan()
-        .activeOffsetX([-28, 28])
-        .failOffsetY([-20, 20])
-        .onEnd((e) => {
-          'worklet';
-          if (e.translationX < -56 || e.velocityX < -600) {
-            runOnJS(goNext)();
-          } else if (e.translationX > 56 || e.velocityX > 600) {
-            runOnJS(goPrev)();
-          }
-        }),
-    [goNext, goPrev],
   );
 
   if (showLoading) {
@@ -396,21 +420,19 @@ export function PlaybackScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <ScreenHeader title={strings.playback.title} />
-      <GestureDetector gesture={placeSwipe}>
-        <View style={styles.list}>
-          <ClusterSlide
-            key={cluster.id}
-            cluster={cluster}
-            width={width}
-            coverAssetId={covers[placeKey] ?? null}
-            onSetCover={setCover}
-          />
-        </View>
-      </GestureDetector>
+      <View style={styles.list}>
+        <ClusterSlide
+          key={cluster.id}
+          cluster={cluster}
+          width={width}
+          coverAssetId={covers[placeKey] ?? null}
+          onSetCover={setCover}
+        />
+      </View>
       {clusters.length > 1 ? (
         <View style={styles.pager}>
           <Pressable
-            onPress={goPrev}
+            onPress={() => goTo(index - 1)}
             disabled={!canPrev}
             hitSlop={8}
             accessibilityRole="button"
@@ -427,7 +449,7 @@ export function PlaybackScreen() {
             {index + 1} / {clusters.length}
           </Text>
           <Pressable
-            onPress={goNext}
+            onPress={() => goTo(index + 1)}
             disabled={!canNext}
             hitSlop={8}
             accessibilityRole="button"

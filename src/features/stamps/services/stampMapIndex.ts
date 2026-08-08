@@ -99,6 +99,21 @@ export function getStampMapUnits(): StampMapUnit[] {
   return unitsCache;
 }
 
+let unitsByVisitKey: Map<string, StampMapUnit> | null = null;
+
+/** O(1) L1 unit lookup — nation map must not rescan every unit per visit set. */
+export function getStampMapUnitByVisitKey(
+  visitKey: string,
+): StampMapUnit | undefined {
+  if (!unitsByVisitKey) {
+    unitsByVisitKey = new Map();
+    for (const u of getStampMapUnits()) {
+      unitsByVisitKey.set(mapVisitKey(u.sido, u.key), u);
+    }
+  }
+  return unitsByVisitKey.get(visitKey);
+}
+
 export function getStampMapProvinces(): StampMapProvince[] {
   if (!provincesCache) {
     provincesCache = buildProvinces();

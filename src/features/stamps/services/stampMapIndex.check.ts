@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import {
   countVisitedDongsInSido,
   countVisitedL1InSido,
+  getStampMapUnitByVisitKey,
   getStampMapUnits,
   mapVisitKey,
   selectionFromProvince,
@@ -72,5 +73,9 @@ assert.equal(sidos.size, 2);
 assert.equal(countVisitedDongsInSido(collected, '서울'), 1);
 assert.equal(countVisitedL1InSido(collected, '서울'), 1);
 assert.ok(unitsForSido('서울').length >= 20);
+
+const byKey = getStampMapUnitByVisitKey('경기/가평군');
+assert.equal(byKey?.key, '가평군');
+assert.equal(getStampMapUnitByVisitKey('없음/없음'), undefined);
 
 console.log('stampMapIndex.check: ok');

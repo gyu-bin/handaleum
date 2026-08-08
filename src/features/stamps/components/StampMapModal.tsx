@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   LayoutChangeEvent,
   Modal,
@@ -13,47 +13,31 @@ import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
 import type { StampsCollected } from '../types';
-import {
-  countVisitedDongsInSido,
-  countVisitedL1InSido,
-  visitedSidoNames,
-  type StampMapSelection,
-} from '../services/stampMapIndex';
-import {
-  StampKoreaMap,
-  type StampKoreaMapHandle,
-} from './StampKoreaMap';
+import { visitedSidoNames } from '../services/stampMapIndex';
+import { StampKoreaMap } from './StampKoreaMap';
 
 export interface StampMapModalProps {
   visible: boolean;
   collected: StampsCollected;
   onClose: () => void;
-  onSelect: (selection: StampMapSelection) => void;
 }
 
-/** Full-screen visit map: nation soft hint → L1 close-up (real Korea geo). */
+/**
+ * View-only visit map — nation outlines + dong dots (mockup 2 constellation).
+ */
 export function StampMapModal({
   visible,
   collected,
   onClose,
-  onSelect,
 }: StampMapModalProps) {
   const insets = useSafeAreaInsets();
   const [mapSize, setMapSize] = useState({ width: 0, height: 0 });
-  const [focusSido, setFocusSido] = useState<string | null>(null);
-  const mapRef = useRef<StampKoreaMapHandle>(null);
 
   const visitCount = Object.keys(collected).length;
   const sidoCount = useMemo(
     () => visitedSidoNames(collected).size,
     [collected],
   );
-
-  useEffect(() => {
-    if (!visible) {
-      setFocusSido(null);
-    }
-  }, [visible]);
 
   const onMapLayout = (e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
@@ -66,51 +50,17 @@ export function StampMapModal({
     setMapSize({ width, height });
   };
 
-  const subtitle = useMemo(() => {
-    if (visitCount === 0) {
-      return strings.stamps.mapEmpty;
-    }
-    if (focusSido) {
-      const dongs = countVisitedDongsInSido(collected, focusSido);
-      const l1 = countVisitedL1InSido(collected, focusSido);
-      return strings.stamps.mapVisitCountSido(focusSido, dongs, l1);
-    }
-    return strings.stamps.mapVisitCount(visitCount, sidoCount);
-  }, [collected, focusSido, sidoCount, visitCount]);
-
-  const handleClose = () => {
-    setFocusSido(null);
-    onClose();
-  };
-
-  const handleMapSelect = (selection: StampMapSelection) => {
-    if (!focusSido) {
-      setFocusSido(selection.sido);
-      return;
-    }
-    onSelect(selection);
-    handleClose();
-  };
-
-  const onMapPress = (locationX: number, locationY: number) => {
-    const selection = mapRef.current?.hitTest(locationX, locationY);
-    if (selection) {
-      handleMapSelect(selection);
-    }
-  };
+  const subtitle =
+    visitCount === 0
+      ? strings.stamps.mapEmpty
+      : strings.stamps.mapVisitCount(visitCount, sidoCount);
 
   return (
     <Modal
       visible={visible}
       animationType="slide"
       presentationStyle="fullScreen"
-      onRequestClose={() => {
-        if (focusSido) {
-          setFocusSido(null);
-          return;
-        }
-        handleClose();
-      }}
+      onRequestClose={onClose}
     >
       <View
         style={[
@@ -122,34 +72,13 @@ export function StampMapModal({
         ]}
       >
         <View style={styles.header}>
-          {focusSido ? (
-            <Pressable
-              onPress={() => setFocusSido(null)}
-              hitSlop={12}
-              accessibilityRole="button"
-              accessibilityLabel={strings.stamps.mapBackNation}
-              style={({ pressed }) => [
-                styles.sideBtn,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text style={styles.sideLabel}>
-                {strings.stamps.mapBackNation}
-              </Text>
-            </Pressable>
-          ) : (
-            <View style={styles.sideSpacer} />
-          )}
-
+          <View style={styles.sideSpacer} />
           <View style={styles.headerCopy}>
-            <Text style={styles.title}>
-              {focusSido ?? strings.stamps.mapTitle}
-            </Text>
+            <Text style={styles.title}>{strings.stamps.mapTitle}</Text>
             <Text style={styles.subtitle}>{subtitle}</Text>
           </View>
-
           <Pressable
-            onPress={handleClose}
+            onPress={onClose}
             hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel={strings.stamps.mapClose}
@@ -165,47 +94,23 @@ export function StampMapModal({
 
         <View style={styles.mapStage} onLayout={onMapLayout}>
           {mapSize.width > 0 && mapSize.height > 0 ? (
-            <Pressable
-              style={styles.flex}
-              onPress={(e) => {
-                onMapPress(
-                  e.nativeEvent.locationX,
-                  e.nativeEvent.locationY,
-                );
+            <StampKoreaMap
+              collected={collected}
+              style={{
+                width: mapSize.width,
+                height: mapSize.height,
               }}
-              accessibilityRole="image"
-              accessibilityLabel={
-                focusSido
-                  ? strings.stamps.mapA11ySido(focusSido)
-                  : strings.stamps.mapA11y
-              }
-            >
-              <StampKoreaMap
-                ref={mapRef}
-                collected={collected}
-                mode={focusSido ? 'sido' : 'nation'}
-                focusSido={focusSido ?? undefined}
-                style={{
-                  width: mapSize.width,
-                  height: mapSize.height,
-                }}
-              />
-            </Pressable>
+            />
           ) : null}
         </View>
 
-        <Text style={styles.hint}>
-          {focusSido ? strings.stamps.mapHintSido : strings.stamps.mapHint}
-        </Text>
+        <Text style={styles.hint}>{strings.stamps.mapHint}</Text>
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
   root: {
     flex: 1,
     backgroundColor: theme.colors.background,

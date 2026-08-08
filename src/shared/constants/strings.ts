@@ -358,20 +358,14 @@ export const strings = {
     scanIntroBody:
       '앨범 속 위치 사진으로 동 도장을 모아요. 확인을 눌러도 백그라운드에서 이어지고, 홈의 이번 달 지도는 그대로 쓸 수 있어요.',
     scanIntroConfirm: '확인',
-    mapA11y: '모은 시·도가 칠해진 대한민국 지도',
-    mapA11ySido: (sido: string) =>
-      `${sido}에서 모은 구·시·군이 칠해진 지도`,
+    mapA11y: '방문한 동네가 점으로 표시된 대한민국 지도',
     mapEyebrow: '동네 도장',
     mapTitle: '모은 동네',
-    mapHint: '시·도를 누르면 구·시·군으로 확대돼요',
-    mapHintSido: '칠해진 구·시·군을 누르면 그곳으로 이동',
-    mapBackNation: '전국',
+    mapHint: '한눈에 보는 발자취',
     mapClose: '닫기',
     mapOpen: '모은 동네 보기',
     mapVisitCount: (dongs: number, sidos: number) =>
       `${dongs}개 동 · ${sidos}개 시·도`,
-    mapVisitCountSido: (sido: string, dongs: number, l1: number) =>
-      `${sido} · ${dongs}개 동 · ${l1}개 구·시·군`,
     mapEmpty: '아직 모은 동이 없어요',
     leafListEmpty: '동네 목록이 없어요',
     gunLeafListEmpty: '면·읍 목록을 아직 준비 중이에요',

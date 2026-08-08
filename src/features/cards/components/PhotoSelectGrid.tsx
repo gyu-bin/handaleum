@@ -1,6 +1,9 @@
-import { memo, useEffect, useMemo, useState, type ReactElement } from 'react';
+import { memo, useCallback, useMemo, type ReactElement } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
+  Platform,
+  type ListRenderItemInfo,
   Pressable,
   StyleSheet,
   Text,
@@ -10,15 +13,14 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { Image } from 'expo-image';
-import Animated, {
-  useAnimatedScrollHandler,
-} from 'react-native-reanimated';
 
 import { theme } from '@/shared/constants/theme';
 
-import { resolveAssetUri } from '../../photos/services/mediaLibrary';
+import { useGridThumbUri } from '../../photos/hooks/useGridThumbUri';
 import type { PhotoRef } from '../../photos/types';
 import type { PlacePhotoSection } from '../../photos/utils/placeJourney';
+
+const THUMB_SIZE = 128;
 
 export interface PhotoSelectGridProps {
   photos: PhotoRef[];
@@ -36,9 +38,6 @@ export interface PhotoSelectGridProps {
   keyboardShouldPersistTaps?: 'always' | 'never' | 'handled';
   /** Lock scrolling while the collage drag-to-swap gesture is active. */
   scrollEnabled?: boolean;
-  /** UI-thread scroll handler for sticky-preview collapse. */
-  onScroll?: ReturnType<typeof useAnimatedScrollHandler>;
-  scrollEventThrottle?: number;
 }
 
 type ListRow =
@@ -94,23 +93,7 @@ const Cell = memo(function Cell({
   size: number;
   onToggle: (assetId: string) => void;
 }) {
-  const [uri, setUri] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void resolveAssetUri(photo.assetId, { imageSize: 128 })
-      .then((next) => {
-        if (!cancelled) {
-          setUri(next);
-        }
-      })
-      .catch((error) => {
-        console.warn('PhotoSelectGrid uri failed', photo.assetId, error);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [photo.assetId]);
+  const uri = useGridThumbUri(photo.assetId, THUMB_SIZE);
 
   return (
     <Pressable
@@ -127,6 +110,8 @@ const Cell = memo(function Cell({
             contentFit="cover"
             recyclingKey={photo.assetId}
             cachePolicy="memory-disk"
+            transition={0}
+            priority="low"
           />
         ) : (
           <View style={[styles.image, styles.placeholder]} />
@@ -164,19 +149,13 @@ export function PhotoSelectGrid({
   contentContainerStyle,
   keyboardShouldPersistTaps,
   scrollEnabled = true,
-  onScroll,
-  scrollEventThrottle = 16,
 }: PhotoSelectGridProps) {
   const { width } = useWindowDimensions();
   const size = (width - theme.spacing.lg * 2) / COLS;
-  const selected = new Set(selectedAssetIds);
-
-  useEffect(() => {
-    return () => {
-      // Drop decoded bitmaps when leaving card create (large months).
-      void Image.clearMemoryCache();
-    };
-  }, []);
+  const selected = useMemo(
+    () => new Set(selectedAssetIds),
+    [selectedAssetIds],
+  );
 
   const rows = useMemo(
     () => (sections != null ? rowsFromSections(sections) : rowsFromPhotos(photos)),
@@ -194,15 +173,43 @@ export function PhotoSelectGrid({
     </View>
   );
 
+  const renderItem = useCallback(
+    ({ item }: ListRenderItemInfo<ListRow>) => {
+      if (item.kind === 'header') {
+        return (
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionHead}>
+              <Text style={styles.sectionPlace}>{item.title}</Text>
+              <View style={styles.sectionRule} />
+              <Text style={styles.sectionCount}>{item.count}장</Text>
+            </View>
+          </View>
+        );
+      }
+      return (
+        <View style={styles.photoRow}>
+          {item.photos.map((photo) => (
+            <Cell
+              key={photo.assetId}
+              photo={photo}
+              selected={selected.has(photo.assetId)}
+              size={size}
+              onToggle={onToggle}
+            />
+          ))}
+        </View>
+      );
+    },
+    [onToggle, selected, size],
+  );
+
   return (
-    <Animated.FlatList
+    <FlatList
       style={styles.list}
       data={rows}
       keyExtractor={(item) => item.key}
       extraData={selectedAssetIds}
       scrollEnabled={scrollEnabled}
-      onScroll={onScroll}
-      scrollEventThrottle={scrollEventThrottle ?? 16}
       keyboardShouldPersistTaps={keyboardShouldPersistTaps}
       showsVerticalScrollIndicator={false}
       ListHeaderComponent={header}
@@ -210,35 +217,10 @@ export function PhotoSelectGrid({
       contentContainerStyle={contentContainerStyle}
       initialNumToRender={6}
       maxToRenderPerBatch={3}
-      windowSize={3}
+      windowSize={5}
       updateCellsBatchingPeriod={50}
-      removeClippedSubviews
-      renderItem={({ item }) => {
-        if (item.kind === 'header') {
-          return (
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionHead}>
-                <Text style={styles.sectionPlace}>{item.title}</Text>
-                <View style={styles.sectionRule} />
-                <Text style={styles.sectionCount}>{item.count}장</Text>
-              </View>
-            </View>
-          );
-        }
-        return (
-          <View style={styles.photoRow}>
-            {item.photos.map((photo) => (
-              <Cell
-                key={photo.assetId}
-                photo={photo}
-                selected={selected.has(photo.assetId)}
-                size={size}
-                onToggle={onToggle}
-              />
-            ))}
-          </View>
-        );
-      }}
+      removeClippedSubviews={Platform.OS === 'android'}
+      renderItem={renderItem}
     />
   );
 }

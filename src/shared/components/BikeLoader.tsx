@@ -1,5 +1,5 @@
 import { memo, useEffect } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
   ReduceMotion,
@@ -9,119 +9,139 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
-import Svg, { Circle, G, Path, Polyline } from 'react-native-svg';
+import Svg, { G, Path, Polyline } from 'react-native-svg';
 
 import { theme } from '@/shared/constants/theme';
 
 /**
- * Uiverse.io bike loader — wheels spin on UI-thread Views forever.
- * Rasterize spinning layers so JS load (album sync) does not hitch the spin.
+ * Brand bike mark — frame is static SVG; wheels/pedals are plain Views spun on
+ * the UI thread. No rasterize (fights continuous rotate). No SVG inside spin.
  */
 const never = { reduceMotion: ReduceMotion.Never as const };
-/** Slightly slower = fewer wrap hits, reads smoother under load. */
-const SPIN_MS = 1400;
+const SPIN_MS = 1200;
 const VB_W = 48;
 const VB_H = 30;
-const WHEEL_VB = 20;
 
 export interface BikeLoaderProps {
   /** SVG display width in px (viewBox 48×30). */
   width?: number;
 }
 
-function WheelMark({ color, size }: { color: string; size: number }) {
-  const c = WHEEL_VB / 2;
+function WheelDisc({ color, size }: { color: string; size: number }) {
+  const rim = Math.max(1.5, size * 0.08);
+  const hub = Math.max(2, size * 0.14);
   return (
-    <Svg width={size} height={size} viewBox={`0 0 ${WHEEL_VB} ${WHEEL_VB}`}>
-      <G
-        fill="none"
-        stroke={color}
-        strokeWidth={1}
-        strokeLinecap="round"
-        transform={`translate(${c},${c})`}
-      >
-        <Circle r={9} />
-        <Circle
-          r={5}
-          strokeDasharray="31.416 31.416"
-          strokeDashoffset={-23.562}
-        />
-        <Circle
-          r={5}
-          strokeDasharray="31.416 31.416"
-          strokeDashoffset={-23.562}
-          rotation={180}
-          originX={0}
-          originY={0}
-        />
-      </G>
-    </Svg>
+    <View style={[styles.wheelBox, { width: size, height: size }]}>
+      <View
+        style={[
+          styles.wheelRim,
+          {
+            width: size * 0.92,
+            height: size * 0.92,
+            borderRadius: size,
+            borderWidth: rim,
+            borderColor: color,
+          },
+        ]}
+      />
+      <View
+        style={[
+          styles.spoke,
+          {
+            width: size * 0.72,
+            height: rim,
+            backgroundColor: color,
+          },
+        ]}
+      />
+      <View
+        style={[
+          styles.spoke,
+          {
+            width: rim,
+            height: size * 0.72,
+            backgroundColor: color,
+          },
+        ]}
+      />
+      <View
+        style={[
+          styles.hub,
+          {
+            width: hub,
+            height: hub,
+            borderRadius: hub,
+            backgroundColor: color,
+          },
+        ]}
+      />
+    </View>
   );
 }
 
-function PedalMark({ color, size }: { color: string; size: number }) {
-  const c = WHEEL_VB / 2;
+function PedalDisc({ color, size }: { color: string; size: number }) {
+  const rim = Math.max(1.5, size * 0.1);
   return (
-    <Svg width={size} height={size} viewBox={`0 0 ${WHEEL_VB} ${WHEEL_VB}`}>
-      <G
-        fill="none"
-        stroke={color}
-        strokeWidth={1}
-        strokeLinecap="round"
-        transform={`translate(${c},${c})`}
-      >
-        <Circle
-          r={4}
-          strokeDasharray="25.133 25.133"
-          strokeDashoffset={-21.991}
-        />
-        <Circle
-          r={4}
-          strokeDasharray="25.133 25.133"
-          strokeDashoffset={-21.991}
-          rotation={180}
-          originX={0}
-          originY={0}
-        />
-      </G>
-    </Svg>
+    <View style={[styles.wheelBox, { width: size, height: size }]}>
+      <View
+        style={[
+          styles.wheelRim,
+          {
+            width: size * 0.55,
+            height: size * 0.55,
+            borderRadius: size,
+            borderWidth: rim,
+            borderColor: color,
+          },
+        ]}
+      />
+      <View
+        style={[
+          styles.spoke,
+          {
+            width: size * 0.42,
+            height: rim,
+            backgroundColor: color,
+            transform: [{ rotate: '35deg' }],
+          },
+        ]}
+      />
+    </View>
   );
 }
-
-const spinLayerProps =
-  Platform.OS === 'ios'
-    ? ({ shouldRasterizeIOS: true } as const)
-    : ({ renderToHardwareTextureAndroid: true } as const);
 
 /**
- * Brand loading mark — frame stays drawn; wheels/pedals never stop spinning.
+ * Brand loading mark — wheels never stop while mounted.
  */
 export const BikeLoader = memo(function BikeLoader({
   width = 132,
 }: BikeLoaderProps) {
-  const spin = useSharedValue(0);
+  const turn = useSharedValue(0);
   const color = theme.colors.splashMark;
   const height = (width * VB_H) / VB_W;
   const sx = width / VB_W;
-  const wheelPx = WHEEL_VB * sx;
+  const wheelPx = 20 * sx;
 
   useEffect(() => {
-    spin.value = withRepeat(
-      withTiming(360, { duration: SPIN_MS, easing: Easing.linear, ...never }),
+    // 0→1 loop avoids 360° wrap seams that look like a hitch.
+    turn.value = 0;
+    turn.value = withRepeat(
+      withTiming(1, { duration: SPIN_MS, easing: Easing.linear, ...never }),
       -1,
       false,
+      undefined,
+      ReduceMotion.Never,
     );
     return () => {
-      cancelAnimation(spin);
+      cancelAnimation(turn);
     };
-  }, [spin]);
+  }, [turn]);
 
-  // Numeric degrees (not template string) — smoother UI-thread updates.
   const wheelSpinStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${spin.value}deg` }],
+    transform: [{ rotate: `${turn.value * 360}deg` }],
   }));
   const pedalSpinStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${67.5 + spin.value}deg` }],
+    transform: [{ rotate: `${67.5 + turn.value * 360}deg` }],
   }));
 
   const left = {
@@ -142,6 +162,7 @@ export const BikeLoader = memo(function BikeLoader({
       style={[styles.stage, { width, height }]}
       accessibilityElementsHidden
       collapsable={false}
+      pointerEvents="none"
     >
       <Svg width={width} height={height} viewBox={`0 0 ${VB_W} ${VB_H}`}>
         <G
@@ -159,7 +180,6 @@ export const BikeLoader = memo(function BikeLoader({
       </Svg>
 
       <Animated.View
-        {...spinLayerProps}
         style={[
           styles.spinPart,
           left,
@@ -167,10 +187,9 @@ export const BikeLoader = memo(function BikeLoader({
           wheelSpinStyle,
         ]}
       >
-        <WheelMark color={color} size={wheelPx} />
+        <WheelDisc color={color} size={wheelPx} />
       </Animated.View>
       <Animated.View
-        {...spinLayerProps}
         style={[
           styles.spinPart,
           mid,
@@ -178,10 +197,9 @@ export const BikeLoader = memo(function BikeLoader({
           pedalSpinStyle,
         ]}
       >
-        <PedalMark color={color} size={wheelPx} />
+        <PedalDisc color={color} size={wheelPx} />
       </Animated.View>
       <Animated.View
-        {...spinLayerProps}
         style={[
           styles.spinPart,
           right,
@@ -189,7 +207,7 @@ export const BikeLoader = memo(function BikeLoader({
           wheelSpinStyle,
         ]}
       >
-        <WheelMark color={color} size={wheelPx} />
+        <WheelDisc color={color} size={wheelPx} />
       </Animated.View>
     </View>
   );
@@ -201,6 +219,19 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   spinPart: {
+    position: 'absolute',
+  },
+  wheelBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wheelRim: {
+    position: 'absolute',
+  },
+  spoke: {
+    position: 'absolute',
+  },
+  hub: {
     position: 'absolute',
   },
 });

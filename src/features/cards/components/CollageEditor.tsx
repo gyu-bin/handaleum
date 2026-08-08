@@ -11,7 +11,10 @@ import Animated, {
 
 import { theme } from '@/shared/constants/theme';
 
-import { resolveAssetUri } from '../../photos/services/mediaLibrary';
+import {
+  resolveAssetUri,
+  syncAssetDisplayUri,
+} from '../../photos/services/mediaLibrary';
 import { collageRects, COLLAGE_MAX, type CollageRect } from '../utils/collageLayout';
 
 const GUTTER = 6;
@@ -23,13 +26,17 @@ const SPRING_MOVE = { damping: 20, stiffness: 260, mass: 0.7 };
 const SPRING_SETTLE = { damping: 22, stiffness: 300, mass: 0.6 };
 
 function useUri(assetId: string): string | null {
-  const [uri, setUri] = useState<string | null>(null);
+  const syncUri = syncAssetDisplayUri(assetId, 256);
+  const [asyncUri, setAsyncUri] = useState<string | null>(null);
   useEffect(() => {
+    if (syncUri) {
+      return;
+    }
     let cancelled = false;
-    void resolveAssetUri(assetId)
+    void resolveAssetUri(assetId, { imageSize: 256 })
       .then((next) => {
         if (!cancelled) {
-          setUri(next);
+          setAsyncUri(next);
         }
       })
       .catch((error) => {
@@ -38,8 +45,8 @@ function useUri(assetId: string): string | null {
     return () => {
       cancelled = true;
     };
-  }, [assetId]);
-  return uri;
+  }, [assetId, syncUri]);
+  return syncUri ?? asyncUri;
 }
 
 function EditableCell({

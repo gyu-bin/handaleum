@@ -34,6 +34,8 @@ const CELL_DEG = 0.05;
 
 let items: IndexedDong[] | null = null;
 let grid: Map<string, number[]> | null = null;
+/** stampId → bbox center (glance map dots). */
+let centroidsById: Map<string, { lat: number; lng: number }> | null = null;
 
 function cellKey(lng: number, lat: number): string {
   return `${Math.floor(lng / CELL_DEG)},${Math.floor(lat / CELL_DEG)}`;
@@ -70,6 +72,32 @@ function ensureIndex(): void {
 
   items = nextItems;
   grid = nextGrid;
+  centroidsById = null;
+}
+
+function ensureCentroids(): Map<string, { lat: number; lng: number }> {
+  ensureIndex();
+  if (centroidsById) {
+    return centroidsById;
+  }
+  const next = new Map<string, { lat: number; lng: number }>();
+  for (const d of items!) {
+    const id = d.id || `${d.sido}/${d.city}/${d.name}`;
+    const { bbox } = d;
+    next.set(id, {
+      lng: (bbox.minLng + bbox.maxLng) / 2,
+      lat: (bbox.minLat + bbox.maxLat) / 2,
+    });
+  }
+  centroidsById = next;
+  return next;
+}
+
+/** BBox center for a stamp leaf id (`sido/city/dong`), or null if unknown. */
+export function centroidForDongId(
+  stampId: string,
+): { lat: number; lng: number } | null {
+  return ensureCentroids().get(stampId) ?? null;
 }
 
 /**
@@ -109,4 +137,5 @@ export function lookupDong(lat: number, lng: number): DongLookupHit | null {
 export function resetDongLookupForTests(): void {
   items = null;
   grid = null;
+  centroidsById = null;
 }

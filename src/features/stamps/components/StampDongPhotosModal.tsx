@@ -13,7 +13,7 @@ import {
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { resolveAssetUri } from '@/features/photos/services/mediaLibrary';
+import { useGridThumbUri } from '@/features/photos/hooks/useGridThumbUri';
 import type { PhotoRef } from '@/features/photos/types';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
@@ -57,36 +57,16 @@ const Thumb = memo(function Thumb({
   dateLabel: string;
   size: number;
 }) {
-  const [uri, setUri] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
+  const [failed, setFailed] = useState(false);
+  const uri = useGridThumbUri(assetId, THUMB_SIZE, retryNonce);
 
   useEffect(() => {
-    let cancelled = false;
     setFailed(false);
-    setUri(null);
-    void resolveAssetUri(assetId, { imageSize: THUMB_SIZE })
-      .then((next) => {
-        if (cancelled) {
-          return;
-        }
-        if (!next) {
-          setFailed(true);
-          return;
-        }
-        setUri(next);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setFailed(true);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
   }, [assetId, retryNonce]);
 
   const onRetry = useCallback(() => {
+    setFailed(false);
     setRetryNonce((n) => n + 1);
   }, []);
 
@@ -109,8 +89,8 @@ const Thumb = memo(function Thumb({
             recyclingKey={`${assetId}-${THUMB_SIZE}`}
             cachePolicy="memory-disk"
             transition={0}
+            priority="low"
             onError={() => {
-              setUri(null);
               setFailed(true);
             }}
           />
@@ -183,13 +163,6 @@ export function StampDongPhotosModal({
       cancelled = true;
     };
   }, [query]);
-
-  useEffect(() => {
-    if (visible) {
-      return;
-    }
-    void Image.clearMemoryCache();
-  }, [visible]);
 
   const rows = useMemo((): ThumbRow[] => {
     if (photos.length === 0) {
@@ -317,11 +290,11 @@ export function StampDongPhotosModal({
               columnWrapperStyle={styles.row}
               contentContainerStyle={styles.grid}
               showsVerticalScrollIndicator={false}
-              initialNumToRender={4}
-              maxToRenderPerBatch={2}
-              windowSize={3}
-              updateCellsBatchingPeriod={50}
-              removeClippedSubviews
+              initialNumToRender={8}
+              maxToRenderPerBatch={6}
+              windowSize={7}
+              updateCellsBatchingPeriod={40}
+              removeClippedSubviews={false}
               renderItem={renderItem}
             />
           )}

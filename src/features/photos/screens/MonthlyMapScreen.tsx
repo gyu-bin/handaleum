@@ -175,23 +175,19 @@ export function MonthlyMapScreen() {
     hasAccess &&
     ((isPending && !data) ||
       Boolean(data && data.photos.length === 0 && isFetching));
-  const showBootLoading = useHeldBusy(bootBusy, 1800);
-  const showDataLoading = useHeldBusy(dataBusy, 500);
+  // One held flag — boot→data handoff must not remount LoadingView (bike hitch).
+  const showLoading = useHeldBusy(bootBusy || dataBusy, 1500);
 
   // First-run gate before the permission gate: explain the app, then ask.
   if (!onboardingSeen) {
     return <Redirect href="/onboarding" />;
   }
 
-  if (showBootLoading) {
-    return <LoadingView />;
-  }
-
-  if (!hasAccess) {
+  if (isReady && !hasAccess) {
     return <Redirect href="/permission" />;
   }
 
-  if (showDataLoading) {
+  if (showLoading) {
     return <LoadingView />;
   }
 

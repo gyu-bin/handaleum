@@ -8,13 +8,6 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import Animated, {
-  Extrapolation,
-  interpolate,
-  useAnimatedScrollHandler,
-  useAnimatedStyle,
-  useSharedValue,
-} from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import Svg, { Path } from 'react-native-svg';
@@ -42,9 +35,8 @@ import {
   usePhotoPlaceSections,
   type PickerSortMode,
 } from '../hooks/usePhotoPlaceSections';
-import type { CommentAlign } from '../types';
+import type { CommentAlign, MapSnapshot } from '../types';
 import { formatMonthDot } from '../utils/cardMeta';
-import type { MapSnapshot } from '../types';
 
 /** The card holds up to five photos (cover + grid). */
 const MAX_PHOTOS = 5;
@@ -60,24 +52,8 @@ const CARD_ASPECT = 1920 / 1080;
 const SHEET_PEEK_MIN = 300;
 /** Approx. screen header under the safe-area top. */
 const CREATE_HEADER_H = 52;
-/** Scroll distance to fully tuck — shorter = card shrinks sooner while picking. */
-const PREVIEW_COLLAPSE_Y = 220;
-/** How far the photo sheet climbs over the card preview. */
-const GRID_COVER_Y = 96;
 /** One-line caption length on the create card. */
 const COMMENT_MAX = 40;
-
-/** Smoothstep — soft ease without killing responsiveness. */
-function collapseProgress(scrollY: number): number {
-  'worklet';
-  const raw = interpolate(
-    scrollY,
-    [0, PREVIEW_COLLAPSE_Y],
-    [0, 1],
-    Extrapolation.CLAMP,
-  );
-  return raw * raw * (3 - 2 * raw);
-}
 
 function previewCardWidth(windowW: number, bodyH: number): number {
   // Room for sticky pad + skin column + balance — dots must stay on-screen.
@@ -374,49 +350,12 @@ export function CardCreateScreen() {
   const [sortMode, setSortMode] = useState<PickerSortMode>('newest');
   const selectedIdsRef = useRef(selectedAssetIds);
   selectedIdsRef.current = selectedAssetIds;
-  const scrollY = useSharedValue(0);
   const insets = useSafeAreaInsets();
   const { width: windowW, height: windowH } = useWindowDimensions();
   // Body height under the screen header — size the card so the sheet always peeks.
   const bodyH = windowH - insets.top - CREATE_HEADER_H;
   const cardW = previewCardWidth(windowW, bodyH);
   const previewMaxH = previewExpandedMaxHeight(cardW);
-
-  // Keep scroll → sticky collapse on the UI thread (JS onScroll was janky).
-  const onGridScroll = useAnimatedScrollHandler({
-    onScroll: (e) => {
-      scrollY.value = e.contentOffset.y;
-    },
-  });
-
-  // Outer keeps a fixed layout height — animating height was Yoga thrash on scroll.
-  // Inner slides up (no scale); sheet climbs via translateY only.
-  const stickyPreviewStyle = useMemo(
-    () => [{ height: previewMaxH } as const],
-    [previewMaxH],
-  );
-
-  const stickyPreviewInnerStyle = useAnimatedStyle(() => {
-    const t = collapseProgress(scrollY.value);
-    // Translate only — scaling CollageEditor under the sheet janks scroll on device.
-    return {
-      transform: [
-        {
-          translateY: interpolate(t, [0, 1], [0, -previewMaxH * 0.62]),
-        },
-      ],
-      opacity: interpolate(t, [0, 0.75, 1], [1, 0.85, 0.4]),
-    };
-  });
-
-  const gridSheetStyle = useAnimatedStyle(() => {
-    const t = collapseProgress(scrollY.value);
-    return {
-      transform: [
-        { translateY: interpolate(t, [0, 1], [0, -GRID_COVER_Y]) },
-      ],
-    };
-  });
 
   // Newest / oldest for the flat picker; place mode still uses journey sections.
   const pickerPhotos = useMemo(() => {
@@ -754,47 +693,46 @@ export function CardCreateScreen() {
       />
       {formError ? <Text style={styles.error}>{formError}</Text> : null}
       <View style={styles.body}>
-        {/* Card sits under the photo sheet; sheet climbs over it on scroll. */}
+        {/* Fixed card preview; photo grid scrolls below (no sticky collapse anim). */}
         {selectedCount > 0 ? (
-          <Animated.View style={[styles.stickyPreview, stickyPreviewStyle]}>
-            <Animated.View style={stickyPreviewInnerStyle}>
-              <CreateCardPreview
-                assetIds={selectedAssetIds}
-                photos={selectedPhotos}
-                month={month}
-                paperSkin={paperSkin}
-                onPaperSkinChange={setPaperSkin}
-                commentAlign={commentAlign}
-                onCommentAlignChange={setCommentAlign}
-                comment={comment}
-                onCommentChange={setComment}
-                onSwap={onSwap}
-                onDraggingChange={setCollageDragging}
-                onDeselect={onToggle}
-                cardW={cardW}
-              />
-            </Animated.View>
-          </Animated.View>
+          <View style={[styles.stickyPreview, { height: previewMaxH }]}>
+            <CreateCardPreview
+              assetIds={selectedAssetIds}
+              photos={selectedPhotos}
+              month={month}
+              paperSkin={paperSkin}
+              onPaperSkinChange={setPaperSkin}
+              commentAlign={commentAlign}
+              onCommentAlignChange={setCommentAlign}
+              comment={comment}
+              onCommentChange={setComment}
+              onSwap={onSwap}
+              onDraggingChange={setCollageDragging}
+              onDeselect={onToggle}
+              cardW={cardW}
+            />
+          </View>
         ) : null}
-        <Animated.View style={[styles.gridSheet, gridSheetStyle]}>
+        <View style={styles.gridSheet}>
           {sheetChrome}
           <View style={styles.gridFlex}>
             <PhotoSelectGrid
-              key={sortMode}
               photos={pickerPhotos}
               sections={
-                sortMode === 'place' ? (placeLoading ? [] : placeSections) : null
+                sortMode !== 'place'
+                  ? null
+                  : placeLoading
+                    ? null
+                    : placeSections
               }
               sectionsLoading={sortMode === 'place' && placeLoading}
               selectedAssetIds={selectedAssetIds}
               onToggle={onToggle}
               scrollEnabled={!collageDragging}
               contentContainerStyle={styles.scroll}
-              onScroll={onGridScroll}
-              scrollEventThrottle={16}
             />
           </View>
-        </Animated.View>
+        </View>
       </View>
     </SafeAreaView>
   );

@@ -734,6 +734,29 @@ export function waitWhilePinExportBusy(maxMs = 2500): Promise<void> {
 const PIN_THUMB_WIDTH = 128;
 
 /**
+ * Sync display URI for list cells — no Promise, no setState on scroll.
+ * Prefers a warm downscaled `file://` pin thumb when present (avoids full
+ * `ph://` decode). Else iOS/dummy sync; Android cache hit or null (warm via
+ * {@link resolveAssetUri} / {@link resolveAssetFileUri}).
+ */
+export function syncAssetDisplayUri(
+  assetId: string,
+  imageSize: DummyImageSize = 128,
+): string | null {
+  if (isDummyAssetId(assetId)) {
+    return dummyAssetImageUri(assetId, imageSize);
+  }
+  const file = peekAssetFileUri(assetId);
+  if (file) {
+    return file;
+  }
+  if (Platform.OS === 'ios') {
+    return `ph://${assetId}`;
+  }
+  return uriCache.get(assetId) ?? null;
+}
+
+/**
  * Resolve a display URI for a camera-roll asset. Every consumer feeds the
  * result to expo-image, which renders iOS `ph://` Photos URIs natively — so on
  * iOS this is a pure string build with no native round-trip. Elsewhere the
