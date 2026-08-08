@@ -741,8 +741,10 @@ const PIN_THUMB_WIDTH = 128;
 
 /**
  * Sync display URI for list cells — no Promise, no setState on scroll.
- * Prefers a warm downscaled `file://` pin thumb when present (avoids full
- * `ph://` decode). Else iOS/dummy sync; Android cache hit or null (warm via
+ * Prefers a warm ~128px `file://` pin thumb only when `imageSize` is thumb-sized
+ * (avoids full `ph://` decode on dense grids). Hero / collage (256+) skip the
+ * pin thumb so they are not stuck on a soft 128px bake after warmGridThumbs.
+ * Else iOS/dummy sync; Android cache hit or null (warm via
  * {@link resolveAssetUri} / {@link resolveAssetFileUri}).
  */
 export function syncAssetDisplayUri(
@@ -752,9 +754,11 @@ export function syncAssetDisplayUri(
   if (isDummyAssetId(assetId)) {
     return dummyAssetImageUri(assetId, imageSize);
   }
-  const file = peekAssetFileUri(assetId);
-  if (file) {
-    return file;
+  if (imageSize <= PIN_THUMB_WIDTH) {
+    const file = peekAssetFileUri(assetId);
+    if (file) {
+      return file;
+    }
   }
   if (Platform.OS === 'ios') {
     return `ph://${assetId}`;

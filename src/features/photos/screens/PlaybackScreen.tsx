@@ -45,7 +45,8 @@ import {
 } from '../utils/placeJourney';
 
 const GRID_COLS = 3;
-const HERO_SIZE = 256;
+/** Ask past pin-thumb size so syncAssetDisplayUri returns full ph:// / localUri. */
+const HERO_SIZE = 1080;
 const ROW_GAP = theme.spacing.sm;
 
 type ThumbRow = { key: string; photos: PhotoRef[] };
