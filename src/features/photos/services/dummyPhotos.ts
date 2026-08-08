@@ -81,9 +81,9 @@ function iosAddr(
 }
 
 /**
- * Seoul / Gyeonggi (+ Incheon) demo set — map pins, journey chips, 발도장,
- * and card “위치별”. Coordinates stay near the named leaf so jitter
- * still resolves via offline PIP / canned geocode.
+ * Nationwide demo hubs — map pins, journey chips, 발도장, card “위치별”.
+ * Coordinates stay inside the named leaf so jitter still resolves via
+ * offline PIP / canned geocode (see dummyHubs.pip.check.ts).
  *
  * Stress: `DUMMY_STRESS_MULT` multiplies per-hub counts.
  * Image URIs reuse a small pool so picsum/network doesn't mask JS jank.
@@ -92,14 +92,17 @@ function iosAddr(
 export const DUMMY_STRESS_MULT = 1;
 
 /**
- * Slim demo set — few places, many photos (playback / pin sheet stress).
- * ponytail: expand hubs again if stamp/map density demos need them.
+ * Bump when HUBS lat/lng set changes so 발도장 drops the stale GPS snapshot
+ * and rebuilds 모은 동네 from the new sample album.
  */
+export const DUMMY_HUBS_REV = 1;
+
+/** One hub per major region — enough for glance-dot coverage. */
 const HUBS: DummyHub[] = [
   {
     lat: 37.5345,
     lng: 126.9946,
-    count: 120,
+    count: 30,
     label: '이태원',
     address: iosAddr({
       region: '서울특별시',
@@ -112,63 +115,224 @@ const HUBS: DummyHub[] = [
     }),
   },
   {
-    lat: 37.5446,
-    lng: 127.0559,
-    count: 80,
-    label: '성수',
-    address: iosAddr({
-      region: '서울특별시',
-      city: '서울특별시',
-      district: '성동구',
-      street: '성수동1가',
-      name: '성수동1가',
-      postalCode: '04779',
-      formattedAddress: '대한민국 서울특별시 성동구 성수동1가',
-    }),
-  },
-  {
-    lat: 37.5563,
-    lng: 126.9236,
-    count: 60,
-    label: '홍대',
-    address: iosAddr({
-      region: '서울특별시',
-      city: '서울특별시',
-      district: '마포구',
-      street: '서교동',
-      name: '서교동',
-      postalCode: '04057',
-      formattedAddress: '대한민국 서울특별시 마포구 서교동',
-    }),
-  },
-  {
-    lat: 37.5007,
-    lng: 127.0365,
-    count: 40,
-    label: '강남',
-    address: iosAddr({
-      region: '서울특별시',
-      city: '서울특별시',
-      district: '강남구',
-      street: '역삼동',
-      name: '역삼동',
-      postalCode: '06236',
-      formattedAddress: '대한민국 서울특별시 강남구 역삼동',
-    }),
-  },
-  {
-    lat: 37.3947,
-    lng: 127.1112,
-    count: 30,
-    label: '판교',
+    lat: 37.2636,
+    lng: 127.0286,
+    count: 22,
+    label: '수원',
     address: iosAddr({
       region: '경기도',
-      city: '성남시',
-      subregion: '분당구',
-      street: '삼평동',
-      name: '삼평동',
-      postalCode: '13494',
-      formattedAddress: '대한민국 경기도 성남시 분당구 삼평동',
+      city: '수원시',
+      subregion: '팔달구',
+      street: '인계동',
+      name: '인계동',
+      postalCode: '16488',
+      formattedAddress: '대한민국 경기도 수원시 팔달구 인계동',
+    }),
+  },
+  {
+    lat: 37.3825,
+    lng: 126.6564,
+    count: 22,
+    label: '송도',
+    address: iosAddr({
+      region: '인천광역시',
+      city: '인천광역시',
+      district: '연수구',
+      street: '송도동',
+      name: '송도동',
+      postalCode: '21984',
+      formattedAddress: '대한민국 인천광역시 연수구 송도동',
+    }),
+  },
+  {
+    lat: 37.765,
+    lng: 128.897,
+    count: 22,
+    label: '강릉',
+    address: iosAddr({
+      region: '강원특별자치도',
+      city: '강릉시',
+      street: '교동',
+      name: '교동',
+      postalCode: '25533',
+      formattedAddress: '대한민국 강원특별자치도 강릉시 교동',
+    }),
+  },
+  {
+    lat: 36.815,
+    lng: 127.113,
+    count: 18,
+    label: '천안',
+    address: iosAddr({
+      region: '충청남도',
+      city: '천안시',
+      subregion: '서북구',
+      street: '불당동',
+      name: '불당동',
+      postalCode: '31156',
+      formattedAddress: '대한민국 충청남도 천안시 서북구 불당동',
+    }),
+  },
+  {
+    lat: 36.635,
+    lng: 127.491,
+    count: 18,
+    label: '청주',
+    address: iosAddr({
+      region: '충청북도',
+      city: '청주시',
+      subregion: '상당구',
+      street: '성안동',
+      name: '성안동',
+      postalCode: '28531',
+      formattedAddress: '대한민국 충청북도 청주시 상당구 성안동',
+    }),
+  },
+  {
+    lat: 36.328,
+    lng: 127.427,
+    count: 22,
+    label: '대전',
+    address: iosAddr({
+      region: '대전광역시',
+      city: '대전광역시',
+      district: '중구',
+      street: '대흥동',
+      name: '대흥동',
+      postalCode: '34920',
+      formattedAddress: '대한민국 대전광역시 중구 대흥동',
+    }),
+  },
+  {
+    lat: 35.815,
+    lng: 127.153,
+    count: 22,
+    label: '전주',
+    address: iosAddr({
+      region: '전북특별자치도',
+      city: '전주시',
+      subregion: '완산구',
+      street: '풍남동',
+      name: '풍남동',
+      postalCode: '55041',
+      formattedAddress: '대한민국 전북특별자치도 전주시 완산구 풍남동',
+    }),
+  },
+  {
+    lat: 35.1498,
+    lng: 126.9195,
+    count: 22,
+    label: '광주',
+    address: iosAddr({
+      region: '광주광역시',
+      city: '광주광역시',
+      district: '동구',
+      street: '충장로',
+      name: '충장동',
+      postalCode: '61475',
+      formattedAddress: '대한민국 광주광역시 동구 충장동',
+    }),
+  },
+  {
+    lat: 34.7395,
+    lng: 127.736,
+    count: 18,
+    label: '여수',
+    address: iosAddr({
+      region: '전라남도',
+      city: '여수시',
+      street: '중앙동',
+      name: '중앙동',
+      postalCode: '59747',
+      formattedAddress: '대한민국 전라남도 여수시 중앙동',
+    }),
+  },
+  {
+    lat: 35.8667,
+    lng: 128.597,
+    count: 22,
+    label: '대구',
+    address: iosAddr({
+      region: '대구광역시',
+      city: '대구광역시',
+      district: '중구',
+      street: '삼덕동',
+      name: '삼덕동',
+      postalCode: '41940',
+      formattedAddress: '대한민국 대구광역시 중구 삼덕동',
+    }),
+  },
+  {
+    lat: 35.8372,
+    lng: 129.211,
+    count: 18,
+    label: '경주',
+    address: iosAddr({
+      region: '경상북도',
+      city: '경주시',
+      street: '황남동',
+      name: '황남동',
+      postalCode: '38166',
+      formattedAddress: '대한민국 경상북도 경주시 황남동',
+    }),
+  },
+  {
+    lat: 35.1587,
+    lng: 129.1604,
+    count: 30,
+    label: '해운대',
+    address: iosAddr({
+      region: '부산광역시',
+      city: '부산광역시',
+      district: '해운대구',
+      street: '우동',
+      name: '우동',
+      postalCode: '48094',
+      formattedAddress: '대한민국 부산광역시 해운대구 우동',
+    }),
+  },
+  {
+    lat: 35.538,
+    lng: 129.338,
+    count: 18,
+    label: '울산',
+    address: iosAddr({
+      region: '울산광역시',
+      city: '울산광역시',
+      district: '남구',
+      street: '삼산동',
+      name: '삼산동',
+      postalCode: '44705',
+      formattedAddress: '대한민국 울산광역시 남구 삼산동',
+    }),
+  },
+  {
+    lat: 35.221,
+    lng: 128.685,
+    count: 18,
+    label: '창원',
+    address: iosAddr({
+      region: '경상남도',
+      city: '창원시',
+      subregion: '성산구',
+      street: '상남동',
+      name: '상남동',
+      postalCode: '51496',
+      formattedAddress: '대한민국 경상남도 창원시 성산구 상남동',
+    }),
+  },
+  {
+    lat: 33.4996,
+    lng: 126.5312,
+    count: 26,
+    label: '제주',
+    address: iosAddr({
+      region: '제주특별자치도',
+      city: '제주시',
+      street: '이도이동',
+      name: '이도이동',
+      postalCode: '63219',
+      formattedAddress: '대한민국 제주특별자치도 제주시 이도이동',
     }),
   },
 ];

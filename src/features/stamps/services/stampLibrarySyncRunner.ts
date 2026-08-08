@@ -1,4 +1,8 @@
 import {
+  DUMMY_HUBS_REV,
+  isDevDummyPhotosEnabled,
+} from '@/features/photos/services/dummyPhotos';
+import {
   isPinExportBusy,
   setFullAlbumScanBusy,
 } from '@/features/photos/services/mediaLibrary';
@@ -8,8 +12,10 @@ import {
 } from '@/features/photos/services/indexingBackground';
 import { clearPlaceResolveCache } from '@/features/photos/services/placeResolve';
 import {
+  getDevDummyHubsRev,
   getStampsLibrarySyncAt,
   getStampsPlaceParseRev,
+  setDevDummyHubsRev,
   setStampsCoarseGeocodeAt,
   setStampsGpsScanAt,
   setStampsLibrarySyncAt,
@@ -102,7 +108,9 @@ export function startStampLibrarySync(
   }
 
   const parseRevStale = getStampsPlaceParseRev() < STAMPS_PLACE_PARSE_REV;
-  const userForce = options?.force === true;
+  const dummyHubsStale =
+    isDevDummyPhotosEnabled() && getDevDummyHubsRev() < DUMMY_HUBS_REV;
+  const userForce = options?.force === true || dummyHubsStale;
   const now = Date.now();
   const librarySyncAt = getStampsLibrarySyncAt();
 
@@ -130,7 +138,7 @@ export function startStampLibrarySync(
     emit();
 
     try {
-      // Only user-forced rescan drops the GPS snapshot (Approach A).
+      // Forced rescan (user or new sample hubs) drops the GPS snapshot.
       if (userForce) {
         clearPlaceResolveCache();
         setStampsGpsScanAt(0);
@@ -145,6 +153,9 @@ export function startStampLibrarySync(
       setStampsLibrarySyncAt(Date.now());
       if (result.photoCount > 0) {
         setStampsPlaceParseRev(STAMPS_PLACE_PARSE_REV);
+        if (isDevDummyPhotosEnabled()) {
+          setDevDummyHubsRev(DUMMY_HUBS_REV);
+        }
       }
       return result;
     } catch (error) {

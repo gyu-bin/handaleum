@@ -145,6 +145,22 @@ export function setDevDummyPhotosRaw(enabled: boolean): void {
   storage.set(DEV_DUMMY_PHOTOS_KEY, enabled ? '1' : '0');
 }
 
+/** Last applied `DUMMY_HUBS_REV` (stamp sync wiped for new sample hubs). */
+const DEV_DUMMY_HUBS_REV_KEY = 'devDummyHubsRev';
+
+export function getDevDummyHubsRev(): number {
+  const raw = storage.getString(DEV_DUMMY_HUBS_REV_KEY);
+  if (!raw) {
+    return 0;
+  }
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}
+
+export function setDevDummyHubsRev(rev: number): void {
+  storage.set(DEV_DUMMY_HUBS_REV_KEY, String(rev));
+}
+
 /** JSON map of stampId → { name, sido, firstMonth }. */
 export function getStampsRaw(): string | null {
   return storage.getString(STAMPS_COLLECTED_KEY) ?? null;
@@ -179,7 +195,7 @@ const STAMPS_LIBRARY_SYNC_AT_KEY = 'stampsLibrarySyncAt';
 const STAMPS_GPS_SCAN_AT_KEY = 'stampsGpsScanAt';
 /** Bump when place→구 parse changes so cooldown cannot hide new stamps. */
 const STAMPS_PLACE_PARSE_REV_KEY = 'stampsPlaceParseRev';
-/** Bump forces one full-album stamp rescan (Seoul/Gyeonggi sample 2026-08-06). */
+/** Bump forces one full-album stamp rescan (place→구 parse change). */
 export const STAMPS_PLACE_PARSE_REV = 17;
 
 /** Epoch ms of last finished full-album stamp sync (0 if never). */

@@ -28,7 +28,7 @@ function subscribe(listener: () => void): () => void {
   };
 }
 
-/** __DEV__-only Seoul/Gyeonggi demo set. Default on until disabled. */
+/** __DEV__-only nationwide demo hubs. Default on until disabled. */
 export function useDevDummyPhotos(): {
   enabled: boolean;
   setEnabled: (next: boolean) => void;
