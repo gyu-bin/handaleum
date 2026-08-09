@@ -385,15 +385,17 @@ export function CardCreateScreen() {
   }, [selectedAssetIds.length, resetScroll]);
 
   useEffect(() => {
-    if (!data) {
+    if (!data || showLoading) {
       return;
     }
     startMonthThumbPrewarm({
       month,
       priorityIds: [],
       monthAssetIds: data.allPhotos.map((p) => p.assetId),
+      // Picker scroll warms the viewport; don't fill the shared export bus.
+      maxMonthFill: 48,
     });
-  }, [data, month]);
+  }, [data, month, showLoading]);
 
   useEffect(() => {
     if (selectedAssetIds.length === 0) {

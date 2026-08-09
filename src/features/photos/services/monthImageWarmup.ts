@@ -23,7 +23,8 @@ export { planMonthPrewarmIds } from './monthPrewarmPlan';
  */
 
 const WARM_CONCURRENCY = 2;
-const START_DELAY_MS = 1200;
+/** After held bike (~1.5s) + first paint — avoid fighting LoadingView spin. */
+const START_DELAY_MS = 2000;
 /** Priority (seeds/covers) + month fill headroom. */
 const MAX_QUEUE = 200;
 const warmedAssetIds = new Set<string>();

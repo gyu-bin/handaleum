@@ -120,9 +120,19 @@ export function MonthlyMapScreen() {
     resetClusterCellCache();
   }, [month]);
 
+  const bootBusy = !isReady;
+  const dataBusy =
+    isReady &&
+    hasAccess &&
+    ((isPending && !data) ||
+      Boolean(data && data.photos.length === 0 && isFetching));
+  // One held flag — boot→data handoff must not remount LoadingView (bike hitch).
+  const showLoading = useHeldBusy(bootBusy || dataBusy, 1500);
+
   // Middle-path prewarm after month GPS settles (not on every zoom recluster).
+  // Skip while the bike is up — pin bake steals frames from the spin.
   useEffect(() => {
-    if (!data || isFetching) {
+    if (!data || isFetching || showLoading) {
       return;
     }
     startMonthThumbPrewarm({
@@ -130,18 +140,18 @@ export function MonthlyMapScreen() {
       priorityIds: Object.values(covers),
       monthAssetIds: data.photos.map((p) => p.assetId),
     });
-  }, [covers, data, isFetching, month]);
+  }, [covers, data, isFetching, month, showLoading]);
 
   // Pin seeds change with zoom grain — bump them to the front only.
   useEffect(() => {
-    if (!data || isFetching || clusters.length === 0) {
+    if (!data || isFetching || showLoading || clusters.length === 0) {
       return;
     }
     startMonthImageWarmup({
       month,
       assetIds: clusters.map((c) => clusterSeedId(c)),
     });
-  }, [clusters, data, isFetching, month]);
+  }, [clusters, data, isFetching, month, showLoading]);
 
   // Keep the open pin across zoom: cluster.id includes grain and changes, but
   // the seed asset usually survives. Drop selection only if the seed is gone.
@@ -176,15 +186,6 @@ export function MonthlyMapScreen() {
   const selectedPlaceKey = selected
     ? placeBucketKey(selected.centerLat, selected.centerLng)
     : null;
-
-  const bootBusy = !isReady;
-  const dataBusy =
-    isReady &&
-    hasAccess &&
-    ((isPending && !data) ||
-      Boolean(data && data.photos.length === 0 && isFetching));
-  // One held flag — boot→data handoff must not remount LoadingView (bike hitch).
-  const showLoading = useHeldBusy(bootBusy || dataBusy, 1500);
 
   // First-run gate before the permission gate: explain the app, then ask.
   if (!onboardingSeen) {

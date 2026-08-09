@@ -213,7 +213,9 @@ export async function syncStampsFromLibrary(
       yieldToPinExports: true,
       pinExportYieldMaxMs: LIBRARY_PIN_YIELD_MAX_MS,
       retryFailedLocations: false,
-      networkLocationFallback: deepRecheck,
+      // GPS: local metadata only (no iCloud download). Weekly pass may re-read
+      // previously no-GPS assets if the user later downloaded originals.
+      networkLocationFallback: false,
       recheckCachedNoLocation: deepRecheck,
       onScanProgress: (scan) => {
         setProgress({

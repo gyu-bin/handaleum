@@ -456,16 +456,19 @@ export function PlaybackScreen() {
   }, [month]);
 
   // Same middle-path prewarm if user opens playback without visiting the map first.
+  // Wait until the bike leaves — bake during LoadingView hitchs the spin.
   useEffect(() => {
-    if (!data) {
+    if (!data || showLoading) {
       return;
     }
     startMonthThumbPrewarm({
       month,
       priorityIds: Object.values(covers),
       monthAssetIds: data.photos.map((p) => p.assetId),
+      // Grid scroll owns warm; keep month fill light on this screen.
+      maxMonthFill: 48,
     });
-  }, [covers, data, month]);
+  }, [covers, data, month, showLoading]);
 
   const goTo = useCallback(
     (next: number) => {

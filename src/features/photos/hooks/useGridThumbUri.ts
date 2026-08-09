@@ -5,13 +5,14 @@ import {
   isGridThumbWarmPaused,
   peekAssetFileUri,
   resolveAssetUri,
+  scheduleGridThumbWarm,
   syncAssetDisplayUri,
 } from '../services/mediaLibrary';
 
 /**
  * Grid cell URI for the scroll hot path.
  * - Sync string when possible — no setState.
- * - Miss: one resolve, then cheap peek retries (no hammering while flinging).
+ * - Miss / iOS `ph://`: idle-warm then one peek upgrade (no hammering while flinging).
  */
 export function useGridThumbUri(
   assetId: string,
@@ -24,23 +25,31 @@ export function useGridThumbUri(
     uri: string;
   } | null>(null);
 
+  // Viewport warm: each mounted cell asks for a file thumb (paused while flinging).
   useEffect(() => {
-    if (syncUri) {
+    scheduleGridThumbWarm(assetId);
+  }, [assetId]);
+
+  useEffect(() => {
+    // Durable file:// already — nothing async to do.
+    if (syncUri != null && !syncUri.startsWith('ph://')) {
       return;
     }
     let cancelled = false;
     let attempt = 0;
     const run = async () => {
-      // One real resolve — further loops only peek (warm may finish later).
-      const first = await resolveAssetUri(assetId, { imageSize });
-      if (cancelled) {
-        return;
+      if (syncUri == null) {
+        // Android / cache miss: one real resolve, then peek retries.
+        const first = await resolveAssetUri(assetId, { imageSize });
+        if (cancelled) {
+          return;
+        }
+        if (first) {
+          setAsyncHit({ id: assetId, uri: first });
+          return;
+        }
       }
-      if (first) {
-        setAsyncHit({ id: assetId, uri: first });
-        return;
-      }
-      while (!cancelled && attempt < 16) {
+      while (!cancelled && attempt < 20) {
         // Don't fight the scroll fling with timer storms.
         if (isGridThumbWarmPaused()) {
           await new Promise((r) => setTimeout(r, 200));
@@ -53,7 +62,7 @@ export function useGridThumbUri(
         }
         attempt += 1;
         await new Promise((r) =>
-          setTimeout(r, Math.min(1500, 200 * attempt)),
+          setTimeout(r, Math.min(1200, 150 * attempt)),
         );
       }
     };
@@ -63,8 +72,8 @@ export function useGridThumbUri(
     };
   }, [assetId, imageSize, retryNonce, syncUri]);
 
-  if (syncUri) {
-    return syncUri;
+  if (asyncHit?.id === assetId) {
+    return asyncHit.uri;
   }
-  return asyncHit?.id === assetId ? asyncHit.uri : null;
+  return syncUri;
 }

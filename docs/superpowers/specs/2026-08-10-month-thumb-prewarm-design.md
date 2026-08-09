@@ -7,6 +7,8 @@
 - 우선순위: **핀 seed/cover** → 같은 달 나머지 GPS 사진(상한).
 - 다른 달: 그달 열릴 때 동일 로직.
 - 스크롤 중(`gridThumbWarmPaused`)·핀 export 폭주 시 양보.
+- `LoadingView`(자전거) 보이는 동안 prewarm 시작 금지. 시작 delay ≥ held busy.
+- 몰아보기/카드만들기는 `maxMonthFill`을 낮게(그리드 viewport warm이 본업).
 
 ## 상한
 

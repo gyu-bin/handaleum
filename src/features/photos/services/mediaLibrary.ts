@@ -47,10 +47,10 @@ const PAGE_SIZE = 200;
 /** Full-album listing — keep pages modest so home stays responsive. */
 const LIBRARY_PAGE_SIZE = 200;
 /**
- * Parallel getAssetInfoAsync for uncached GPS. Keep low — large months used to
- * fan out 40 native reads and jetsam the process.
+ * Native `asset-locations` batch size (metadata only — no file open).
+ * Larger = fewer JS bridges; safe now that iCloud download is off.
  */
-const LOCATION_BATCH = 8;
+const LOCATION_BATCH = 32;
 /** Cap simultaneous ImageManipulator exports (map pin thumbs). */
 const PIN_EXPORT_CONCURRENCY = 2;
 /** Cap simultaneous Android URI lookups while scrolling grids. */
@@ -73,8 +73,38 @@ const limitGridThumbWarm = createConcurrencyLimiter(GRID_THUMB_WARM_CONCURRENCY,
   onOverflow: 'drop-newest',
 });
 const gridThumbWarmQueued = new Set<string>();
+/**
+ * Ids requested while paused (scroll) or aborted mid-slot — flushed on resume.
+ * Without this, flinging drops warm forever and cold tails get worse down-list.
+ */
+const gridThumbWarmPending: string[] = [];
+const GRID_THUMB_WARM_PENDING_MAX = 96;
 /** While true, do not start new ImageManipulator thumbs (scroll / fling). */
 let gridThumbWarmPaused = false;
+
+function enqueueGridThumbWarmPending(assetId: string): void {
+  if (
+    peekAssetFileUri(assetId) ||
+    gridThumbWarmQueued.has(assetId) ||
+    gridThumbWarmPending.includes(assetId)
+  ) {
+    return;
+  }
+  gridThumbWarmPending.push(assetId);
+  if (gridThumbWarmPending.length > GRID_THUMB_WARM_PENDING_MAX) {
+    gridThumbWarmPending.shift();
+  }
+}
+
+function flushGridThumbWarmPending(): void {
+  if (gridThumbWarmPending.length === 0) {
+    return;
+  }
+  const ids = gridThumbWarmPending.splice(0, gridThumbWarmPending.length);
+  for (const id of ids) {
+    scheduleGridThumbWarm(id);
+  }
+}
 
 const limitPinExport = createConcurrencyLimiter(PIN_EXPORT_CONCURRENCY, {
   maxQueue: PIN_EXPORT_MAX_QUEUE,
@@ -152,15 +182,14 @@ function coordsFromInfo(
 }
 
 /**
- * Resolve GPS for one asset.
- * Default: local metadata only (map month loads — avoid iCloud download storms).
- * `networkFallback`: if local has no coords but asset is in iCloud, download once
- * (monthly soft-recheck + 발도장). Never download every no-GPS local asset —
- * that freezes the UI on screenshot-heavy months.
+ * Resolve GPS for one asset — **local metadata only**.
+ * Never `shouldDownloadFromNetwork`: iCloud originals stay in the cloud;
+ * missing GPS is cached as no-location (optional weekly local re-read may
+ * pick them up after the user downloads in Photos).
  */
 async function fetchLocation(
   asset: Asset,
-  options?: { networkFallback?: boolean },
+  _options?: { networkFallback?: boolean },
 ): Promise<PhotoRef | 'no-location' | null> {
   try {
     const info = await getAssetInfoAsync(asset, {
@@ -169,18 +198,6 @@ async function fetchLocation(
     const local = coordsFromInfo(asset, info);
     if (local) {
       return local;
-    }
-
-    if (options?.networkFallback && info.isNetworkAsset) {
-      const remote = await getAssetInfoAsync(asset, {
-        shouldDownloadFromNetwork: true,
-      });
-      const fromNetwork = coordsFromInfo(asset, remote);
-      if (fromNetwork) {
-        return fromNetwork;
-      }
-    } else if (info.isNetworkAsset && !options?.networkFallback) {
-      return null; // leave uncached — stamp scan / retry can try again
     }
 
     setAssetLocationRaw(asset.id, 'x');
@@ -235,7 +252,8 @@ const softRecheckedNoLoc = new Set<string>();
 /** Unbounded soft-recheck of every "x" stalls month open on screenshot-heavy libraries. */
 const SOFT_RECHECK_CAP = 120;
 /** Yield to the UI between GPS batches so map gestures stay responsive. */
-const BATCH_YIELD_MS = 64;
+/** Gap between GPS batches — short; metadata batches are cheap. */
+const BATCH_YIELD_MS = 40;
 
 /**
  * Load all camera-roll photos for a month via expo-media-library.
@@ -308,7 +326,7 @@ export async function loadMonthlyPhotos(
     yieldMs: BATCH_YIELD_MS,
     yieldToPinExports: true,
     shouldContinue,
-    locOpts: { networkFallback: true },
+    locOpts: { networkFallback: false },
     onBatch: async ({ located: batchLocated, noLocation }) => {
       photos.push(...batchLocated);
       noLocationCount += noLocation;
@@ -378,11 +396,13 @@ export type LoadAllLocatedPhotosOptions = {
   pinExportYieldMaxMs?: number;
   /** Re-read assets that failed getAssetInfoAsync once (transient native errors). */
   retryFailedLocations?: boolean;
-  /** Try iCloud download when local metadata has no GPS (발도장 only). */
+  /**
+   * @deprecated Ignored — GPS is local-metadata only (no iCloud download).
+   */
   networkLocationFallback?: boolean;
   /**
-   * Re-check assets previously cached as no-location (may have been iCloud
-   * blacklisted before network fallback existed).
+   * Re-check assets previously cached as no-location (local PHAsset.location
+   * may fill in after the user downloads the original in Photos).
    */
   recheckCachedNoLocation?: boolean;
 };
@@ -422,7 +442,6 @@ async function resolveChunkLocations(
   }
 
   const out: (PhotoRef | 'no-location' | null)[] = new Array(chunk.length);
-  const needNetwork: number[] = [];
 
   for (let j = 0; j < chunk.length; j++) {
     const asset = chunk[j]!;
@@ -439,23 +458,9 @@ async function resolveChunkLocations(
       out[j] = refFromCoords(asset, lat, lng);
       continue;
     }
-    if (locOpts.networkFallback) {
-      needNetwork.push(j);
-      continue;
-    }
+    // Local metadata only — never download iCloud originals for GPS.
     setAssetLocationRaw(asset.id, 'x');
     out[j] = 'no-location';
-  }
-
-  // iCloud / deep recheck — same cap as month GPS (opens image bytes).
-  for (let i = 0; i < needNetwork.length; i += LOCATION_BATCH) {
-    const slice = needNetwork.slice(i, i + LOCATION_BATCH);
-    const recovered = await Promise.all(
-      slice.map((j) => fetchLocation(chunk[j]!, locOpts)),
-    );
-    for (let k = 0; k < recovered.length; k++) {
-      out[slice[k]!] = recovered[k] ?? null;
-    }
   }
 
   return out;
@@ -555,7 +560,9 @@ export async function loadAllLocatedPhotos(
       : LOCATION_BATCH;
   const yieldMs =
     batchYieldMs != null && batchYieldMs >= 0 ? batchYieldMs : BATCH_YIELD_MS;
-  const locOpts = { networkFallback: networkLocationFallback === true };
+  // networkLocationFallback is ignored — never download for GPS.
+  void networkLocationFallback;
+  const locOpts = { networkFallback: false };
   const pinYieldMaxMs = pinExportYieldMaxMs ?? 2500;
 
   if (!forceRealLibrary && isDevDummyPhotosEnabled()) {
@@ -868,16 +875,13 @@ function normalizeFileCandidate(uri: string): string | null {
  * never be passed straight to Naver (NSData can't read it either).
  */
 async function exportPinThumbFileUri(assetId: string): Promise<string | null> {
-  // Warm iCloud / paired resources before reading pixels.
+  // Local resources only — do not pull iCloud originals for pin thumbs.
   let infoLocal: string | null = null;
   try {
-    let info = await getAssetInfoAsync(assetId, { shouldDownloadFromNetwork: true });
+    const info = await getAssetInfoAsync(assetId, {
+      shouldDownloadFromNetwork: false,
+    });
     infoLocal = info.localUri ?? null;
-    if (!infoLocal && Platform.OS === 'ios') {
-      await new Promise((r) => setTimeout(r, 450));
-      info = await getAssetInfoAsync(assetId, { shouldDownloadFromNetwork: true });
-      infoLocal = info.localUri ?? null;
-    }
   } catch (error) {
     console.error('getAssetInfoAsync for pin thumb failed', assetId, error);
   }
@@ -1004,9 +1008,13 @@ export async function resolveAssetFileUri(assetId: string): Promise<string | nul
 /**
  * Pause/resume idle thumb export while the user is scrolling a photo grid.
  * In-flight manipulator work (at most 1) may finish; nothing new starts.
+ * On resume, pending (scroll-time) ids are flushed.
  */
 export function setGridThumbWarmPaused(paused: boolean): void {
   gridThumbWarmPaused = paused;
+  if (!paused) {
+    flushGridThumbWarmPending();
+  }
 }
 
 /** True while a photo grid is flinging — async URI retries should back off. */
@@ -1023,16 +1031,18 @@ export function scheduleGridThumbWarm(assetId: string): void {
   if (isDummyAssetId(assetId)) {
     return;
   }
-  if (gridThumbWarmPaused) {
+  if (peekAssetFileUri(assetId) || gridThumbWarmQueued.has(assetId)) {
     return;
   }
-  if (peekAssetFileUri(assetId) || gridThumbWarmQueued.has(assetId)) {
+  if (gridThumbWarmPaused) {
+    enqueueGridThumbWarmPending(assetId);
     return;
   }
   gridThumbWarmQueued.add(assetId);
   void limitGridThumbWarm(async () => {
     try {
       if (gridThumbWarmPaused) {
+        enqueueGridThumbWarmPending(assetId);
         return;
       }
       await resolveAssetFileUri(assetId);
@@ -1042,14 +1052,12 @@ export function scheduleGridThumbWarm(assetId: string): void {
   }).catch(() => {
     // Queue overflow — allow a later warm pass to re-enqueue.
     gridThumbWarmQueued.delete(assetId);
+    enqueueGridThumbWarmPending(assetId);
   });
 }
 
 /** After interactions — warm the first N ids for a screen (Playback / card grid). */
 export function warmGridThumbs(assetIds: string[], limit = 48): void {
-  if (gridThumbWarmPaused) {
-    return;
-  }
   const slice = assetIds.slice(0, Math.max(0, limit));
   for (const id of slice) {
     scheduleGridThumbWarm(id);
