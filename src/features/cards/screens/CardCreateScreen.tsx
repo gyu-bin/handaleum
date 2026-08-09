@@ -738,7 +738,7 @@ export function CardCreateScreen() {
       />
       {formError ? <Text style={styles.error}>{formError}</Text> : null}
       <View style={styles.body}>
-        {/* Instagram-style: height shrinks + top-anchored scale (not sheet covering). */}
+        {/* Preview height shrinks in normal flow — do not translate the sheet (clips bottom). */}
         {selectedCount > 0 ? (
           <Animated.View style={[styles.stickyPreview, collapseStyle]}>
             <Animated.View

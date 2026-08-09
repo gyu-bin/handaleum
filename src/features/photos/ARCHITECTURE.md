@@ -32,8 +32,9 @@
 | 월 선택 = **저널 UI: 연도 스테퍼 + 1–12월 2열** (0장 비활성) | 전체 월 스크롤 / 연도 칩 | 사용자 시안(옵션 C) | 2026-08-02 |
 | GPS 없는 사진 완전 제외, 카운트만 표시 | lat/lng optional로 카드 포함 허용 | 사용자 결정. "위치 있는 사진만 표시" 안내로 처리 | 2026-07-17 |
 | 몰아보기 = **장소 페이지** (히어로+그리드). 자동재생 없음. 순서=첫 사진 takenAt 오름차순(달 초→말). 지도 연동 비범위 | 지도 이동형 / ▶ 자동 스와이프 | 2026-08-07 A 정리 | 2026-08-07 |
-| 몰아보기 본문 = **고정 세로 50/50** (위: 제목+직사각 히어로, 아래: 그리드). 스크롤 연동 히어로 축소 없음 | 1:1 히어로 / 스크롤 축소 | 그리드 가시성 + 레이아웃 버벅임 제거. 스펙 `2026-08-09-playback-half-layout-design.md` | 2026-08-09 |
-| 몰아보기·카드만들기 상단 = **인스타식 축소** (height reflow + top scale, 시트 덮개 금지). 스펙 `2026-08-09-collapse-header-scroll-design.md` | clip-only / 시트 zIndex 덮개 | 작아지며 공간 확보 | 2026-08-09 |
+| 몰아보기 = 제목 고정 + **정사각 히어로**만 스크롤 시 비율 축소(scale). 스펙 `2026-08-09-playback-half-layout-design.md` | 직사각 fill / 제목까지 clip | 짤림·덮개 체감 제거 | 2026-08-10 |
+| 스크롤 축소 = **scale + translateY**(height 레이아웃 금지). 그리드 warm은 momentum 후 재개, batch≥3 | height 매프레임 / batch=1 | 몰아보기·카드·핀시트·동사진 끊김 | 2026-08-10 |
+| 핀 시트 그리드 = `AssetThumbImage`+warm (셀마다 resolve 금지) | 셀별 getAssetInfo / clearMemoryCache | 시트 스크롤 끊김 완화 | 2026-08-10 |
 | 맵 핀 placeholder = export 완료까지 **재시도**(3회 포기 금지). month warm도 `resolveAssetFileUri` | 3회 후 lightblue 고착 / prefetch만 | 대량 월에서도 썸네일 복구 | 2026-08-10 |
 | 몰아보기 수동 스와이프만 | 자동 재생 | 자동재생 무의미 판정 | 2026-08-07 |
 | 클러스터링은 순수 함수 (services/cluster.ts) | 지도 라이브러리 내장 클러스터 | 저장 금지 원칙 + 테스트 용이 | 2026-07-17 |

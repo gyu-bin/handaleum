@@ -591,14 +591,15 @@ export function StampDongPhotosModal({
                   keyExtractor={(item) => item.key}
                   contentContainerStyle={styles.grid}
                   showsVerticalScrollIndicator={false}
-                  initialNumToRender={4}
-                  maxToRenderPerBatch={1}
-                  windowSize={3}
-                  updateCellsBatchingPeriod={120}
+                  initialNumToRender={6}
+                  maxToRenderPerBatch={3}
+                  windowSize={5}
+                  updateCellsBatchingPeriod={50}
                   removeClippedSubviews={Platform.OS === 'android'}
                   getItemLayout={getItemLayout}
                   renderItem={renderItem}
                   onScrollBeginDrag={onGridScrollBegin}
+                  onMomentumScrollBegin={onGridScrollBegin}
                   onScrollEndDrag={onGridScrollEnd}
                   onMomentumScrollEnd={onGridScrollEnd}
                 />

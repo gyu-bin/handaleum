@@ -1,24 +1,25 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
   useWindowDimensions,
+  type ListRenderItemInfo,
 } from 'react-native';
-import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
-import { resolveAssetUri } from '../services/mediaLibrary';
-import { startMonthImageWarmup } from '../services/monthImageWarmup';
+import { AssetThumbImage } from './AssetThumbImage';
+import { usePauseGridThumbWarmOnScroll } from '../hooks/usePauseGridThumbWarmOnScroll';
+import { warmGridThumbs } from '../services/mediaLibrary';
 import type { PlaceCluster, PhotoRef } from '../types';
 import { placeBucketKey, resolveClusterDetailLabel } from '../utils/placeJourney';
-import { useCurrentMonth } from '../hooks/useCurrentMonth';
 
 /** Photos appended per scroll page in the pin sheet grid. */
 const PAGE_SIZE = 18;
@@ -33,35 +34,17 @@ export interface PhotoPreviewSheetProps {
   onSetCover?: (placeKey: string, assetId: string) => void;
 }
 
-function PhotoThumb({
+const PhotoThumb = memo(function PhotoThumb({
   photo,
+  size,
   isCover,
   onSelectCover,
 }: {
   photo: PhotoRef;
+  size: number;
   isCover: boolean;
   onSelectCover?: () => void;
 }) {
-  const [uri, setUri] = useState<string | null>(null);
-  const { width } = useWindowDimensions();
-  const size = (width - theme.spacing.md * 2 - theme.spacing.sm * 2) / 3;
-
-  useEffect(() => {
-    let cancelled = false;
-    void resolveAssetUri(photo.assetId)
-      .then((next) => {
-        if (!cancelled) {
-          setUri(next);
-        }
-      })
-      .catch((error) => {
-        console.warn('PhotoThumb uri failed', photo.assetId, error);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [photo.assetId]);
-
   return (
     <Pressable
       onLongPress={onSelectCover}
@@ -69,23 +52,15 @@ function PhotoThumb({
       disabled={!onSelectCover}
       accessibilityRole="button"
       accessibilityLabel={
-        isCover
-          ? strings.map.coverSelected
-          : strings.map.setAsCover
+        isCover ? strings.map.coverSelected : strings.map.setAsCover
       }
       style={{ width: size, height: size, margin: theme.spacing.sm / 2 }}
     >
-      {uri ? (
-        <Image
-          source={{ uri }}
-          style={styles.thumb}
-          contentFit="cover"
-          recyclingKey={photo.assetId}
-          cachePolicy="memory-disk"
-        />
-      ) : (
-        <View style={[styles.thumb, styles.thumbPlaceholder]} />
-      )}
+      <AssetThumbImage
+        assetId={photo.assetId}
+        size={size}
+        style={styles.thumb}
+      />
       {isCover ? (
         <View style={styles.coverBadge}>
           <Text style={styles.coverBadgeText}>{strings.map.coverBadge}</Text>
@@ -97,7 +72,7 @@ function PhotoThumb({
       ) : null}
     </Pressable>
   );
-}
+});
 
 export function PhotoPreviewSheet({
   cluster,
@@ -106,13 +81,15 @@ export function PhotoPreviewSheet({
   onSetCover,
 }: PhotoPreviewSheetProps) {
   const insets = useSafeAreaInsets();
-  const { month } = useCurrentMonth();
+  const { width } = useWindowDimensions();
+  const thumbWarmScroll = usePauseGridThumbWarmOnScroll();
   const placeKey = cluster
     ? placeBucketKey(cluster.centerLat, cluster.centerLng)
     : null;
   const [placeLabel, setPlaceLabel] = useState<string | null>(null);
   const [labelLoading, setLabelLoading] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const cell = (width - theme.spacing.md * 2 - theme.spacing.sm * 2) / 3;
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
@@ -125,29 +102,26 @@ export function PhotoPreviewSheet({
     return cluster.photos.slice(0, visibleCount);
   }, [cluster, visibleCount]);
 
-  // Warm only the visible sheet page (not the whole cluster if it has thousands).
+  // Idle file thumbs — same path as playback/cards (not per-cell getAssetInfo).
   useEffect(() => {
     if (pagePhotos.length === 0) {
       return;
     }
-    startMonthImageWarmup({
-      month,
-      assetIds: pagePhotos.map((p) => p.assetId),
-    });
-  }, [month, pagePhotos]);
+    warmGridThumbs(
+      pagePhotos.map((p) => p.assetId),
+      PAGE_SIZE,
+    );
+  }, [pagePhotos]);
 
   useEffect(() => {
     if (!cluster) {
       setPlaceLabel(null);
       setLabelLoading(false);
-      void Image.clearMemoryCache();
       return;
     }
     let cancelled = false;
     setPlaceLabel(null);
     setLabelLoading(true);
-    // Prefer a real photo coordinate over the cluster centroid (centroids can
-    // sit on bridges / water between buckets and mis-alias neighborhoods).
     const pin =
       (coverAssetId
         ? cluster.photos.find((p) => p.assetId === coverAssetId)
@@ -183,6 +157,22 @@ export function PhotoPreviewSheet({
         : Math.min(n + PAGE_SIZE, cluster.photos.length),
     );
   }, [cluster]);
+
+  const renderItem = useCallback(
+    ({ item }: ListRenderItemInfo<PhotoRef>) => (
+      <PhotoThumb
+        photo={item}
+        size={cell}
+        isCover={coverAssetId === item.assetId}
+        onSelectCover={
+          onSetCover && placeKey
+            ? () => onSetCover(placeKey, item.assetId)
+            : undefined
+        }
+      />
+    ),
+    [cell, coverAssetId, onSetCover, placeKey],
+  );
 
   const titleText = labelLoading
     ? strings.map.placeLoading
@@ -222,23 +212,18 @@ export function PhotoPreviewSheet({
             numColumns={3}
             contentContainerStyle={styles.list}
             initialNumToRender={12}
-            maxToRenderPerBatch={9}
-            windowSize={5}
-            updateCellsBatchingPeriod={50}
-            removeClippedSubviews
+            maxToRenderPerBatch={6}
+            windowSize={6}
+            updateCellsBatchingPeriod={40}
+            removeClippedSubviews={Platform.OS === 'android'}
             onEndReached={loadMore}
             onEndReachedThreshold={0.4}
-            renderItem={({ item }) => (
-              <PhotoThumb
-                photo={item}
-                isCover={coverAssetId === item.assetId}
-                onSelectCover={
-                  onSetCover && placeKey
-                    ? () => onSetCover(placeKey, item.assetId)
-                    : undefined
-                }
-              />
-            )}
+            renderItem={renderItem}
+            extraData={coverAssetId}
+            onScrollBeginDrag={thumbWarmScroll.onScrollBeginDrag}
+            onMomentumScrollBegin={thumbWarmScroll.onMomentumScrollBegin}
+            onScrollEndDrag={thumbWarmScroll.onScrollEndDrag}
+            onMomentumScrollEnd={thumbWarmScroll.onMomentumScrollEnd}
           />
         ) : null}
       </View>
@@ -290,10 +275,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: 4,
-  },
-  thumbPlaceholder: {
-    backgroundColor: theme.colors.ink,
-    opacity: 0.12,
   },
   coverBadge: {
     position: 'absolute',

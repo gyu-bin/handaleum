@@ -15,7 +15,6 @@ import {
   Text,
   useWindowDimensions,
   View,
-  type LayoutChangeEvent,
 } from 'react-native';
 import { Image } from 'expo-image';
 import Animated from 'react-native-reanimated';
@@ -173,11 +172,12 @@ const ClusterSlide = memo(function ClusterSlide({
     onScroll,
     collapseStyle,
     mediaScaleStyle,
-  } = useCollapseOnScroll();
-  const [expandedPx, setExpandedPx] = useState(0);
+  } = useCollapseOnScroll({ minRatio: 0.55, range: 160 });
 
   const pad = theme.spacing.lg;
   const contentW = width - pad * 2;
+  /** Square hero edge — collapse only this, not the title row. */
+  const heroEdge = contentW;
   const cell = (contentW - ROW_GAP * (GRID_COLS - 1)) / GRID_COLS;
   const rowHeight = cell + ROW_GAP;
 
@@ -185,17 +185,9 @@ const ClusterSlide = memo(function ClusterSlide({
     resetScroll();
   }, [cluster.id, resetScroll]);
 
-  const onBodyLayout = useCallback(
-    (e: LayoutChangeEvent) => {
-      const half = Math.floor(e.nativeEvent.layout.height / 2);
-      if (half <= 0) {
-        return;
-      }
-      setExpandedPx((prev) => (Math.abs(prev - half) < 1 ? prev : half));
-      setExpandedHeight(half);
-    },
-    [setExpandedHeight],
-  );
+  useEffect(() => {
+    setExpandedHeight(heroEdge);
+  }, [heroEdge, setExpandedHeight]);
 
   useEffect(() => {
     const next =
@@ -347,96 +339,91 @@ const ClusterSlide = memo(function ClusterSlide({
   );
 
   return (
-    <View style={styles.list} onLayout={onBodyLayout}>
-      {/*
-        Smooth path: wrapper height (frees space) + top-anchored scale (GPU).
-        Avoid flex-reflowing the hero every scroll frame — that hitchs.
-      */}
-      <Animated.View
-        style={[
-          styles.topClip,
-          expandedPx > 0 ? collapseStyle : styles.topHalfFlex,
-        ]}
-      >
+    <View style={styles.list}>
+      {/* Title stays put — only the square hero scales on scroll. */}
+      <View style={styles.chapterHead}>
+        <View style={styles.titleRow}>
+          <Text style={styles.place} numberOfLines={2}>
+            {placeText}
+          </Text>
+          <View style={styles.metaCol}>
+            {chapterDay ? (
+              <Text style={styles.meta} numberOfLines={1}>
+                {chapterDay}
+              </Text>
+            ) : null}
+            <Text style={styles.meta} numberOfLines={1}>
+              {strings.map.clusterCount(cluster.photos.length)}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Hero slot height shrinks; list stays in normal flow so bottom pager isn't clipped. */}
+      <Animated.View style={[styles.heroSlot, collapseStyle]}>
         <Animated.View
           style={[
-            styles.topScaleInner,
-            expandedPx > 0 ? { height: expandedPx } : styles.topHalfFlex,
+            styles.heroSquare,
+            { width: heroEdge, height: heroEdge },
             mediaScaleStyle,
           ]}
         >
-          <View style={styles.titleRow}>
-            <Text style={styles.place} numberOfLines={2}>
-              {placeText}
-            </Text>
-            <View style={styles.metaCol}>
-              {chapterDay ? (
-                <Text style={styles.meta} numberOfLines={1}>
-                  {chapterDay}
-                </Text>
-              ) : null}
-              <Text style={styles.meta} numberOfLines={1}>
-                {strings.map.clusterCount(cluster.photos.length)}
-              </Text>
-            </View>
-          </View>
-          <View style={[styles.imageWrap, { width: contentW }]}>
-            {uri ? (
-              <Image
-                source={{ uri }}
-                style={styles.hero}
-                contentFit="cover"
-                cachePolicy="memory-disk"
-                recyclingKey={`${activeId}-${HERO_SIZE}`}
-                priority="high"
-                transition={0}
-                allowDownscaling
-              />
-            ) : (
-              <View style={[styles.hero, styles.placeholder]} />
-            )}
-          </View>
-          {cluster.photos.length > 1 ? (
-            <Text style={styles.gridHint}>{strings.playback.gridHint}</Text>
-          ) : null}
+          {uri ? (
+            <Image
+              source={{ uri }}
+              style={{ width: heroEdge, height: heroEdge }}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              recyclingKey={`${activeId}-${HERO_SIZE}`}
+              priority="high"
+              transition={0}
+              allowDownscaling
+            />
+          ) : (
+            <View
+              style={[
+                styles.placeholder,
+                { width: heroEdge, height: heroEdge },
+              ]}
+            />
+          )}
         </Animated.View>
       </Animated.View>
 
-      <View style={styles.bottomHalf}>
-        <Animated.FlatList
-          style={styles.thumbList}
-          data={thumbRows}
-          keyExtractor={(row) => row.key}
-          contentContainerStyle={styles.gridContent}
-          showsVerticalScrollIndicator={false}
-          initialNumToRender={6}
-          maxToRenderPerBatch={3}
-          windowSize={5}
-          updateCellsBatchingPeriod={50}
-          removeClippedSubviews={Platform.OS === 'android'}
-          getItemLayout={getItemLayout}
-          renderItem={renderRow}
-          extraData={`${activeId}:${coverId}`}
-          onScroll={onScroll}
-          scrollEventThrottle={16}
-          onScrollBeginDrag={() => {
-            scrollingRef.current = true;
-            thumbWarmScroll.onScrollBeginDrag();
-          }}
-          onScrollEndDrag={() => {
-            thumbWarmScroll.onScrollEndDrag();
-            setTimeout(() => {
-              scrollingRef.current = false;
-              flushPendingLabel();
-            }, 80);
-          }}
-          onMomentumScrollEnd={() => {
-            scrollingRef.current = false;
-            thumbWarmScroll.onMomentumScrollEnd();
-            flushPendingLabel();
-          }}
-        />
-      </View>
+      {cluster.photos.length > 1 ? (
+        <Text style={styles.gridHint}>{strings.playback.gridHint}</Text>
+      ) : null}
+
+      <Animated.FlatList
+        style={styles.thumbList}
+        data={thumbRows}
+        keyExtractor={(row) => row.key}
+        contentContainerStyle={styles.gridContent}
+        showsVerticalScrollIndicator={false}
+        initialNumToRender={8}
+        maxToRenderPerBatch={4}
+        windowSize={7}
+        updateCellsBatchingPeriod={40}
+        removeClippedSubviews={Platform.OS === 'android'}
+        getItemLayout={getItemLayout}
+        renderItem={renderRow}
+        extraData={`${activeId}:${coverId}`}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        onScrollBeginDrag={() => {
+          scrollingRef.current = true;
+          thumbWarmScroll.onScrollBeginDrag();
+        }}
+        onMomentumScrollBegin={thumbWarmScroll.onMomentumScrollBegin}
+        onScrollEndDrag={() => {
+          thumbWarmScroll.onScrollEndDrag();
+        }}
+        onMomentumScrollEnd={() => {
+          scrollingRef.current = false;
+          thumbWarmScroll.onMomentumScrollEnd();
+          flushPendingLabel();
+        }}
+      />
     </View>
   );
 });
@@ -621,26 +608,24 @@ const styles = StyleSheet.create({
     minWidth: 64,
     textAlign: 'center',
   },
-  topClip: {
-    overflow: 'hidden',
+  chapterHead: {
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.md,
+    flexShrink: 0,
   },
-  topHalfFlex: {
-    flex: 1,
-    minHeight: 0,
+  heroSlot: {
+    overflow: 'hidden',
+    alignSelf: 'center',
+    marginTop: theme.spacing.md,
   },
-  /** Fixed layout at expanded height; visual shrink via mediaScaleStyle (GPU). */
-  topScaleInner: {
-    width: '100%',
-    minHeight: 0,
-  },
-  bottomHalf: {
-    flex: 1,
-    minHeight: 0,
+  heroSquare: {
+    borderRadius: theme.radius.card,
+    overflow: 'hidden',
+    backgroundColor: theme.colors.surfaceAlt,
   },
   thumbList: {
     flex: 1,
+    minHeight: 0,
   },
   gridContent: {
     paddingHorizontal: theme.spacing.lg,
@@ -651,7 +636,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: theme.spacing.md,
-    flexShrink: 0,
   },
   place: {
     ...theme.type.title,
@@ -675,26 +659,14 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'right',
   },
-  imageWrap: {
-    flex: 1,
-    marginTop: theme.spacing.md,
-    borderRadius: theme.radius.card,
-    backgroundColor: theme.colors.surface,
-    overflow: 'hidden',
-    minHeight: 0,
-  },
-  hero: {
-    width: '100%',
-    height: '100%',
-    borderRadius: theme.radius.card,
-    backgroundColor: theme.colors.surfaceAlt,
-  },
   placeholder: {
     backgroundColor: theme.colors.surfaceAlt,
+    borderRadius: theme.radius.card,
   },
   gridHint: {
     ...theme.type.micro,
     marginTop: theme.spacing.sm,
+    marginHorizontal: theme.spacing.lg,
     flexShrink: 0,
     color: theme.colors.subtle,
   },

@@ -11,21 +11,22 @@ import { collapseHeight } from './collapseHeight';
 export { collapseHeight } from './collapseHeight';
 
 export type UseCollapseOnScrollOptions = {
-  /** Collapsed height as a fraction of expanded (default 0.5). */
+  /** Collapsed height as a fraction of expanded (default 0.55). */
   minRatio?: number;
-  /** scrollY distance (px) to reach full collapse (default 180). */
+  /** scrollY distance (px) to reach full collapse (default 160). */
   range?: number;
 };
 
 /**
- * Instagram-style sticky shrink on the UI thread.
- * - `collapseStyle`: wrapper height shrinks (frees space below — not a covering sheet).
- * - `mediaScaleStyle`: content scales from the top (feels like shrinking, not clipping).
- * No React setState on scroll.
+ * Collapse only a sticky media slot:
+ * - `collapseStyle` shrinks that slot's height (list below grows via normal flex)
+ * - `mediaScaleStyle` scales media from the top so it looks proportional, not cropped
+ *
+ * Do NOT translate the scrolling list — that clips the bottom chrome.
  */
 export function useCollapseOnScroll(options: UseCollapseOnScrollOptions = {}) {
-  const minRatio = options.minRatio ?? 0.5;
-  const range = options.range ?? 180;
+  const minRatio = options.minRatio ?? 0.55;
+  const range = options.range ?? 160;
   const scrollY = useSharedValue(0);
   const expandedH = useSharedValue(0);
 
@@ -51,10 +52,8 @@ export function useCollapseOnScroll(options: UseCollapseOnScrollOptions = {}) {
       return { transform: [{ scale: 1 }] };
     }
     const h = collapseHeight(scrollY.value, maxH, range, minRatio);
-    const scale = h / maxH;
     return {
-      transform: [{ scale }],
-      // RN 0.73+ — keep the top edge pinned while scaling down.
+      transform: [{ scale: h / maxH }],
       transformOrigin: 'top',
     };
   });

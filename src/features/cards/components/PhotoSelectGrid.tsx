@@ -224,15 +224,16 @@ export function PhotoSelectGrid({
       ListHeaderComponent={header}
       ListFooterComponent={ListFooterComponent}
       contentContainerStyle={contentContainerStyle}
-      initialNumToRender={4}
-      maxToRenderPerBatch={1}
-      windowSize={3}
-      updateCellsBatchingPeriod={100}
+      initialNumToRender={8}
+      maxToRenderPerBatch={4}
+      windowSize={6}
+      updateCellsBatchingPeriod={40}
       removeClippedSubviews={Platform.OS === 'android'}
       renderItem={renderItem}
       onScroll={onScroll}
       scrollEventThrottle={scrollEventThrottle}
       onScrollBeginDrag={thumbWarmScroll.onScrollBeginDrag}
+      onMomentumScrollBegin={thumbWarmScroll.onMomentumScrollBegin}
       onScrollEndDrag={thumbWarmScroll.onScrollEndDrag}
       onMomentumScrollEnd={thumbWarmScroll.onMomentumScrollEnd}
     />
