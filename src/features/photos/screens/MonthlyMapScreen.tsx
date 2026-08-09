@@ -28,7 +28,10 @@ import { usePhotoPermission } from '../hooks/usePhotoPermission';
 import { usePinCovers } from '../hooks/usePinCovers';
 import { clusterPhotos, resetClusterCellCache } from '../services/cluster';
 import { isDevDummyPhotosEnabled } from '../services/dummyPhotos';
-import { startMonthImageWarmup } from '../services/monthImageWarmup';
+import {
+  startMonthImageWarmup,
+  startMonthThumbPrewarm,
+} from '../services/monthImageWarmup';
 import type { MonthKey, PlaceCluster } from '../types';
 import { placeBucketKey } from '../utils/placeJourney';
 
@@ -113,27 +116,32 @@ export function MonthlyMapScreen() {
     scheduleStampLibrarySyncFromMap();
   }, [hasLibraryAccess, isReady, isFetching]);
 
-  // Warm cover thumbs only on the map. Sheet/playback warm their own window —
-  // sampling ~80 album images here was fighting pin exports while panning.
-  const coverWarmKey = useMemo(
-    () => Object.values(covers).sort().join(','),
-    [covers],
-  );
-
   useEffect(() => {
     resetClusterCellCache();
   }, [month]);
 
+  // Middle-path prewarm after month GPS settles (not on every zoom recluster).
   useEffect(() => {
-    const assetIds = Object.values(covers);
-    if (assetIds.length === 0) {
+    if (!data || isFetching) {
+      return;
+    }
+    startMonthThumbPrewarm({
+      month,
+      priorityIds: Object.values(covers),
+      monthAssetIds: data.photos.map((p) => p.assetId),
+    });
+  }, [covers, data, isFetching, month]);
+
+  // Pin seeds change with zoom grain — bump them to the front only.
+  useEffect(() => {
+    if (!data || isFetching || clusters.length === 0) {
       return;
     }
     startMonthImageWarmup({
       month,
-      assetIds,
+      assetIds: clusters.map((c) => clusterSeedId(c)),
     });
-  }, [coverWarmKey, covers, month]);
+  }, [clusters, data, isFetching, month]);
 
   // Keep the open pin across zoom: cluster.id includes grain and changes, but
   // the seed asset usually survives. Drop selection only if the seed is gone.

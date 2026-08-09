@@ -23,6 +23,10 @@ import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 
 import { useCurrentMonth } from '../../photos/hooks/useCurrentMonth';
 import { useMonthlyPhotos } from '../../photos/hooks/useMonthlyPhotos';
+import {
+  startMonthImageWarmup,
+  startMonthThumbPrewarm,
+} from '../../photos/services/monthImageWarmup';
 import type { PhotoRef } from '../../photos/types';
 import { CollageEditor } from '../components/CollageEditor';
 import { PhotoSelectGrid } from '../components/PhotoSelectGrid';
@@ -358,8 +362,13 @@ export function CardCreateScreen() {
   const bodyH = windowH - insets.top - CREATE_HEADER_H;
   const cardW = previewCardWidth(windowW, bodyH);
   const previewMaxH = previewExpandedMaxHeight(cardW);
-  const { onScroll, collapseStyle, setExpandedHeight, resetScroll } =
-    useCollapseOnScroll();
+  const {
+    onScroll,
+    collapseStyle,
+    mediaScaleStyle,
+    setExpandedHeight,
+    resetScroll,
+  } = useCollapseOnScroll();
 
   useLayoutEffect(() => {
     setExpandedHeight(previewMaxH);
@@ -374,6 +383,24 @@ export function CardCreateScreen() {
       resetScroll();
     }
   }, [selectedAssetIds.length, resetScroll]);
+
+  useEffect(() => {
+    if (!data) {
+      return;
+    }
+    startMonthThumbPrewarm({
+      month,
+      priorityIds: [],
+      monthAssetIds: data.allPhotos.map((p) => p.assetId),
+    });
+  }, [data, month]);
+
+  useEffect(() => {
+    if (selectedAssetIds.length === 0) {
+      return;
+    }
+    startMonthImageWarmup({ month, assetIds: selectedAssetIds });
+  }, [month, selectedAssetIds]);
 
   // Newest / oldest for the flat picker; place mode still uses journey sections.
   const pickerPhotos = useMemo(() => {
@@ -711,10 +738,16 @@ export function CardCreateScreen() {
       />
       {formError ? <Text style={styles.error}>{formError}</Text> : null}
       <View style={styles.body}>
-        {/* Clip-collapse preview on scroll — collage stays at previewMaxH (no remeasure). */}
+        {/* Instagram-style: height shrinks + top-anchored scale (not sheet covering). */}
         {selectedCount > 0 ? (
           <Animated.View style={[styles.stickyPreview, collapseStyle]}>
-            <View style={{ height: previewMaxH }}>
+            <Animated.View
+              style={[
+                styles.previewScaleInner,
+                { height: previewMaxH },
+                mediaScaleStyle,
+              ]}
+            >
               <CreateCardPreview
                 assetIds={selectedAssetIds}
                 photos={selectedPhotos}
@@ -730,7 +763,7 @@ export function CardCreateScreen() {
                 onDeselect={onToggle}
                 cardW={cardW}
               />
-            </View>
+            </Animated.View>
           </Animated.View>
         ) : null}
         <View style={styles.gridSheet}>
@@ -771,22 +804,21 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'flex-start',
-    zIndex: 0,
+  },
+  previewScaleInner: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
   },
   body: {
     flex: 1,
   },
   gridSheet: {
     flex: 1,
-    zIndex: 2,
     backgroundColor: theme.colors.background,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: theme.colors.hairline,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -6 },
-    shadowRadius: 14,
-    elevation: 8,
   },
   sheetChrome: {
     paddingHorizontal: theme.spacing.lg,

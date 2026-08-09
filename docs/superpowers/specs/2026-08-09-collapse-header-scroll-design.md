@@ -2,19 +2,16 @@
 
 ## 결정
 
-- 스크롤 시 상단 미리보기 높이 **100% → ~50%** (clamp).
-- **Reanimated UI 스레드**만 사용. 스크롤마다 `setState`로 높이 갱신 금지 (이전 버벅임 원인).
-- 래퍼 `height`만 애니메이션 + `overflow: hidden`. 안쪽(히어로 / CollageEditor)은 **max 높이 고정 · 재측정 없음**.
-- 공통 훅: `useCollapseOnScroll` (`minRatio=0.5`, `range≈160`).
+- 스크롤 시 상단 **인스타 프로필식 축소**: 높이 100%→~50% + **위에서 스케일**.
+- **덮개(시트 zIndex로 가리기) 금지.** 아래 영역이 위를 덮는 느낌이 아니라, 위 미디어가 작아지며 공간이 비는 느낌.
+- Reanimated UI 스레드만. 스크롤마다 `setState` 금지.
+- 몰아보기·카드: 래퍼 **height**(공간 확보) + 안쪽 **고정 크기 + top scale**(GPU). 스크롤마다 flex reflow 금지(버벅임).
+- `gridSheet` 그림자/elevation으로 덮개 연출하지 않음.
 
-## 적용
+## 훅
 
-| 화면 | 축소 대상 |
-|---|---|
-| 몰아보기 | 위 50% 블록 (제목+직사각 히어로) |
-| 카드 만들기 | sticky 카드 프리뷰 래퍼 |
+`useCollapseOnScroll` → `collapseStyle`(height) + `mediaScaleStyle`(scale from top).
 
 ## 비범위
 
-- 스프링 스냅 / 완전 접기
-- 하단 페이저·헤더 연동
+- 완전 접기 / 스프링 스냅

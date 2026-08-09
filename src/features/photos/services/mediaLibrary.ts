@@ -11,6 +11,7 @@ import { getAssetLocationsAsync } from 'asset-locations';
 
 import { getAssetLocationRaw, setAssetLocationRaw } from '@/lib/storage';
 import {
+  ConcurrencyQueueOverflowError,
   createConcurrencyLimiter,
   lruSet,
 } from '@/shared/utils/concurrency';
@@ -60,14 +61,32 @@ const URI_CACHE_MAX = 400;
 const FILE_URI_CACHE_MAX = 360;
 /** Idle grid warm — keep at 1 so scroll never competes with a manipulator storm. */
 const GRID_THUMB_WARM_CONCURRENCY = 1;
-const limitGridThumbWarm = createConcurrencyLimiter(GRID_THUMB_WARM_CONCURRENCY);
+/** Bound waiters so a dense month cannot enqueue thousands of manipulator jobs. */
+const PIN_EXPORT_MAX_QUEUE = 64;
+const GRID_THUMB_WARM_MAX_QUEUE = 48;
+const ANDROID_URI_MAX_QUEUE = 32;
+/** After export failure, skip re-export for this long (ms). */
+const FILE_URI_FAIL_TTL_MS = 8_000;
+
+const limitGridThumbWarm = createConcurrencyLimiter(GRID_THUMB_WARM_CONCURRENCY, {
+  maxQueue: GRID_THUMB_WARM_MAX_QUEUE,
+  onOverflow: 'drop-newest',
+});
 const gridThumbWarmQueued = new Set<string>();
 /** While true, do not start new ImageManipulator thumbs (scroll / fling). */
 let gridThumbWarmPaused = false;
 
+const limitPinExport = createConcurrencyLimiter(PIN_EXPORT_CONCURRENCY, {
+  maxQueue: PIN_EXPORT_MAX_QUEUE,
+  onOverflow: 'drop-newest',
+});
+const limitAndroidUri = createConcurrencyLimiter(ANDROID_URI_CONCURRENCY, {
+  maxQueue: ANDROID_URI_MAX_QUEUE,
+  onOverflow: 'drop-newest',
+});
 
-const limitPinExport = createConcurrencyLimiter(PIN_EXPORT_CONCURRENCY);
-const limitAndroidUri = createConcurrencyLimiter(ANDROID_URI_CONCURRENCY);
+/** assetId → Date.now() until which resolveAssetFileUri should return null. */
+const fileUriFailUntil = new Map<string, number>();
 
 async function collectAssets(options: {
   createdAfter?: number;
@@ -926,15 +945,25 @@ export async function resolveAssetFileUri(assetId: string): Promise<string | nul
     return hit;
   }
 
+  const failUntil = fileUriFailUntil.get(assetId);
+  if (failUntil != null && Date.now() < failUntil) {
+    return null;
+  }
+
   const pending = fileUriInflight.get(assetId);
   if (pending) {
     return pending;
   }
 
+  const markFail = () => {
+    lruSet(fileUriFailUntil, assetId, Date.now() + FILE_URI_FAIL_TTL_MS, 800);
+  };
+
   const work = (async (): Promise<string | null> => {
     if (isDummyAssetId(assetId)) {
       const uri = dummyAssetImageUri(assetId, 256);
       lruSet(fileUriCache, assetId, uri, FILE_URI_CACHE_MAX);
+      fileUriFailUntil.delete(assetId);
       return uri;
     }
 
@@ -942,19 +971,25 @@ export async function resolveAssetFileUri(assetId: string): Promise<string | nul
       const diskHit = await readPinThumbFromDisk(assetId);
       if (diskHit) {
         lruSet(fileUriCache, assetId, diskHit, FILE_URI_CACHE_MAX);
+        fileUriFailUntil.delete(assetId);
         return diskHit;
       }
 
       // One slot covers getAssetInfoAsync + manipulateAsync (avoid parallel decode storms).
       const exported = await limitPinExport(() => exportPinThumbFileUri(assetId));
       if (!exported) {
+        markFail();
         return null;
       }
       const durable = (await writePinThumbToDisk(assetId, exported)) ?? exported;
       lruSet(fileUriCache, assetId, durable, FILE_URI_CACHE_MAX);
+      fileUriFailUntil.delete(assetId);
       return durable;
     } catch (error) {
-      console.error('resolveAssetFileUri failed', assetId, error);
+      if (!(error instanceof ConcurrencyQueueOverflowError)) {
+        console.error('resolveAssetFileUri failed', assetId, error);
+      }
+      markFail();
       return null;
     }
   })().finally(() => {
@@ -972,6 +1007,11 @@ export async function resolveAssetFileUri(assetId: string): Promise<string | nul
  */
 export function setGridThumbWarmPaused(paused: boolean): void {
   gridThumbWarmPaused = paused;
+}
+
+/** True while a photo grid is flinging — async URI retries should back off. */
+export function isGridThumbWarmPaused(): boolean {
+  return gridThumbWarmPaused;
 }
 
 /**
@@ -999,6 +1039,9 @@ export function scheduleGridThumbWarm(assetId: string): void {
     } finally {
       gridThumbWarmQueued.delete(assetId);
     }
+  }).catch(() => {
+    // Queue overflow — allow a later warm pass to re-enqueue.
+    gridThumbWarmQueued.delete(assetId);
   });
 }
 

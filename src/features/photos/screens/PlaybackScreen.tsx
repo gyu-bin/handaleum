@@ -36,10 +36,12 @@ import { usePauseGridThumbWarmOnScroll } from '../hooks/usePauseGridThumbWarmOnS
 import { usePinCovers } from '../hooks/usePinCovers';
 import { clusterPhotos } from '../services/cluster';
 import {
+  peekAssetFileUri,
   resolveAssetUri,
   syncAssetDisplayUri,
   warmGridThumbs,
 } from '../services/mediaLibrary';
+import { startMonthThumbPrewarm } from '../services/monthImageWarmup';
 import type { PhotoRef, PlaceCluster } from '../types';
 import {
   placeBucketKey,
@@ -153,7 +155,10 @@ const ClusterSlide = memo(function ClusterSlide({
   const [activeId, setActiveId] = useState(
     () => coverAssetId ?? cluster.photos[0]?.assetId ?? '',
   );
-  const [asyncHeroUri, setAsyncHeroUri] = useState<string | null>(null);
+  const [asyncHero, setAsyncHero] = useState<{
+    id: string;
+    uri: string;
+  } | null>(null);
   const [placeLabel, setPlaceLabel] = useState<string | null>(null);
   const [labelLoading, setLabelLoading] = useState(true);
   const scrollingRef = useRef(false);
@@ -162,8 +167,13 @@ const ClusterSlide = memo(function ClusterSlide({
     loading: boolean;
   } | null>(null);
   const thumbWarmScroll = usePauseGridThumbWarmOnScroll();
-  const collapse = useCollapseOnScroll();
-  const { resetScroll, setExpandedHeight, onScroll, collapseStyle } = collapse;
+  const {
+    resetScroll,
+    setExpandedHeight,
+    onScroll,
+    collapseStyle,
+    mediaScaleStyle,
+  } = useCollapseOnScroll();
   const [expandedPx, setExpandedPx] = useState(0);
 
   const pad = theme.spacing.lg;
@@ -220,18 +230,26 @@ const ClusterSlide = memo(function ClusterSlide({
   const syncHeroUri = activePhoto
     ? syncAssetDisplayUri(activePhoto.assetId, HERO_SIZE)
     : null;
-  const uri = syncHeroUri ?? asyncHeroUri;
+  // Interim 128 thumb while full hero resolves — avoids blank flash.
+  const interimHeroUri = activePhoto
+    ? (peekAssetFileUri(activePhoto.assetId) ??
+      syncAssetDisplayUri(activePhoto.assetId, 128))
+    : null;
+  const uri =
+    syncHeroUri ??
+    (asyncHero?.id === activePhoto?.assetId ? asyncHero.uri : null) ??
+    interimHeroUri;
 
   useEffect(() => {
     if (!activePhoto || syncHeroUri) {
       return;
     }
     let cancelled = false;
-    setAsyncHeroUri(null);
+    // Keep interim URI until the next one lands (no blank clear).
     void resolveAssetUri(activePhoto.assetId, { imageSize: HERO_SIZE })
       .then((next) => {
-        if (!cancelled) {
-          setAsyncHeroUri(next);
+        if (!cancelled && next) {
+          setAsyncHero({ id: activePhoto.assetId, uri: next });
         }
       })
       .catch((error) => {
@@ -330,17 +348,21 @@ const ClusterSlide = memo(function ClusterSlide({
 
   return (
     <View style={styles.list} onLayout={onBodyLayout}>
-      {/* Clip-collapse on UI thread — inner stays at expandedPx (no setState on scroll). */}
+      {/*
+        Smooth path: wrapper height (frees space) + top-anchored scale (GPU).
+        Avoid flex-reflowing the hero every scroll frame — that hitchs.
+      */}
       <Animated.View
         style={[
           styles.topClip,
           expandedPx > 0 ? collapseStyle : styles.topHalfFlex,
         ]}
       >
-        <View
+        <Animated.View
           style={[
-            styles.topInner,
+            styles.topScaleInner,
             expandedPx > 0 ? { height: expandedPx } : styles.topHalfFlex,
+            mediaScaleStyle,
           ]}
         >
           <View style={styles.titleRow}>
@@ -377,7 +399,7 @@ const ClusterSlide = memo(function ClusterSlide({
           {cluster.photos.length > 1 ? (
             <Text style={styles.gridHint}>{strings.playback.gridHint}</Text>
           ) : null}
-        </View>
+        </Animated.View>
       </Animated.View>
 
       <View style={styles.bottomHalf}>
@@ -445,6 +467,18 @@ export function PlaybackScreen() {
   useEffect(() => {
     setIndex(0);
   }, [month]);
+
+  // Same middle-path prewarm if user opens playback without visiting the map first.
+  useEffect(() => {
+    if (!data) {
+      return;
+    }
+    startMonthThumbPrewarm({
+      month,
+      priorityIds: Object.values(covers),
+      monthAssetIds: data.photos.map((p) => p.assetId),
+    });
+  }, [covers, data, month]);
 
   const goTo = useCallback(
     (next: number) => {
@@ -596,7 +630,8 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
   },
-  topInner: {
+  /** Fixed layout at expanded height; visual shrink via mediaScaleStyle (GPU). */
+  topScaleInner: {
     width: '100%',
     minHeight: 0,
   },

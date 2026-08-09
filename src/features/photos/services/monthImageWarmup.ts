@@ -1,24 +1,31 @@
 import { Image } from 'expo-image';
 
 import type { MonthKey } from '../types';
-import { resolveAssetUri } from './mediaLibrary';
+import {
+  isGridThumbWarmPaused,
+  resolveAssetFileUri,
+  resolveAssetUri,
+  waitWhilePinExportBusy,
+} from './mediaLibrary';
+import {
+  DEFAULT_MONTH_FILL_MAX,
+  planMonthPrewarmIds,
+} from './monthPrewarmPlan';
+
+export { planMonthPrewarmIds } from './monthPrewarmPlan';
 
 /**
- * Budgeted display-image warm for pin sheet / playback / cards.
+ * Budgeted month thumb prewarm (middle path):
+ * GPS indexing stays metadata-only; after a month loads we idle-bake small
+ * file:// pin thumbs for map seeds first, then the rest of that month (capped).
  *
- * NEVER enqueue an entire huge month — tens of thousands of Image.prefetch
- * calls thrash disk and fight pin thumb exports. Callers pass only:
- * - visible pin covers / seeds (map)
- * - open sheet page / playback window (on demand)
- *
- * Cap keeps the queue small; already-warmed ids are skipped for the session.
+ * NEVER enqueue the whole library. Other months warm when opened.
  */
 
 const WARM_CONCURRENCY = 2;
-const START_DELAY_MS = 1800;
-/** Hard cap — covers (~30) + sheet page (50) + playback window headroom. */
-const MAX_QUEUE = 120;
-
+const START_DELAY_MS = 1200;
+/** Priority (seeds/covers) + month fill headroom. */
+const MAX_QUEUE = 200;
 const warmedAssetIds = new Set<string>();
 
 let activeMonth: MonthKey | null = null;
@@ -30,8 +37,17 @@ let hasStartedDelayForMonth = false;
 
 export interface MonthImageWarmupInput {
   month: MonthKey;
-  /** Only these assets — do not pass the full month list. */
+  /** Only these assets — do not pass the full library. */
   assetIds: string[];
+}
+
+export interface MonthThumbPrewarmInput {
+  month: MonthKey;
+  /** Map pin seeds + covers — always front of the queue. */
+  priorityIds: string[];
+  /** Same-month GPS photos; fill is capped. */
+  monthAssetIds: string[];
+  maxMonthFill?: number;
 }
 
 function uniqueIds(ids: string[]): string[] {
@@ -70,16 +86,44 @@ function enqueueFront(ids: string[]): void {
   trimQueue();
 }
 
+function enqueueBack(ids: string[]): void {
+  const inQueue = new Set(queue);
+  for (const id of ids) {
+    if (warmedAssetIds.has(id) || inQueue.has(id)) {
+      continue;
+    }
+    queue.push(id);
+    inQueue.add(id);
+  }
+  trimQueue();
+}
+
+async function yieldIfBusy(runId: number): Promise<boolean> {
+  // true = aborted (generation changed)
+  while (isGridThumbWarmPaused()) {
+    if (runId !== generation) {
+      return true;
+    }
+    await new Promise((r) => setTimeout(r, 220));
+  }
+  if (runId !== generation) {
+    return true;
+  }
+  await waitWhilePinExportBusy(800);
+  return runId !== generation;
+}
+
 async function warmOne(assetId: string): Promise<void> {
   if (warmedAssetIds.has(assetId)) {
     return;
   }
   try {
+    // Naver pins need durable file:// thumbs — display prefetch alone is not enough.
+    await resolveAssetFileUri(assetId);
     const uri = await resolveAssetUri(assetId);
-    if (!uri) {
-      return;
+    if (uri) {
+      await Image.prefetch(uri, 'memory-disk');
     }
-    await Image.prefetch(uri, 'memory-disk');
     warmedAssetIds.add(assetId);
   } catch (error) {
     console.warn('month image warm failed', assetId, error);
@@ -104,6 +148,11 @@ async function drain(runId: number): Promise<void> {
         if (warmedAssetIds.has(assetId)) {
           continue;
         }
+        if (await yieldIfBusy(runId)) {
+          // Put it back — scroll/export took priority.
+          queue.unshift(assetId);
+          return;
+        }
         if (runId !== generation) {
           return;
         }
@@ -116,7 +165,8 @@ async function drain(runId: number): Promise<void> {
   } finally {
     draining = false;
     if (runId === generation && queue.length > 0) {
-      void drain(runId);
+      // Reschedule gently if we yielded for scroll.
+      scheduleDrain(runId, false);
     }
   }
 }
@@ -139,19 +189,10 @@ function scheduleDrain(runId: number, immediate: boolean): void {
   }, START_DELAY_MS);
 }
 
-/**
- * Warm a small set of display URIs. Safe to call as the map/sheet updates —
- * priority ids go to the front; queue never exceeds MAX_QUEUE.
- */
-export function startMonthImageWarmup(input: MonthImageWarmupInput): void {
-  const ids = uniqueIds(input.assetIds);
-  if (ids.length === 0) {
-    return;
-  }
-
-  const monthChanged = activeMonth !== input.month;
+function ensureMonth(month: MonthKey): number {
+  const monthChanged = activeMonth !== month;
   if (monthChanged) {
-    activeMonth = input.month;
+    activeMonth = month;
     generation += 1;
     queue = [];
     hasStartedDelayForMonth = false;
@@ -160,13 +201,13 @@ export function startMonthImageWarmup(input: MonthImageWarmupInput): void {
       delayTimer = null;
     }
   }
+  return generation;
+}
 
-  enqueueFront(ids);
+function kickDrain(runId: number): void {
   if (queue.length === 0) {
     return;
   }
-
-  const runId = generation;
   if (!hasStartedDelayForMonth) {
     hasStartedDelayForMonth = true;
     scheduleDrain(runId, false);
@@ -175,6 +216,40 @@ export function startMonthImageWarmup(input: MonthImageWarmupInput): void {
   if (!draining) {
     scheduleDrain(runId, true);
   }
+}
+
+/**
+ * Warm a small set of display URIs. Priority ids go to the front.
+ */
+export function startMonthImageWarmup(input: MonthImageWarmupInput): void {
+  const ids = uniqueIds(input.assetIds);
+  if (ids.length === 0) {
+    return;
+  }
+  const runId = ensureMonth(input.month);
+  enqueueFront(ids);
+  kickDrain(runId);
+}
+
+/**
+ * Middle-path prewarm: pin seeds/covers first, then capped same-month fill.
+ * Call after month GPS has settled (`!isFetching`).
+ */
+export function startMonthThumbPrewarm(input: MonthThumbPrewarmInput): void {
+  const { priority, fill } = planMonthPrewarmIds(
+    input.priorityIds,
+    input.monthAssetIds,
+    input.maxMonthFill ?? DEFAULT_MONTH_FILL_MAX,
+  );
+
+  if (priority.length === 0 && fill.length === 0) {
+    return;
+  }
+
+  const runId = ensureMonth(input.month);
+  enqueueFront(priority);
+  enqueueBack(fill);
+  kickDrain(runId);
 }
 
 /** Test helper — not used by UI. */

@@ -2,16 +2,16 @@ import { useEffect, useState } from 'react';
 
 import type { DummyImageSize } from '../services/dummyPhotos';
 import {
+  isGridThumbWarmPaused,
+  peekAssetFileUri,
   resolveAssetUri,
   syncAssetDisplayUri,
 } from '../services/mediaLibrary';
 
 /**
  * Grid cell URI for the scroll hot path.
- * - Sync string when possible (iOS ph:// / warm file:// / dummy) — no setState.
- * - Android cache miss: one resolve + setState.
- * - Does NOT schedule file-thumb warm (that runs only via warmGridThumbs while
- *   scroll is idle — per-cell warm during fling hitched the UI).
+ * - Sync string when possible — no setState.
+ * - Miss: one resolve, then cheap peek retries (no hammering while flinging).
  */
 export function useGridThumbUri(
   assetId: string,
@@ -29,15 +29,35 @@ export function useGridThumbUri(
       return;
     }
     let cancelled = false;
-    void resolveAssetUri(assetId, { imageSize })
-      .then((next) => {
-        if (!cancelled && next) {
-          setAsyncHit({ id: assetId, uri: next });
+    let attempt = 0;
+    const run = async () => {
+      // One real resolve — further loops only peek (warm may finish later).
+      const first = await resolveAssetUri(assetId, { imageSize });
+      if (cancelled) {
+        return;
+      }
+      if (first) {
+        setAsyncHit({ id: assetId, uri: first });
+        return;
+      }
+      while (!cancelled && attempt < 16) {
+        // Don't fight the scroll fling with timer storms.
+        if (isGridThumbWarmPaused()) {
+          await new Promise((r) => setTimeout(r, 200));
+          continue;
         }
-      })
-      .catch((error) => {
-        console.warn('useGridThumbUri failed', assetId, error);
-      });
+        const peek = peekAssetFileUri(assetId);
+        if (peek) {
+          setAsyncHit({ id: assetId, uri: peek });
+          return;
+        }
+        attempt += 1;
+        await new Promise((r) =>
+          setTimeout(r, Math.min(1500, 200 * attempt)),
+        );
+      }
+    };
+    void run();
     return () => {
       cancelled = true;
     };

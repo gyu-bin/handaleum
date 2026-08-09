@@ -6,6 +6,7 @@ import type { MapImageProp } from '@mj-studio/react-native-naver-map';
 import {
   peekAssetFileUri,
   resolveAssetFileUri,
+  waitWhilePinExportBusy,
 } from '../services/mediaLibrary';
 import { requestMapPinBake } from '../services/mapPinBake';
 import type { PlaceCluster } from '../types';
@@ -88,10 +89,14 @@ function MapClusterMarkerInner({
       setResolved({ id: displayAssetId, uri: peek });
       return;
     }
+    // Indexing ≠ pin-thumb export. Bound retries so dense months don't thrash JS.
+    // After the burst, one idle pass recovers pins that missed the queue cap.
     let cancelled = false;
+    const MAX_BURST = 6;
     const load = async () => {
+      let attempt = 0;
       try {
-        for (let attempt = 0; attempt < 3; attempt += 1) {
+        while (!cancelled && attempt < MAX_BURST) {
           const next = await resolveAssetFileUri(displayAssetId);
           if (cancelled) {
             return;
@@ -101,7 +106,30 @@ function MapClusterMarkerInner({
             setFramedUri(null);
             return;
           }
-          await new Promise((r) => setTimeout(r, 200 * (attempt + 1)));
+          attempt += 1;
+          if (attempt % 2 === 0) {
+            await waitWhilePinExportBusy(3000);
+          }
+          if (cancelled) {
+            return;
+          }
+          await new Promise((r) => setTimeout(r, Math.min(1600, 220 * attempt)));
+        }
+        if (cancelled) {
+          return;
+        }
+        await waitWhilePinExportBusy(5000);
+        if (cancelled) {
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 10_000));
+        if (cancelled) {
+          return;
+        }
+        const late = await resolveAssetFileUri(displayAssetId);
+        if (!cancelled && late) {
+          setResolved({ id: displayAssetId, uri: late });
+          setFramedUri(null);
         }
       } catch (error) {
         console.warn('MapClusterMarker load failed', displayAssetId, error);

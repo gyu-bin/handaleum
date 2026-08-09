@@ -33,7 +33,8 @@
 | GPS 없는 사진 완전 제외, 카운트만 표시 | lat/lng optional로 카드 포함 허용 | 사용자 결정. "위치 있는 사진만 표시" 안내로 처리 | 2026-07-17 |
 | 몰아보기 = **장소 페이지** (히어로+그리드). 자동재생 없음. 순서=첫 사진 takenAt 오름차순(달 초→말). 지도 연동 비범위 | 지도 이동형 / ▶ 자동 스와이프 | 2026-08-07 A 정리 | 2026-08-07 |
 | 몰아보기 본문 = **고정 세로 50/50** (위: 제목+직사각 히어로, 아래: 그리드). 스크롤 연동 히어로 축소 없음 | 1:1 히어로 / 스크롤 축소 | 그리드 가시성 + 레이아웃 버벅임 제거. 스펙 `2026-08-09-playback-half-layout-design.md` | 2026-08-09 |
-| 몰아보기·카드만들기 상단 = **Reanimated clip 축소** (100%→~50%, setState 없음). 스펙 `2026-08-09-collapse-header-scroll-design.md` | JS setState 높이 / scale만 | UI 스레드 + 안쪽 재측정 방지 | 2026-08-09 |
+| 몰아보기·카드만들기 상단 = **인스타식 축소** (height reflow + top scale, 시트 덮개 금지). 스펙 `2026-08-09-collapse-header-scroll-design.md` | clip-only / 시트 zIndex 덮개 | 작아지며 공간 확보 | 2026-08-09 |
+| 맵 핀 placeholder = export 완료까지 **재시도**(3회 포기 금지). month warm도 `resolveAssetFileUri` | 3회 후 lightblue 고착 / prefetch만 | 대량 월에서도 썸네일 복구 | 2026-08-10 |
 | 몰아보기 수동 스와이프만 | 자동 재생 | 자동재생 무의미 판정 | 2026-08-07 |
 | 클러스터링은 순수 함수 (services/cluster.ts) | 지도 라이브러리 내장 클러스터 | 저장 금지 원칙 + 테스트 용이 | 2026-07-17 |
 | 핀 좌표 = **시드 사진 GPS** (평균 금지). 줌 분기도 기존 핀이 미끄러지지 않음 | 셀 멤버 평균 | 확대 시 핀 위치 점프 | 2026-08-09 |
@@ -62,6 +63,8 @@
 | 지도 라벨: 제스처 중에도 **마운트 유지** (MapScreenAnchor). 숨김은 깜빡임의 원인 | 제스처 중 unmount | 확대/패닝 시 라벨 깜빡임 해소 | 2026-07-27 |
 | 클러스터링: **공간 그리드 O(n)** + **줌별 핀 상한** (넘치면 셀 확대). 개요≈20핀, 확대 시 ≤116 | 시드+haversine O(n²) / 상한 없음 | 대량·전국 산포 시 핀 카펫·튕김 방지 | 2026-07-23 |
 | 대량 사진 안정성: GPS `LOCATION_BATCH=8`, 핀 thumb export **동시 2**, URI/bake **LRU**, 그리드 FlatList window 축소 + expo-image recycling/clearMemoryCache | 무제한 Promise.all / 캐시 무한 성장 | 수백 장 월에서 ImageManipulator·디코드 jetsam 완화 | 2026-07-29 |
+| 대량 로드 하드닝: limiter **maxQueue**, fileUri 실패 네거티브 캐시 8s, 맵 핀 burst 재시도+idle 1회. 스펙 `2026-08-10-photo-load-hardening-design.md` | 무한 retry / 무제한 wait 큐 | 끊김·강제종료 우선, 썸네일은 순차 복구 | 2026-08-10 |
+| 이번 달 thumb **중간 프리웜**: GPS 후 idle에 핀 seed/cover → 월 fill≤160. 스크롤 시 양보. 스펙 `2026-08-10-month-thumb-prewarm-design.md` | 볼 때만 굽기 / 전체 라이브러리 선생성 | 지도·몰아보기 첫인상↑, 인덱싱은 메타만 | 2026-08-10 |
 | 핀 thumb **디스크 LRU**(최대 400, cacheDirectory) | 전 라이브러리 영구 복사 / 메모리만 | 재실행 시 export 생략, 앱 용량 상한 | 2026-08-02 |
 | __DEV__ 더미: **전국 16허브 348장/월** (시도 분산). 번들 demo 이미지. 설정에서 off | 서울·경기만 / 전국 랜덤 | 발도장 점 성좌·위치별 피커 확인용 | 2026-08-08 |
 | 유료: 계획=무료 3개월 / 프로 전체·₩3,990. **지금은 `IS_MONETIZATION_LIVE=false`로 전부 개방** | 출시 전 결제 강제 | 도그푸드·출시 우선 | 2026-07-23 |
