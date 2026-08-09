@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 
 import type { DummyImageSize } from '../services/dummyPhotos';
+import { isDummyAssetId } from '../services/dummyPhotos';
 import {
   isGridThumbWarmPaused,
   peekAssetFileUri,
@@ -11,8 +13,10 @@ import {
 
 /**
  * Grid cell URI for the scroll hot path.
- * - Sync string when possible — no setState.
- * - Miss / iOS `ph://`: idle-warm then one peek upgrade (no hammering while flinging).
+ * - iOS: always `ph://` for display (pin-export `file://` is for Naver; a bad
+ *   export must not replace a working Photos URI with a blank frame).
+ * - Android: sync cache, else one resolve + peek retries.
+ * Warm still runs in the background for map pins / recycle.
  */
 export function useGridThumbUri(
   assetId: string,
@@ -25,13 +29,14 @@ export function useGridThumbUri(
     uri: string;
   } | null>(null);
 
-  // Viewport warm: each mounted cell asks for a file thumb (paused while flinging).
   useEffect(() => {
     scheduleGridThumbWarm(assetId);
   }, [assetId]);
 
   useEffect(() => {
-    // Durable file:// already — nothing async to do.
+    if (Platform.OS === 'ios' && !isDummyAssetId(assetId)) {
+      return;
+    }
     if (syncUri != null && !syncUri.startsWith('ph://')) {
       return;
     }
@@ -39,7 +44,6 @@ export function useGridThumbUri(
     let attempt = 0;
     const run = async () => {
       if (syncUri == null) {
-        // Android / cache miss: one real resolve, then peek retries.
         const first = await resolveAssetUri(assetId, { imageSize });
         if (cancelled) {
           return;
@@ -50,7 +54,6 @@ export function useGridThumbUri(
         }
       }
       while (!cancelled && attempt < 20) {
-        // Don't fight the scroll fling with timer storms.
         if (isGridThumbWarmPaused()) {
           await new Promise((r) => setTimeout(r, 200));
           continue;
@@ -72,6 +75,9 @@ export function useGridThumbUri(
     };
   }, [assetId, imageSize, retryNonce, syncUri]);
 
+  if (Platform.OS === 'ios' && !isDummyAssetId(assetId)) {
+    return `ph://${assetId}`;
+  }
   if (asyncHit?.id === assetId) {
     return asyncHit.uri;
   }

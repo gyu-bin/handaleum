@@ -191,7 +191,11 @@ const ViewerPage = memo(function ViewerPage({
   width: number;
   height: number;
 }) {
-  const syncUri = syncAssetDisplayUri(item.assetId, VIEWER_IMAGE_SIZE);
+  // iOS: ph:// only — never pin-export file:// (can blank Optimized Storage assets).
+  const syncUri =
+    Platform.OS === 'ios'
+      ? `ph://${item.assetId}`
+      : syncAssetDisplayUri(item.assetId, VIEWER_IMAGE_SIZE);
   const [asyncUri, setAsyncUri] = useState<string | null>(null);
   const uri = syncUri ?? asyncUri;
   const imageH = height - 48;
@@ -225,7 +229,7 @@ const ViewerPage = memo(function ViewerPage({
           contentFit="contain"
           cachePolicy="memory-disk"
           recyclingKey={`${item.assetId}-viewer`}
-          priority="normal"
+          priority="high"
           transition={0}
           allowDownscaling
         />
@@ -529,7 +533,8 @@ export function StampDongPhotosModal({
             initialNumToRender={1}
             maxToRenderPerBatch={1}
             windowSize={2}
-            removeClippedSubviews={Platform.OS === 'android'}
+            // Horizontal pager + clip often blanks the current page on device.
+            removeClippedSubviews={false}
             key={`viewer-${viewerEpoch}`}
           />
         ) : (

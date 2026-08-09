@@ -2,10 +2,11 @@
 
 ## 결정
 
-- 인덱싱/`loadMonthlyPhotos`/`loadAllLocatedPhotos`: **iCloud 원본 다운로드 없음**.
-- 핀 thumb export도 `shouldDownloadFromNetwork: false`.
+- 인덱싱/`loadMonthlyPhotos`/`loadAllLocatedPhotos`: **GPS용 iCloud 원본 다운로드 없음**.
+- **표시**(그리드 `ph://`, 핀 thumb export, Android display URI)는 Photos가 로컬 리소스를 만들 수 있음 — 빈 프레임 방지.
+- iOS 그리드/동 뷰어 표시는 `ph://` 고정 (pin-export `file://`로 교체하지 않음).
 - 네이티브 메타 배치 32, yield 40ms.
-- 주간 발도장 패스는 예전에 no-GPS로 캐시한 항목의 **로컬 메타 재조회**만 (다운로드 아님).
+- 주간 발도장 패스는 예전에 no-GPS로 캐시한 항목의 **로컬 메타 재조회**만 (GPS 다운로드 아님).
 
 ## 트레이드오프
 

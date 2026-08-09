@@ -7,7 +7,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import Animated from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -23,6 +23,7 @@ import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 
 import { useCurrentMonth } from '../../photos/hooks/useCurrentMonth';
 import { useMonthlyPhotos } from '../../photos/hooks/useMonthlyPhotos';
+import { setGridThumbWarmPaused } from '../../photos/services/mediaLibrary';
 import {
   startMonthImageWarmup,
   startMonthThumbPrewarm,
@@ -384,18 +385,30 @@ export function CardCreateScreen() {
     }
   }, [selectedAssetIds.length, resetScroll]);
 
-  useEffect(() => {
-    if (!data || showLoading) {
-      return;
-    }
-    startMonthThumbPrewarm({
-      month,
-      priorityIds: [],
-      monthAssetIds: data.allPhotos.map((p) => p.assetId),
-      // Picker scroll warms the viewport; don't fill the shared export bus.
-      maxMonthFill: 48,
-    });
-  }, [data, month, showLoading]);
+  // While preview sits on top, freeze thumb bake — resuming a fully-selected
+  // create + warm storm after 만들기 was jetsamming the process.
+  useFocusEffect(
+    useCallback(() => {
+      setGridThumbWarmPaused(false);
+      return () => {
+        setGridThumbWarmPaused(true);
+      };
+    }, []),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!data || showLoading) {
+        return;
+      }
+      startMonthThumbPrewarm({
+        month,
+        priorityIds: [],
+        monthAssetIds: data.allPhotos.map((p) => p.assetId),
+        maxMonthFill: 48,
+      });
+    }, [data, month, showLoading]),
+  );
 
   useEffect(() => {
     if (selectedAssetIds.length === 0) {
@@ -544,6 +557,14 @@ export function CardCreateScreen() {
         commentAlign,
         mapSnapshot,
       });
+      // Clear heavy draft before preview mounts under-stack create stays alive.
+      // Returning to a full collage + grid selection was freezing then crashing.
+      setSelectedAssetIds([]);
+      setSelectionUndoStack([]);
+      setSelectionHint(null);
+      setComment('');
+      setCollageDragging(false);
+      resetScroll();
       // Keep create under preview so back returns to 카드 만들기.
       router.push({
         pathname: '/cards/[id]',

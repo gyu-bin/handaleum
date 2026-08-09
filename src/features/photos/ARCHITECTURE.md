@@ -84,7 +84,7 @@
 | place resolve를 4개로 분리: `placeCache`(버킷키·2단 캐시) / `geocodeQueue`(권한·직렬 큐) / `visitPlaceBuild`(순수 조립) / `placeResolve`(네이밍 정책 + 공개 API). 외부는 계속 `placeResolve`만 import | 단일 456줄 파일 | 캐시·스로틀·조립이 한 파일에 섞여 원인 추적이 어려웠음 | 2026-08-03 |
 | 여정 칩: 디스크 hydrate 즉시 + GPS partial 중에도 geocode(캐시 우선). 빈 결과로 기존 칩을 지우지 않음. visit place 중복은 시+구+동 단위 | `!isFetching` 대기만 / 매 partial마다 wipe | 콜드스타트 "사진 n장"만 · 칩 소실 | 2026-08-02 |
 | GPS 핫패스: 로컬 모듈 `asset-locations`가 **배치로 PHAsset.location / Android EXIF latlng** 읽음. `getAssetInfoAsync`(원본·EXIF 전체)는 모듈 없거나 iCloud deep recheck일 때만 | 장마다 getAssetInfoAsync | expo가 파일까지 열어 발열·저속. 발자취식 메타만 읽기와 정렬 | 2026-08-05 |
-| GPS·핀 thumb = **로컬만** (`shouldDownloadFromNetwork: false`). iCloud 원본 다운로드 안 함. 배치 32·yield 40 | 월 로드 networkFallback / thumb iCloud warm | 첫 인덱싱 속도·발열. 클라우드 전용 사진은 GPS 없을 수 있음 | 2026-08-10 |
+| GPS 인덱싱 = **로컬 메타만**. 표시(핀 export·Android URI)는 필요 시 Photos materialize. iOS 그리드는 `ph://` 고정 | GPS+표시 전부 로컬 / 전부 다운로드 | 인덱싱 발열↓, 동 팝업 빈 프레임 방지 | 2026-08-10 |
 
 ## 경계
 

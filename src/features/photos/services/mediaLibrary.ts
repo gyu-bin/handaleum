@@ -833,8 +833,9 @@ export async function resolveAssetUri(
       return queuedHit;
     }
     try {
+      // Display URI — may materialize Optimized Storage; not used for GPS index.
       const info = await getAssetInfoAsync(assetId, {
-        shouldDownloadFromNetwork: false,
+        shouldDownloadFromNetwork: true,
       });
       const uri = info.localUri ?? info.uri ?? null;
       // Only cache hits — a null miss may be transient (iCloud / permission).
@@ -875,13 +876,21 @@ function normalizeFileCandidate(uri: string): string | null {
  * never be passed straight to Naver (NSData can't read it either).
  */
 async function exportPinThumbFileUri(assetId: string): Promise<string | null> {
-  // Local resources only — do not pull iCloud originals for pin thumbs.
+  // Display path: allow Photos to materialize a local resource for Optimized
+  // Storage. GPS indexing stays local-only (see fetchLocation).
   let infoLocal: string | null = null;
   try {
-    const info = await getAssetInfoAsync(assetId, {
-      shouldDownloadFromNetwork: false,
+    let info = await getAssetInfoAsync(assetId, {
+      shouldDownloadFromNetwork: true,
     });
     infoLocal = info.localUri ?? null;
+    if (!infoLocal && Platform.OS === 'ios') {
+      await new Promise((r) => setTimeout(r, 450));
+      info = await getAssetInfoAsync(assetId, {
+        shouldDownloadFromNetwork: true,
+      });
+      infoLocal = info.localUri ?? null;
+    }
   } catch (error) {
     console.error('getAssetInfoAsync for pin thumb failed', assetId, error);
   }

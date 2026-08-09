@@ -70,10 +70,11 @@ export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
   }, []);
 
   const goBack = () => {
-    // After 만들기, land on 카드 만들기 — never home.
+    // After 만들기, pop back to the kept create screen — avoid dismissTo/replace
+    // remount (double memory with export collage still tearing down).
     if (fromCreate) {
-      if (router.canDismiss()) {
-        router.dismissTo('/cards/create');
+      if (router.canGoBack()) {
+        router.back();
       } else {
         router.replace('/cards/create');
       }

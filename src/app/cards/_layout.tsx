@@ -6,5 +6,14 @@ import { Stack } from 'expo-router';
  * jumps to home.
  */
 export default function CardsLayout() {
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        // Create stays under preview — freeze it so collage/grid don't keep
+        // baking thumbs while the preview/export screen is open.
+        freezeOnBlur: true,
+      }}
+    />
+  );
 }
