@@ -46,13 +46,12 @@ function gridCluster(photos: PhotoRef[], cellDeg: number): PlaceCluster[] {
   const grain = cellDeg.toFixed(6);
   for (const [cellKey, members] of cells.entries()) {
     // Seed = earliest takenAt — only sort when there is something to order.
+    // Pin at seed GPS (not cell average) so zoom splits don't slide the marker.
     if (members.length > 1) {
       members.sort((a, b) => a.takenAt.localeCompare(b.takenAt));
     }
-    const centerLat =
-      members.reduce((sum, p) => sum + p.lat, 0) / members.length;
-    const centerLng =
-      members.reduce((sum, p) => sum + p.lng, 0) / members.length;
+    const centerLat = members[0]!.lat;
+    const centerLng = members[0]!.lng;
     clusters.push({
       id: `${grain}:${cellKey}`,
       centerLat,

@@ -34,6 +34,7 @@
 | 몰아보기 = **장소 페이지** (히어로+그리드). 자동재생 없음. 순서=첫 사진 takenAt 오름차순(달 초→말). 지도 연동 비범위 | 지도 이동형 / ▶ 자동 스와이프 | 2026-08-07 A 정리 | 2026-08-07 |
 | 몰아보기 수동 스와이프만 | 자동 재생 | 자동재생 무의미 판정 | 2026-08-07 |
 | 클러스터링은 순수 함수 (services/cluster.ts) | 지도 라이브러리 내장 클러스터 | 저장 금지 원칙 + 테스트 용이 | 2026-07-17 |
+| 핀 좌표 = **시드 사진 GPS** (평균 금지). 줌 분기도 기존 핀이 미끄러지지 않음 | 셀 멤버 평균 | 확대 시 핀 위치 점프 | 2026-08-09 |
 | 지도: **네이버 Dynamic Map** (`@mj-studio/react-native-naver-map`) + 사진 클러스터 마커. SVG는 카드/스플래시용. **dev build 필수**(Expo Go 불가) | RN Maps / SVG 인포그래픽 | 사용자 결정: 한국 지도 품질·라벨. Client ID `i20jt73shx` | 2026-07-27 |
 | 지도 줌: Naver `animateCameraTo` / `animateCameraWithTwoCoords`. 월 `frameKey` 변경 시에만 자동 프레임 | RN Maps region / SVG rebase | 네이버 SDK 카메라 API | 2026-07-27 |
 | 시 라벨: `KOREA_CITIES` + SVG. 여정 문구는 `expo-location` reverse geocode | 시 중심점 근접 매칭 | 근접 매칭 오탐 | 2026-07-18 |

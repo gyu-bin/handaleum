@@ -7,8 +7,10 @@ import {
   Text,
   View,
 } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { PaperGrain } from '@/shared/components/PaperGrain';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
@@ -22,8 +24,21 @@ export interface StampMapModalProps {
   onClose: () => void;
 }
 
+function CloseXMark({ color }: { color: string }) {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M6 6l12 12M18 6L6 18"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
 /**
- * View-only visit map — nation outlines + dong dots (mockup 2 constellation).
+ * Visit map — empty land + pastel 동 blobs (no legend).
  */
 export function StampMapModal({
   visible,
@@ -71,6 +86,7 @@ export function StampMapModal({
           },
         ]}
       >
+        <PaperGrain style={styles.grain} />
         <View style={styles.header}>
           <View style={styles.sideSpacer} />
           <View style={styles.headerCopy}>
@@ -88,7 +104,7 @@ export function StampMapModal({
               pressed && styles.pressed,
             ]}
           >
-            <Text style={styles.sideLabel}>{strings.stamps.mapClose}</Text>
+            <CloseXMark color={theme.colors.ink} />
           </Pressable>
         </View>
 
@@ -103,8 +119,6 @@ export function StampMapModal({
             />
           ) : null}
         </View>
-
-        <Text style={styles.hint}>{strings.stamps.mapHint}</Text>
       </View>
     </Modal>
   );
@@ -116,6 +130,9 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     paddingHorizontal: theme.spacing.lg,
   },
+  grain: {
+    ...StyleSheet.absoluteFillObject,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -123,6 +140,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
     paddingTop: theme.spacing.xs,
     paddingBottom: theme.spacing.md,
+    zIndex: 1,
   },
   headerCopy: {
     flex: 1,
@@ -159,20 +177,8 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.5,
   },
-  sideLabel: {
-    ...theme.type.label,
-    fontFamily: theme.fonts.sans,
-    color: theme.colors.ink,
-    fontWeight: '600',
-  },
   mapStage: {
     flex: 1,
-  },
-  hint: {
-    ...theme.type.micro,
-    fontFamily: theme.fonts.sans,
-    color: theme.colors.subtle,
-    textAlign: 'center',
-    paddingTop: theme.spacing.sm,
+    zIndex: 1,
   },
 });

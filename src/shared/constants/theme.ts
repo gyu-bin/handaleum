@@ -44,6 +44,14 @@ export const theme = {
     hairline: '#E8E4DC',
     panelBorder: 'rgba(44,62,80,0.12)',
 
+    /** Stamp glance-map pastel washes (mockup option 2). */
+    stampWashCapital: '#C5DCCF',
+    stampWashGangwon: '#E8B5A4',
+    stampWashChungcheong: '#E2D4B6',
+    stampWashJeolla: '#C5C49A',
+    stampWashGyeongsang: '#B7C8DB',
+    stampWashJeju: '#E4C47A',
+
     white: '#FFFFFF',
     /**
      * Legacy warm tokens — Plan A / single navy theme: alias to ink.

@@ -6,10 +6,12 @@ export type StampVisitDot = {
   id: string;
   lat: number;
   lng: number;
+  /** Short 시·도 key for pastel blob color. */
+  sido: string;
 };
 
 /**
- * One glance-map dot per collected 동/읍·면 (atlas centroid).
+ * One glance-map blob per collected 동/읍·면 (atlas centroid).
  * Skips leaves missing from `dongs.json` rather than guessing.
  */
 export function visitDotsFromCollected(
@@ -23,7 +25,7 @@ export function visitDotsFromCollected(
     if (!center) {
       continue;
     }
-    dots.push({ id, lat: center.lat, lng: center.lng });
+    dots.push({ id, lat: center.lat, lng: center.lng, sido: entry.sido });
   }
   return dots;
 }

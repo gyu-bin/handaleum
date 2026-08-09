@@ -1,12 +1,14 @@
 import { memo, useMemo, useState } from 'react';
 import { LayoutChangeEvent, StyleSheet, View, type ViewStyle } from 'react-native';
-import Svg, { Circle, Defs, G, Mask, Path } from 'react-native-svg';
+import Svg, { Circle, Defs, G, Mask, Path, Text as SvgText } from 'react-native-svg';
 
 import koreaGeo from '@/assets/geo/korea.json';
 import {
   bboxOf,
   createProjection,
   geometryToPath,
+  labelAnchorOf,
+  mainlandPolygons,
   type PackedGeometry,
   type Projection,
 } from '@/features/photos/utils/geo';
@@ -15,17 +17,24 @@ import { theme } from '@/shared/constants/theme';
 
 import type { StampsCollected } from '../types';
 import { getStampMapProvinces } from '../services/stampMapIndex';
+import {
+  stampBlobFillForSido,
+  stampMapLabelForSido,
+} from '../services/stampMapPalette';
 import { visitDotsFromCollected } from '../services/stampVisitDots';
 
 const NATION_PAD = 20;
-const DOT_R = 2.4;
-const DOT_OP = 0.88;
+/** Soft “동 방울” — outer halo + inner core (not a pin dot). */
+const BLOB_OUTER_R = 5.2;
+const BLOB_INNER_R = 3.1;
+const BLOB_OUTER_OP = 0.38;
+const BLOB_INNER_OP = 0.92;
+const LABEL_SIZE = 9;
 
 const CELL = {
-  emptyFill: theme.colors.landLight,
   nationRimOp: 0.22,
   nationRimW: 1.25,
-  nationEmptyStrokeOp: 0.1,
+  nationEmptyStrokeOp: 0.12,
   nationEmptyStrokeW: 0.55,
 } as const;
 
@@ -42,7 +51,7 @@ export interface StampKoreaMapProps {
 }
 
 /**
- * Glance map — nation outlines + one ink dot per visited 동 (no tap, no wash).
+ * Glance map — empty 시·도 land + pastel blobs per visited 동 (option B).
  */
 export const StampKoreaMap = memo(function StampKoreaMap({
   collected,
@@ -63,12 +72,17 @@ export const StampKoreaMap = memo(function StampKoreaMap({
 
   const southKorea = koreaGeo.korea as unknown as PackedGeometry;
   const provinces = getStampMapProvinces();
+  // Drop 백령도 등 far-west scraps so the glance map matches the peninsula focus.
+  const koreaLand = useMemo(
+    () => mainlandPolygons(southKorea, FOCUS_BBOX.minLng),
+    [southKorea],
+  );
 
   const projection = useMemo((): Projection | null => {
     if (size.width <= 0 || size.height <= 0) {
       return null;
     }
-    const raw = bboxOf(southKorea);
+    const raw = bboxOf(koreaLand);
     const focused = {
       minLng: Math.max(raw.minLng, FOCUS_BBOX.minLng),
       maxLng: Math.min(raw.maxLng, FOCUS_BBOX.maxLng),
@@ -76,30 +90,45 @@ export const StampKoreaMap = memo(function StampKoreaMap({
       maxLat: Math.min(raw.maxLat, FOCUS_BBOX.maxLat),
     };
     return createProjection(focused, size.width, size.height, NATION_PAD);
-  }, [size.height, size.width, southKorea]);
+  }, [koreaLand, size.height, size.width]);
 
   const koreaPath = useMemo(
-    () => (projection ? geometryToPath(southKorea, projection.project) : ''),
-    [projection, southKorea],
+    () => (projection ? geometryToPath(koreaLand, projection.project) : ''),
+    [koreaLand, projection],
   );
 
-  const sidoPaths = useMemo(() => {
+  const sidoLayers = useMemo(() => {
     if (!projection) {
       return [];
     }
-    return provinces.map((p) => ({
-      name: p.name,
-      d: geometryToPath(p.geometry, projection.project),
-    }));
+    // Drop far-west island scraps so 인천/전남 labels aren't ocean-anchored.
+    const minLng = FOCUS_BBOX.minLng;
+    return provinces.map((p) => {
+      const land = mainlandPolygons(p.geometry, minLng);
+      const [lng, lat] = labelAnchorOf(p.geometry, minLng);
+      const [x, y] = projection.project([lng, lat]);
+      return {
+        name: p.name,
+        d: geometryToPath(land, projection.project),
+        label: stampMapLabelForSido(p.name),
+        lx: x,
+        ly: y,
+      };
+    });
   }, [projection, provinces]);
 
-  const dots = useMemo(() => {
+  const blobs = useMemo(() => {
     if (!projection) {
       return [];
     }
     return visitDotsFromCollected(collected).map((dot) => {
       const [x, y] = projection.project([dot.lng, dot.lat]);
-      return { id: dot.id, x, y };
+      return {
+        id: dot.id,
+        x,
+        y,
+        fill: stampBlobFillForSido(dot.sido),
+      };
     });
   }, [collected, projection]);
 
@@ -122,11 +151,11 @@ export const StampKoreaMap = memo(function StampKoreaMap({
           <Path d={koreaPath} fill={theme.colors.land} />
 
           <G mask="url(#koreaMask)">
-            {sidoPaths.map((p) => (
+            {sidoLayers.map((p) => (
               <Path
                 key={p.name}
                 d={p.d}
-                fill={CELL.emptyFill}
+                fill={theme.colors.landLight}
                 stroke={theme.colors.ink}
                 strokeWidth={CELL.nationEmptyStrokeW}
                 strokeOpacity={CELL.nationEmptyStrokeOp}
@@ -146,15 +175,39 @@ export const StampKoreaMap = memo(function StampKoreaMap({
             strokeLinecap="round"
           />
 
-          {dots.map((d) => (
-            <Circle
-              key={d.id}
-              cx={d.x}
-              cy={d.y}
-              r={DOT_R}
+          {blobs.map((b) => (
+            <G key={b.id}>
+              <Circle
+                cx={b.x}
+                cy={b.y}
+                r={BLOB_OUTER_R}
+                fill={b.fill}
+                fillOpacity={BLOB_OUTER_OP}
+              />
+              <Circle
+                cx={b.x}
+                cy={b.y}
+                r={BLOB_INNER_R}
+                fill={b.fill}
+                fillOpacity={BLOB_INNER_OP}
+              />
+            </G>
+          ))}
+
+          {sidoLayers.map((p) => (
+            <SvgText
+              key={`label-${p.name}`}
+              x={p.lx}
+              y={p.ly}
               fill={theme.colors.ink}
-              fillOpacity={DOT_OP}
-            />
+              fontSize={LABEL_SIZE}
+              fontWeight="600"
+              textAnchor="middle"
+              alignmentBaseline="middle"
+              opacity={0.55}
+            >
+              {p.label}
+            </SvgText>
           ))}
         </Svg>
       ) : null}

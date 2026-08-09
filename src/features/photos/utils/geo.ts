@@ -104,6 +104,69 @@ export function centroidOf(geometry: PackedGeometry): LngLat {
   return [(b.minLng + b.maxLng) / 2, (b.minLat + b.maxLat) / 2];
 }
 
+/** Absolute shoelace area of an exterior ring (degrees², comparison only). */
+function ringAreaAbs(ring: LngLat[]): number {
+  let sum = 0;
+  const n = ring.length;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const [x0, y0] = ring[j]!;
+    const [x1, y1] = ring[i]!;
+    sum += x0 * y1 - x1 * y0;
+  }
+  return Math.abs(sum) / 2;
+}
+
+/**
+ * Keep only polygons whose bbox center is east of `minCenterLng`.
+ * Drops far-west island parts (인천 백령도 등) that pull labels into the sea.
+ * Falls back to the largest polygon if nothing remains.
+ */
+export function mainlandPolygons(
+  geometry: PackedGeometry,
+  minCenterLng: number,
+): PackedGeometry {
+  const kept = geometry.coordinates.filter((polygon) => {
+    const exterior = polygon[0];
+    if (!exterior || exterior.length < 3) {
+      return false;
+    }
+    const b = bboxOf({ type: 'MultiPolygon', coordinates: [polygon] });
+    return (b.minLng + b.maxLng) / 2 >= minCenterLng;
+  });
+  if (kept.length > 0) {
+    return { type: 'MultiPolygon', coordinates: kept };
+  }
+  return largestPolygonGeometry(geometry);
+}
+
+/** Single-polygon geometry = the largest exterior ring (by area). */
+export function largestPolygonGeometry(
+  geometry: PackedGeometry,
+): PackedGeometry {
+  let best = geometry.coordinates[0];
+  if (!best) {
+    return geometry;
+  }
+  let bestA = ringAreaAbs(best[0] ?? []);
+  for (let i = 1; i < geometry.coordinates.length; i += 1) {
+    const poly = geometry.coordinates[i]!;
+    const a = ringAreaAbs(poly[0] ?? []);
+    if (a > bestA) {
+      bestA = a;
+      best = poly;
+    }
+  }
+  return { type: 'MultiPolygon', coordinates: [best] };
+}
+
+/** Label anchor on the mainland mass — not the full MultiPolygon bbox. */
+export function labelAnchorOf(
+  geometry: PackedGeometry,
+  minCenterLng = 125.9,
+): LngLat {
+  return centroidOf(mainlandPolygons(geometry, minCenterLng));
+}
+
 function pointInRing(lng: number, lat: number, ring: LngLat[]): boolean {
   // Ray casting; ring may be closed (first==last) or open.
   let inside = false;
