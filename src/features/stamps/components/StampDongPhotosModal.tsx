@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -15,12 +15,13 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native';
 import { Image } from 'expo-image';
+import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AssetThumbImage } from '@/features/photos/components/AssetThumbImage';
-import { usePauseGridThumbWarmOnScroll } from '@/features/photos/hooks/usePauseGridThumbWarmOnScroll';
 import {
   resolveAssetUri,
+  setGridThumbWarmPaused,
   syncAssetDisplayUri,
   warmGridThumbs,
 } from '@/features/photos/services/mediaLibrary';
@@ -45,6 +46,8 @@ const VIEWER_IMAGE_SIZE = 1080;
 const LABEL_GAP = 5;
 const LABEL_H = theme.type.micro.lineHeight;
 const ROW_GAP_BOTTOM = GAP + 4;
+/** Hold thumb bake after fling so decode doesn't fight scroll. */
+const GRID_WARM_RESUME_MS = 220;
 
 type SortMode = 'newest' | 'oldest';
 
@@ -90,6 +93,32 @@ function orderPhotos(photos: PhotoRef[], sortMode: SortMode): PhotoRef[] {
     sortMode === 'newest'
       ? b.takenAt.localeCompare(a.takenAt)
       : a.takenAt.localeCompare(b.takenAt),
+  );
+}
+
+function prefetchViewerAround(items: ThumbItem[], center: number): void {
+  for (const i of [center - 1, center, center + 1]) {
+    const item = items[i];
+    if (!item) {
+      continue;
+    }
+    const uri = syncAssetDisplayUri(item.assetId, VIEWER_IMAGE_SIZE);
+    if (uri) {
+      void Image.prefetch(uri, 'memory-disk');
+    }
+  }
+}
+
+function CloseXMark({ color }: { color: string }) {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M6 6l12 12M18 6L6 18"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+      />
+    </Svg>
   );
 }
 
@@ -165,6 +194,7 @@ const ViewerPage = memo(function ViewerPage({
   const syncUri = syncAssetDisplayUri(item.assetId, VIEWER_IMAGE_SIZE);
   const [asyncUri, setAsyncUri] = useState<string | null>(null);
   const uri = syncUri ?? asyncUri;
+  const imageH = height - 48;
 
   useEffect(() => {
     if (syncUri) {
@@ -191,15 +221,16 @@ const ViewerPage = memo(function ViewerPage({
       {uri ? (
         <Image
           source={{ uri }}
-          style={{ width, height: height - 48 }}
+          style={{ width, height: imageH }}
           contentFit="contain"
           cachePolicy="memory-disk"
           recyclingKey={`${item.assetId}-viewer`}
-          priority="high"
+          priority="normal"
           transition={0}
+          allowDownscaling
         />
       ) : (
-        <View style={[styles.viewerPlaceholder, { width, height: height - 48 }]}>
+        <View style={[styles.viewerPlaceholder, { width, height: imageH }]}>
           <ActivityIndicator color={theme.colors.ink} />
         </View>
       )}
@@ -232,7 +263,8 @@ export function StampDongPhotosModal({
   const [sortMode, setSortMode] = useState<SortMode>('newest');
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [viewerEpoch, setViewerEpoch] = useState(0);
-  const thumbWarmScroll = usePauseGridThumbWarmOnScroll();
+  const flatItemsRef = useRef<ThumbItem[]>([]);
+  const warmResumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const visible = query != null;
   const leaf = query?.leaf ?? '';
@@ -289,7 +321,7 @@ export function StampDongPhotosModal({
   }, [query]);
 
   useEffect(() => {
-    if (photos.length === 0) {
+    if (photos.length === 0 || viewerOpen) {
       return;
     }
     const handle = InteractionManager.runAfterInteractions(() => {
@@ -299,7 +331,25 @@ export function StampDongPhotosModal({
       );
     });
     return () => handle.cancel();
-  }, [photos]);
+  }, [photos, viewerOpen]);
+
+  // Viewer decode must not compete with pin-thumb bake.
+  useEffect(() => {
+    if (viewerOpen) {
+      setGridThumbWarmPaused(true);
+      return;
+    }
+    setGridThumbWarmPaused(false);
+  }, [viewerOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (warmResumeTimer.current) {
+        clearTimeout(warmResumeTimer.current);
+      }
+      setGridThumbWarmPaused(false);
+    };
+  }, []);
 
   const flatItems = useMemo((): ThumbItem[] => {
     if (photos.length === 0) {
@@ -310,6 +360,8 @@ export function StampDongPhotosModal({
       dateLabel: formatTakenAt(p.takenAt),
     }));
   }, [photos, sortMode]);
+
+  flatItemsRef.current = flatItems;
 
   const rows = useMemo(() => chunkRows(flatItems), [flatItems]);
 
@@ -329,6 +381,8 @@ export function StampDongPhotosModal({
     (assetId: string) => {
       const index = flatItems.findIndex((item) => item.assetId === assetId);
       if (index >= 0) {
+        setGridThumbWarmPaused(true);
+        prefetchViewerAround(flatItems, index);
         setViewerIndex(index);
         setViewerEpoch((n) => n + 1);
       }
@@ -344,6 +398,24 @@ export function StampDongPhotosModal({
   const onSortOldest = useCallback(() => {
     setViewerIndex(null);
     setSortMode('oldest');
+  }, []);
+
+  const onGridScrollBegin = useCallback(() => {
+    if (warmResumeTimer.current) {
+      clearTimeout(warmResumeTimer.current);
+      warmResumeTimer.current = null;
+    }
+    setGridThumbWarmPaused(true);
+  }, []);
+
+  const onGridScrollEnd = useCallback(() => {
+    if (warmResumeTimer.current) {
+      clearTimeout(warmResumeTimer.current);
+    }
+    warmResumeTimer.current = setTimeout(() => {
+      warmResumeTimer.current = null;
+      setGridThumbWarmPaused(false);
+    }, GRID_WARM_RESUME_MS);
   }, []);
 
   const cell = Math.floor((windowW - H_PAD * 2 - GAP * (COLS - 1)) / COLS);
@@ -386,15 +458,14 @@ export function StampDongPhotosModal({
     [windowW],
   );
 
+  // Prefetch only — no setState (avoids re-render hitch on every page).
   const onViewerMomentumEnd = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const x = event.nativeEvent.contentOffset.x;
       const next = Math.round(x / Math.max(1, windowW));
-      if (next >= 0 && next < flatItems.length) {
-        setViewerIndex(next);
-      }
+      prefetchViewerAround(flatItemsRef.current, next);
     },
-    [flatItems.length, windowW],
+    [windowW],
   );
 
   return (
@@ -430,18 +501,16 @@ export function StampDongPhotosModal({
             onPress={viewerOpen ? onCloseViewer : onRequestClose}
             hitSlop={12}
             accessibilityRole="button"
-            accessibilityLabel={
-              viewerOpen
-                ? strings.stamps.dongPhotosViewerClose
-                : strings.stamps.dongPhotosClose
-            }
+            accessibilityLabel={strings.stamps.dongPhotosClose}
             style={({ pressed }) => [styles.closeHit, pressed && styles.pressed]}
           >
-            <Text style={styles.closeLabel}>
-              {viewerOpen
-                ? strings.stamps.dongPhotosViewerClose
-                : strings.stamps.dongPhotosClose}
-            </Text>
+            {viewerOpen ? (
+              <CloseXMark color={theme.colors.inkSoft} />
+            ) : (
+              <Text style={styles.closeLabel}>
+                {strings.stamps.dongPhotosClose}
+              </Text>
+            )}
           </Pressable>
         </View>
 
@@ -459,7 +528,8 @@ export function StampDongPhotosModal({
             onMomentumScrollEnd={onViewerMomentumEnd}
             initialNumToRender={1}
             maxToRenderPerBatch={1}
-            windowSize={3}
+            windowSize={2}
+            removeClippedSubviews={Platform.OS === 'android'}
             key={`viewer-${viewerEpoch}`}
           />
         ) : (
@@ -524,13 +594,13 @@ export function StampDongPhotosModal({
                   initialNumToRender={4}
                   maxToRenderPerBatch={1}
                   windowSize={3}
-                  updateCellsBatchingPeriod={100}
+                  updateCellsBatchingPeriod={120}
                   removeClippedSubviews={Platform.OS === 'android'}
                   getItemLayout={getItemLayout}
                   renderItem={renderItem}
-                  onScrollBeginDrag={thumbWarmScroll.onScrollBeginDrag}
-                  onScrollEndDrag={thumbWarmScroll.onScrollEndDrag}
-                  onMomentumScrollEnd={thumbWarmScroll.onMomentumScrollEnd}
+                  onScrollBeginDrag={onGridScrollBegin}
+                  onScrollEndDrag={onGridScrollEnd}
+                  onMomentumScrollEnd={onGridScrollEnd}
                 />
               )}
             </View>
@@ -574,6 +644,9 @@ const styles = StyleSheet.create({
   closeHit: {
     paddingVertical: 2,
     paddingLeft: theme.spacing.sm,
+    minWidth: 28,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
   },
   closeLabel: {
     ...theme.type.label,

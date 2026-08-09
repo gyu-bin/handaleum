@@ -7,7 +7,6 @@ import {
   useState,
 } from 'react';
 import {
-  FlatList,
   InteractionManager,
   Platform,
   type ListRenderItemInfo,
@@ -18,6 +17,13 @@ import {
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
+import Animated, {
+  Extrapolation,
+  interpolate,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LoadingView } from '@/shared/components/LoadingView';
@@ -48,6 +54,8 @@ const GRID_COLS = 3;
 /** Ask past pin-thumb size so syncAssetDisplayUri returns full ph:// / localUri. */
 const HERO_SIZE = 1080;
 const ROW_GAP = theme.spacing.sm;
+/** Scroll distance (px) to shrink hero from 1:1 → 16:9. */
+const HERO_COLLAPSE_RANGE = 160;
 
 type ThumbRow = { key: string; photos: PhotoRef[] };
 
@@ -160,11 +168,39 @@ const ClusterSlide = memo(function ClusterSlide({
     loading: boolean;
   } | null>(null);
   const thumbWarmScroll = usePauseGridThumbWarmOnScroll();
+  const scrollY = useSharedValue(0);
 
   const pad = theme.spacing.lg;
   const contentW = width - pad * 2;
+  const heroFullH = contentW;
+  const heroMinH = contentW * (9 / 16);
   const cell = (contentW - ROW_GAP * (GRID_COLS - 1)) / GRID_COLS;
   const rowHeight = cell + ROW_GAP;
+
+  const onThumbScroll = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+    },
+  });
+
+  const heroAnimStyle = useAnimatedStyle(() => ({
+    height: interpolate(
+      scrollY.value,
+      [0, HERO_COLLAPSE_RANGE],
+      [heroFullH, heroMinH],
+      Extrapolation.CLAMP,
+    ),
+    width: contentW,
+  }));
+
+  const hintAnimStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      scrollY.value,
+      [0, HERO_COLLAPSE_RANGE * 0.45],
+      [1, 0],
+      Extrapolation.CLAMP,
+    ),
+  }));
 
   useEffect(() => {
     const next =
@@ -326,11 +362,11 @@ const ClusterSlide = memo(function ClusterSlide({
             </Text>
           </View>
         </View>
-        <View style={styles.imageWrap}>
+        <Animated.View style={[styles.imageWrap, heroAnimStyle]}>
           {uri ? (
             <Image
               source={{ uri }}
-              style={[styles.hero, { width: contentW }]}
+              style={styles.hero}
               contentFit="cover"
               cachePolicy="memory-disk"
               recyclingKey={`${activeId}-${HERO_SIZE}`}
@@ -339,17 +375,17 @@ const ClusterSlide = memo(function ClusterSlide({
               allowDownscaling
             />
           ) : (
-            <View
-              style={[styles.hero, styles.placeholder, { width: contentW }]}
-            />
+            <View style={[styles.hero, styles.placeholder]} />
           )}
-        </View>
+        </Animated.View>
         {cluster.photos.length > 1 ? (
-          <Text style={styles.gridHint}>{strings.playback.gridHint}</Text>
+          <Animated.Text style={[styles.gridHint, hintAnimStyle]}>
+            {strings.playback.gridHint}
+          </Animated.Text>
         ) : null}
       </View>
 
-      <FlatList
+      <Animated.FlatList
         style={styles.thumbList}
         data={thumbRows}
         keyExtractor={(row) => row.key}
@@ -363,6 +399,8 @@ const ClusterSlide = memo(function ClusterSlide({
         getItemLayout={getItemLayout}
         renderItem={renderRow}
         extraData={`${activeId}:${coverId}`}
+        onScroll={onThumbScroll}
+        scrollEventThrottle={16}
         onScrollBeginDrag={() => {
           scrollingRef.current = true;
           thumbWarmScroll.onScrollBeginDrag();
@@ -598,7 +636,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   hero: {
-    aspectRatio: 1,
+    width: '100%',
+    height: '100%',
     borderRadius: theme.radius.card,
     backgroundColor: theme.colors.surfaceAlt,
   },
