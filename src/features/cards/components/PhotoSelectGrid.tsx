@@ -1,7 +1,6 @@
-import { memo, useCallback, useEffect, useMemo, type ReactElement } from 'react';
+import { memo, useCallback, useEffect, useMemo, type ComponentProps, type ReactElement } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   InteractionManager,
   Platform,
   type ListRenderItemInfo,
@@ -13,6 +12,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import { theme } from '@/shared/constants/theme';
 
@@ -38,6 +38,9 @@ export interface PhotoSelectGridProps {
   keyboardShouldPersistTaps?: 'always' | 'never' | 'handled';
   /** Lock scrolling while the collage drag-to-swap gesture is active. */
   scrollEnabled?: boolean;
+  /** Reanimated scroll handler (e.g. sticky preview collapse). */
+  onScroll?: ComponentProps<typeof Animated.FlatList>['onScroll'];
+  scrollEventThrottle?: number;
 }
 
 type ListRow =
@@ -141,6 +144,8 @@ export function PhotoSelectGrid({
   contentContainerStyle,
   keyboardShouldPersistTaps,
   scrollEnabled = true,
+  onScroll,
+  scrollEventThrottle = 16,
 }: PhotoSelectGridProps) {
   const { width } = useWindowDimensions();
   const size = (width - theme.spacing.lg * 2) / COLS;
@@ -208,7 +213,7 @@ export function PhotoSelectGrid({
   );
 
   return (
-    <FlatList
+    <Animated.FlatList
       style={styles.list}
       data={rows}
       keyExtractor={(item) => item.key}
@@ -225,6 +230,8 @@ export function PhotoSelectGrid({
       updateCellsBatchingPeriod={100}
       removeClippedSubviews={Platform.OS === 'android'}
       renderItem={renderItem}
+      onScroll={onScroll}
+      scrollEventThrottle={scrollEventThrottle}
       onScrollBeginDrag={thumbWarmScroll.onScrollBeginDrag}
       onScrollEndDrag={thumbWarmScroll.onScrollEndDrag}
       onMomentumScrollEnd={thumbWarmScroll.onMomentumScrollEnd}

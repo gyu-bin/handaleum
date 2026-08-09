@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import Animated from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import Svg, { Path } from 'react-native-svg';
@@ -17,6 +18,7 @@ import { ScreenHeader } from '@/shared/components/ScreenHeader';
 import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
+import { useCollapseOnScroll } from '@/shared/hooks/useCollapseOnScroll';
 import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 
 import { useCurrentMonth } from '../../photos/hooks/useCurrentMonth';
@@ -356,6 +358,22 @@ export function CardCreateScreen() {
   const bodyH = windowH - insets.top - CREATE_HEADER_H;
   const cardW = previewCardWidth(windowW, bodyH);
   const previewMaxH = previewExpandedMaxHeight(cardW);
+  const { onScroll, collapseStyle, setExpandedHeight, resetScroll } =
+    useCollapseOnScroll();
+
+  useLayoutEffect(() => {
+    setExpandedHeight(previewMaxH);
+  }, [previewMaxH, setExpandedHeight]);
+
+  useEffect(() => {
+    resetScroll();
+  }, [month, resetScroll]);
+
+  useEffect(() => {
+    if (selectedAssetIds.length === 0) {
+      resetScroll();
+    }
+  }, [selectedAssetIds.length, resetScroll]);
 
   // Newest / oldest for the flat picker; place mode still uses journey sections.
   const pickerPhotos = useMemo(() => {
@@ -693,25 +711,27 @@ export function CardCreateScreen() {
       />
       {formError ? <Text style={styles.error}>{formError}</Text> : null}
       <View style={styles.body}>
-        {/* Fixed card preview; photo grid scrolls below (no sticky collapse anim). */}
+        {/* Clip-collapse preview on scroll — collage stays at previewMaxH (no remeasure). */}
         {selectedCount > 0 ? (
-          <View style={[styles.stickyPreview, { height: previewMaxH }]}>
-            <CreateCardPreview
-              assetIds={selectedAssetIds}
-              photos={selectedPhotos}
-              month={month}
-              paperSkin={paperSkin}
-              onPaperSkinChange={setPaperSkin}
-              commentAlign={commentAlign}
-              onCommentAlignChange={setCommentAlign}
-              comment={comment}
-              onCommentChange={setComment}
-              onSwap={onSwap}
-              onDraggingChange={setCollageDragging}
-              onDeselect={onToggle}
-              cardW={cardW}
-            />
-          </View>
+          <Animated.View style={[styles.stickyPreview, collapseStyle]}>
+            <View style={{ height: previewMaxH }}>
+              <CreateCardPreview
+                assetIds={selectedAssetIds}
+                photos={selectedPhotos}
+                month={month}
+                paperSkin={paperSkin}
+                onPaperSkinChange={setPaperSkin}
+                commentAlign={commentAlign}
+                onCommentAlignChange={setCommentAlign}
+                comment={comment}
+                onCommentChange={setComment}
+                onSwap={onSwap}
+                onDraggingChange={setCollageDragging}
+                onDeselect={onToggle}
+                cardW={cardW}
+              />
+            </View>
+          </Animated.View>
         ) : null}
         <View style={styles.gridSheet}>
           {sheetChrome}
@@ -730,6 +750,8 @@ export function CardCreateScreen() {
               onToggle={onToggle}
               scrollEnabled={!collageDragging}
               contentContainerStyle={styles.scroll}
+              onScroll={onScroll}
+              scrollEventThrottle={16}
             />
           </View>
         </View>

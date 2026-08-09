@@ -7,7 +7,6 @@ import {
   useState,
 } from 'react';
 import {
-  FlatList,
   InteractionManager,
   Platform,
   type ListRenderItemInfo,
@@ -16,8 +15,10 @@ import {
   Text,
   useWindowDimensions,
   View,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { Image } from 'expo-image';
+import Animated from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LoadingView } from '@/shared/components/LoadingView';
@@ -25,6 +26,7 @@ import { ScreenHeader } from '@/shared/components/ScreenHeader';
 import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
+import { useCollapseOnScroll } from '@/shared/hooks/useCollapseOnScroll';
 import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 
 import { AssetThumbImage } from '../components/AssetThumbImage';
@@ -160,11 +162,30 @@ const ClusterSlide = memo(function ClusterSlide({
     loading: boolean;
   } | null>(null);
   const thumbWarmScroll = usePauseGridThumbWarmOnScroll();
+  const collapse = useCollapseOnScroll();
+  const { resetScroll, setExpandedHeight, onScroll, collapseStyle } = collapse;
+  const [expandedPx, setExpandedPx] = useState(0);
 
   const pad = theme.spacing.lg;
   const contentW = width - pad * 2;
   const cell = (contentW - ROW_GAP * (GRID_COLS - 1)) / GRID_COLS;
   const rowHeight = cell + ROW_GAP;
+
+  useEffect(() => {
+    resetScroll();
+  }, [cluster.id, resetScroll]);
+
+  const onBodyLayout = useCallback(
+    (e: LayoutChangeEvent) => {
+      const half = Math.floor(e.nativeEvent.layout.height / 2);
+      if (half <= 0) {
+        return;
+      }
+      setExpandedPx((prev) => (Math.abs(prev - half) < 1 ? prev : half));
+      setExpandedHeight(half);
+    },
+    [setExpandedHeight],
+  );
 
   useEffect(() => {
     const next =
@@ -308,78 +329,92 @@ const ClusterSlide = memo(function ClusterSlide({
   );
 
   return (
-    <View style={styles.list}>
-      {/* Hero outside FlatList — label/uri updates must not relayout the grid. */}
-      <View style={styles.chapterHead}>
-        <View style={styles.titleRow}>
-          <Text style={styles.place} numberOfLines={2}>
-            {placeText}
-          </Text>
-          <View style={styles.metaCol}>
-            {chapterDay ? (
-              <Text style={styles.meta} numberOfLines={1}>
-                {chapterDay}
-              </Text>
-            ) : null}
-            <Text style={styles.meta} numberOfLines={1}>
-              {strings.map.clusterCount(cluster.photos.length)}
+    <View style={styles.list} onLayout={onBodyLayout}>
+      {/* Clip-collapse on UI thread — inner stays at expandedPx (no setState on scroll). */}
+      <Animated.View
+        style={[
+          styles.topClip,
+          expandedPx > 0 ? collapseStyle : styles.topHalfFlex,
+        ]}
+      >
+        <View
+          style={[
+            styles.topInner,
+            expandedPx > 0 ? { height: expandedPx } : styles.topHalfFlex,
+          ]}
+        >
+          <View style={styles.titleRow}>
+            <Text style={styles.place} numberOfLines={2}>
+              {placeText}
             </Text>
+            <View style={styles.metaCol}>
+              {chapterDay ? (
+                <Text style={styles.meta} numberOfLines={1}>
+                  {chapterDay}
+                </Text>
+              ) : null}
+              <Text style={styles.meta} numberOfLines={1}>
+                {strings.map.clusterCount(cluster.photos.length)}
+              </Text>
+            </View>
           </View>
+          <View style={[styles.imageWrap, { width: contentW }]}>
+            {uri ? (
+              <Image
+                source={{ uri }}
+                style={styles.hero}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                recyclingKey={`${activeId}-${HERO_SIZE}`}
+                priority="high"
+                transition={0}
+                allowDownscaling
+              />
+            ) : (
+              <View style={[styles.hero, styles.placeholder]} />
+            )}
+          </View>
+          {cluster.photos.length > 1 ? (
+            <Text style={styles.gridHint}>{strings.playback.gridHint}</Text>
+          ) : null}
         </View>
-        <View style={styles.imageWrap}>
-          {uri ? (
-            <Image
-              source={{ uri }}
-              style={[styles.hero, { width: contentW }]}
-              contentFit="cover"
-              cachePolicy="memory-disk"
-              recyclingKey={`${activeId}-${HERO_SIZE}`}
-              priority="high"
-              transition={0}
-              allowDownscaling
-            />
-          ) : (
-            <View
-              style={[styles.hero, styles.placeholder, { width: contentW }]}
-            />
-          )}
-        </View>
-        {cluster.photos.length > 1 ? (
-          <Text style={styles.gridHint}>{strings.playback.gridHint}</Text>
-        ) : null}
-      </View>
+      </Animated.View>
 
-      <FlatList
-        style={styles.thumbList}
-        data={thumbRows}
-        keyExtractor={(row) => row.key}
-        contentContainerStyle={styles.gridContent}
-        showsVerticalScrollIndicator={false}
-        initialNumToRender={3}
-        maxToRenderPerBatch={1}
-        windowSize={3}
-        updateCellsBatchingPeriod={100}
-        removeClippedSubviews={Platform.OS === 'android'}
-        getItemLayout={getItemLayout}
-        renderItem={renderRow}
-        extraData={`${activeId}:${coverId}`}
-        onScrollBeginDrag={() => {
-          scrollingRef.current = true;
-          thumbWarmScroll.onScrollBeginDrag();
-        }}
-        onScrollEndDrag={() => {
-          thumbWarmScroll.onScrollEndDrag();
-          setTimeout(() => {
+      <View style={styles.bottomHalf}>
+        <Animated.FlatList
+          style={styles.thumbList}
+          data={thumbRows}
+          keyExtractor={(row) => row.key}
+          contentContainerStyle={styles.gridContent}
+          showsVerticalScrollIndicator={false}
+          initialNumToRender={6}
+          maxToRenderPerBatch={3}
+          windowSize={5}
+          updateCellsBatchingPeriod={50}
+          removeClippedSubviews={Platform.OS === 'android'}
+          getItemLayout={getItemLayout}
+          renderItem={renderRow}
+          extraData={`${activeId}:${coverId}`}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
+          onScrollBeginDrag={() => {
+            scrollingRef.current = true;
+            thumbWarmScroll.onScrollBeginDrag();
+          }}
+          onScrollEndDrag={() => {
+            thumbWarmScroll.onScrollEndDrag();
+            setTimeout(() => {
+              scrollingRef.current = false;
+              flushPendingLabel();
+            }, 80);
+          }}
+          onMomentumScrollEnd={() => {
             scrollingRef.current = false;
+            thumbWarmScroll.onMomentumScrollEnd();
             flushPendingLabel();
-          }, 80);
-        }}
-        onMomentumScrollEnd={() => {
-          scrollingRef.current = false;
-          thumbWarmScroll.onMomentumScrollEnd();
-          flushPendingLabel();
-        }}
-      />
+          }}
+        />
+      </View>
     </View>
   );
 });
@@ -552,9 +587,22 @@ const styles = StyleSheet.create({
     minWidth: 64,
     textAlign: 'center',
   },
-  chapterHead: {
+  topClip: {
+    overflow: 'hidden',
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.md,
+  },
+  topHalfFlex: {
+    flex: 1,
+    minHeight: 0,
+  },
+  topInner: {
+    width: '100%',
+    minHeight: 0,
+  },
+  bottomHalf: {
+    flex: 1,
+    minHeight: 0,
   },
   thumbList: {
     flex: 1,
@@ -568,6 +616,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: theme.spacing.md,
+    flexShrink: 0,
   },
   place: {
     ...theme.type.title,
@@ -592,13 +641,16 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   imageWrap: {
+    flex: 1,
     marginTop: theme.spacing.md,
     borderRadius: theme.radius.card,
     backgroundColor: theme.colors.surface,
     overflow: 'hidden',
+    minHeight: 0,
   },
   hero: {
-    aspectRatio: 1,
+    width: '100%',
+    height: '100%',
     borderRadius: theme.radius.card,
     backgroundColor: theme.colors.surfaceAlt,
   },
@@ -608,7 +660,7 @@ const styles = StyleSheet.create({
   gridHint: {
     ...theme.type.micro,
     marginTop: theme.spacing.sm,
-    marginBottom: theme.spacing.xs,
+    flexShrink: 0,
     color: theme.colors.subtle,
   },
   gridRowWrap: {
