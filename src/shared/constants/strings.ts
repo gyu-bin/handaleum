@@ -377,6 +377,9 @@ export const strings = {
     dongPhotosClose: '닫기',
     dongPhotosNewest: '최신순',
     dongPhotosOldest: '오래된순',
+    dongPhotosOpenPhoto: '사진 크게 보기',
+    dongPhotosViewerClose: '그리드로',
+    dongPhotosViewerHint: '좌우로 넘겨 보세요',
     dongPhotoRetry: '다시 시도',
   },
 } as const;

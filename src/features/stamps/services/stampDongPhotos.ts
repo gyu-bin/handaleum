@@ -93,6 +93,20 @@ export async function photosForStampLeaf(
   return indexByStampId?.get(id) ?? [];
 }
 
+/**
+ * Sync read when the leaf→photos index is already warm (post-sync / cold prebuild).
+ * `null` = index not ready yet — caller should await {@link photosForStampLeaf}.
+ */
+export function peekPhotosForStampLeaf(
+  query: StampDongPhotosQuery,
+): PhotoRef[] | null {
+  if (!indexByStampId) {
+    return null;
+  }
+  const id = stampId(query.sido, query.city, query.leaf);
+  return indexByStampId.get(id) ?? [];
+}
+
 /** Test helper. */
 export function stampDongPhotoIndexBuiltAt(): number {
   return indexedAt;

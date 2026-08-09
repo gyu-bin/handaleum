@@ -69,6 +69,8 @@ Grain = **시군구** (서울·광역 구, 도 시·군, 일반구 시 → 구�
 | **동 단위** 발도장 (시·도→시→동). 읍·면 제외 수집 초안. spec: `2026-08-05-dong-stamp-indexing-design.md` | 시군구 유지 | 사용자 확정 B | 2026-08-05 |
 | 내비 = **2뎁스** 시·도→구·시·군→동·면. `admin-dong-gu`로 행정동→구 100% | 시→전체 동(서울 425) / 법정동 dong-gu만 | 너무 깊음 피드백 | 2026-08-06 |
 | 방문 동 탭 → 큰 사진 팝업. 소스=GPS 스냅샷 + PIP (스키마에 assetId 없음) | 수집 시 assetId 저장 | 사용자 B 확정 | 2026-08-06 |
+| 동 사진 그리드 = 카드/몰아보기와 동일 **128 warm file://** + 스크롤 중 warm pause + row-chunk FlatList | 셀마다 원본 `ph://` / numColumns | 호출 경합·스크롤 버벅 | 2026-08-09 |
+| 동 사진 = **탭→in-modal 페이저** 크게 보기 + peek 즉시 그리드/warm. 스펙 `2026-08-09-stamp-dong-photos-viewer-design.md` | 한 장 모달만 / 스피너 게이트 | 사용자 옵션 1 | 2026-08-09 |
 | 발도장 헤더 타이틀 **화면 중앙** (절대 배치) | flex 균형만 | 사용자 요청 | 2026-08-06 |
 | 군 **읍·면** PIP 수집 (`dongs.json`에 군 leaf 포함). 도농복합 시 읍·면은 제외 | 동만 / 시 읍면까지 | 사용자 Q=군만 | 2026-08-06 |
 | 방문 지도 = **전국 시·도 실지도** → 탭 시 L1 확대. **같은 StampKoreaMap 인스턴스 유지**(key remount/Fade 제거). 탭=Pressable hitTest. 방문 칸=`stampMapFill` | 전국 L1 / Path onPress / drill remount | 성능 | 2026-08-07 |
