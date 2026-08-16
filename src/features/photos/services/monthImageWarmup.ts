@@ -253,6 +253,39 @@ export function startMonthThumbPrewarm(input: MonthThumbPrewarmInput): void {
   kickDrain(runId);
 }
 
+/** Cap neighbor-month pin exports so ‹ › prefetch stays cheap. */
+const NEIGHBOR_PIN_CAP = 64;
+
+/**
+ * Export pin file:// for neighbor-month map seeds without resetting the
+ * viewed-month warm queue (unlike {@link startMonthImageWarmup}).
+ */
+export function warmNeighborPinThumbs(assetIds: string[]): void {
+  const ids = uniqueIds(assetIds).slice(0, NEIGHBOR_PIN_CAP);
+  if (ids.length === 0) {
+    return;
+  }
+  if (activeMonth != null) {
+    enqueueBack(ids);
+    kickDrain(generation);
+    return;
+  }
+  void warmIdsSoft(ids);
+}
+
+async function warmIdsSoft(ids: string[]): Promise<void> {
+  for (const assetId of ids) {
+    if (warmedAssetIds.has(assetId)) {
+      continue;
+    }
+    while (isGridThumbWarmPaused()) {
+      await new Promise((r) => setTimeout(r, 220));
+    }
+    await waitWhilePinExportBusy(800);
+    await warmOne(assetId);
+  }
+}
+
 /** Test helper — not used by UI. */
 export function resetMonthImageWarmupForTests(): void {
   generation += 1;

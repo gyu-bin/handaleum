@@ -1,7 +1,10 @@
 import { queryClient } from '@/lib/queryClient';
 
+import { clusterSeedId } from '../components/MapClusterMarker';
 import { photosQueryKeys } from '../hooks/photosQueryKeys';
-import type { MonthKey, MonthSummary } from '../types';
+import type { MonthKey, MonthSummary, MonthlyPhotos } from '../types';
+import { isKoreaLatLng } from '../utils/koreaBounds';
+import { clusterPhotos } from './cluster';
 import {
   releaseIndexingBackground,
   retainIndexingBackground,
@@ -11,6 +14,10 @@ import {
   loadMonthSummaries,
   loadMonthlyPhotos,
 } from './mediaLibrary';
+import { warmNeighborPinThumbs } from './monthImageWarmup';
+
+/** Match MapCanvas DEFAULT_MAP_ZOOM — neighbor pin seeds at overview grain. */
+const NEIGHBOR_PIN_ZOOM = 7;
 
 /** Don't race MediaLibrary with the full-album stamp GPS scan. */
 async function waitWhileAlbumScan(): Promise<void> {
@@ -146,17 +153,42 @@ export function prefetchNeighborMonths(
     if (!month) {
       continue;
     }
-    void queryClient.prefetchQuery({
-      queryKey: photosQueryKeys.monthly(month),
-      queryFn: () =>
-        loadMonthlyPhotos(month, {
-          onPartial: (partial) => {
-            queryClient.setQueryData(photosQueryKeys.monthly(month), partial);
-          },
-          shouldContinue: () => !isFullAlbumScanBusy(),
-        }),
-    });
+    void (async () => {
+      try {
+        await queryClient.prefetchQuery({
+          queryKey: photosQueryKeys.monthly(month),
+          queryFn: () =>
+            loadMonthlyPhotos(month, {
+              onPartial: (partial) => {
+                queryClient.setQueryData(photosQueryKeys.monthly(month), partial);
+              },
+              shouldContinue: () => !isFullAlbumScanBusy(),
+            }),
+        });
+        warmPinsForCachedMonth(month);
+      } catch (error) {
+        console.warn('neighbor month prefetch failed', month, error);
+      }
+    })();
   }
+}
+
+/** After GPS cache is warm, idle-export overview pin thumbs for that month. */
+function warmPinsForCachedMonth(month: MonthKey): void {
+  const data = queryClient.getQueryData<MonthlyPhotos>(
+    photosQueryKeys.monthly(month),
+  );
+  if (!data?.photos.length) {
+    return;
+  }
+  const forMap = data.photos.filter((p) => isKoreaLatLng(p.lat, p.lng));
+  if (forMap.length === 0) {
+    return;
+  }
+  const seeds = clusterPhotos(forMap, NEIGHBOR_PIN_ZOOM).map((c) =>
+    clusterSeedId(c),
+  );
+  warmNeighborPinThumbs(seeds);
 }
 
 /** Test / rare reset — not used by UI. */
