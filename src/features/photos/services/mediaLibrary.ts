@@ -52,7 +52,7 @@ const LIBRARY_PAGE_SIZE = 200;
  */
 const LOCATION_BATCH = 32;
 /** Cap simultaneous ImageManipulator exports (map pin thumbs). */
-const PIN_EXPORT_CONCURRENCY = 2;
+const PIN_EXPORT_CONCURRENCY = 3;
 /** Cap simultaneous Android URI lookups while scrolling grids. */
 const ANDROID_URI_CONCURRENCY = 2;
 /** Bound waiters — drop-oldest so scrolling into new cells is not starved. */

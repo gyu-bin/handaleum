@@ -43,7 +43,10 @@ import {
   l2LeavesForUnit,
   type StampL1Unit,
 } from '../services/stampNavIndex';
-import type { StampDongPhotosQuery } from '../services/stampDongPhotos';
+import {
+  prebuildStampDongPhotoIndex,
+  type StampDongPhotosQuery,
+} from '../services/stampDongPhotos';
 import { firstsInMonth } from '../services/stampsStorage';
 
 function tiltForName(name: string): number {
@@ -109,6 +112,14 @@ export function StampScreen() {
     setMapOpen(false);
     setDongPhotos(null);
   }, [gateOpen]);
+
+  // Warm leaf→photos index so the first 동 tap does not wait on full PIP.
+  useEffect(() => {
+    if (!isReady || gateOpen) {
+      return;
+    }
+    void prebuildStampDongPhotoIndex();
+  }, [gateOpen, isReady]);
 
   const onScanIntroConfirm = useCallback(() => {
     setStampsScanIntroSeen();

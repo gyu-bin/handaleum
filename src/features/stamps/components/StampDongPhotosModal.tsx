@@ -46,7 +46,9 @@ const LABEL_GAP = 5;
 const LABEL_H = theme.type.micro.lineHeight;
 const ROW_GAP_BOTTOM = GAP + 4;
 /** Prefetch this many display URIs so first screens paint together. */
-const GRID_PREFETCH = 180;
+const GRID_PREFETCH = 48;
+/** Idle file warm — display uses ph:// / content://; keep this small. */
+const GRID_WARM_LIMIT = 48;
 /** Hold thumb bake after fling so decode doesn't fight scroll. */
 const GRID_WARM_RESUME_MS = 180;
 
@@ -165,7 +167,7 @@ const Thumb = memo(function Thumb({
           assetId={assetId}
           size={size}
           imageSize={THUMB_IMAGE_SIZE}
-          priority="high"
+          priority="normal"
         />
       </View>
       <Text style={styles.takenAt} numberOfLines={1}>
@@ -308,7 +310,7 @@ export function StampDongPhotosModal({
       setLoading(false);
       const ids = peeked.map((p) => p.assetId);
       prefetchStampGrid(ids);
-      warmGridThumbs(ids, GRID_PREFETCH);
+      warmGridThumbs(ids, GRID_WARM_LIMIT);
     } else {
       setPhotos([]);
       setLoading(true);
@@ -320,7 +322,7 @@ export function StampDongPhotosModal({
           setPhotos(list);
           const ids = list.map((p) => p.assetId);
           prefetchStampGrid(ids);
-          warmGridThumbs(ids, GRID_PREFETCH);
+          warmGridThumbs(ids, GRID_WARM_LIMIT);
         }
       })
       .catch((error) => {
@@ -338,15 +340,6 @@ export function StampDongPhotosModal({
       cancelled = true;
     };
   }, [query]);
-
-  useEffect(() => {
-    if (photos.length === 0 || viewerOpen) {
-      return;
-    }
-    const ids = photos.map((p) => p.assetId);
-    prefetchStampGrid(ids);
-    warmGridThumbs(ids, Math.min(ids.length, 400));
-  }, [photos, viewerOpen]);
 
   // Viewer decode must not compete with pin-thumb bake.
   useEffect(() => {
@@ -607,10 +600,10 @@ export function StampDongPhotosModal({
                   keyExtractor={(item) => item.key}
                   contentContainerStyle={styles.grid}
                   showsVerticalScrollIndicator={false}
-                  // Paint many rows in the first commit so thumbs don't trickle in.
-                  initialNumToRender={40}
-                  maxToRenderPerBatch={24}
-                  windowSize={21}
+                  // First screens only — flooding high-priority Images stalls decode.
+                  initialNumToRender={12}
+                  maxToRenderPerBatch={10}
+                  windowSize={11}
                   updateCellsBatchingPeriod={16}
                   // Clipping blanks recycled thumbs in long (1000+) grids.
                   removeClippedSubviews={false}

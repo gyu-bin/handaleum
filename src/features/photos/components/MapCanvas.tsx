@@ -214,27 +214,32 @@ export const MapCanvas = memo(function MapCanvas({
   );
 
   useEffect(() => {
-    mapReadyRef.current = false;
+    // Do not clear mapReady — NaverMap no longer remounts on month change.
     fittedKeyRef.current = '';
     fittedWithPinsRef.current = false;
-    reportZoom(cameraForClusters(clustersRef.current).zoom, true);
-  }, [frameKey, reportZoom]);
+    if (!mapReadyRef.current) {
+      return;
+    }
+    // Instant snap — rapid ‹ › must not queue 320ms camera animations.
+    if (fitToPhotos(false)) {
+      fittedKeyRef.current = frameKey;
+      fittedWithPinsRef.current = clustersRef.current.length > 0;
+    }
+  }, [fitToPhotos, frameKey]);
 
   useEffect(() => {
     if (!mapReadyRef.current) {
       return;
     }
-    if (clusters.length === 0) {
-      return;
-    }
     if (fittedKeyRef.current === frameKey && fittedWithPinsRef.current) {
       return;
     }
-    if (fitToPhotos(false)) {
+    // Pins can arrive after an empty/stale fit — pull camera to the full set.
+    if (fitToPhotos(fittedKeyRef.current === frameKey)) {
       fittedKeyRef.current = frameKey;
-      fittedWithPinsRef.current = true;
+      fittedWithPinsRef.current = clustersRef.current.length > 0;
     }
-  }, [clusters.length, fitToPhotos, frameKey]);
+  }, [clusters, fitToPhotos, frameKey]);
 
   const onInitialized = useCallback(() => {
     mapReadyRef.current = true;
@@ -283,7 +288,6 @@ export const MapCanvas = memo(function MapCanvas({
   return (
     <View style={styles.wrap}>
       <NaverMapView
-        key={frameKey}
         ref={mapRef}
         style={styles.map}
         mapType="Basic"

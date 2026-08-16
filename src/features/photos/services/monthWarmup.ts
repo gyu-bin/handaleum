@@ -115,6 +115,7 @@ async function drainQueue(): Promise<void> {
 /**
  * Kick off once per JS session after the current month has fully loaded.
  * Safe to call repeatedly — subsequent calls are no-ops unless force.
+ * Neighbors are also prefetched immediately via {@link prefetchNeighborMonths}.
  */
 export function startMonthWarmup(currentMonth: MonthKey): void {
   if (startedForSession) {
@@ -134,6 +135,28 @@ export function startMonthWarmup(currentMonth: MonthKey): void {
       startedForSession = false;
     }
   })();
+}
+
+/** Immediate GPS cache warm for ±1 month (home ‹ ›). Idempotent per key. */
+export function prefetchNeighborMonths(
+  prev: MonthKey | null,
+  next: MonthKey | null,
+): void {
+  for (const month of [prev, next]) {
+    if (!month) {
+      continue;
+    }
+    void queryClient.prefetchQuery({
+      queryKey: photosQueryKeys.monthly(month),
+      queryFn: () =>
+        loadMonthlyPhotos(month, {
+          onPartial: (partial) => {
+            queryClient.setQueryData(photosQueryKeys.monthly(month), partial);
+          },
+          shouldContinue: () => !isFullAlbumScanBusy(),
+        }),
+    });
+  }
 }
 
 /** Test / rare reset — not used by UI. */

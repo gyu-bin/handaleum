@@ -28,8 +28,12 @@ export function useGridThumbUri(
   } | null>(null);
 
   useEffect(() => {
+    // Sync display URI already paints — don't fight decode with pin-thumb bake.
+    if (syncUri != null) {
+      return;
+    }
     scheduleGridThumbWarm(assetId);
-  }, [assetId]);
+  }, [assetId, syncUri]);
 
   useEffect(() => {
     // Already have a sync display URI (ph:// / content:// / file:// / https).

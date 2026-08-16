@@ -21,9 +21,9 @@ let active: Pending | null = null;
 const listeners = new Set<() => void>();
 
 /** Bound baked PNG path cache — month switches used to retain every pin forever. */
-const BAKE_CACHE_MAX = 96;
+const BAKE_CACHE_MAX = 128;
 /** Cap pending bakes — excess fall back to raw thumbs so zoom doesn't stall. */
-const BAKE_QUEUE_MAX = 20;
+const BAKE_QUEUE_MAX = 36;
 
 function cacheBake(key: string, uri: string) {
   if (cache.has(key)) {

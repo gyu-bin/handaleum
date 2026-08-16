@@ -37,6 +37,11 @@ function getSnapshot(): MonthKey {
   return currentMonth;
 }
 
+/** Latest shared month — safe inside press handlers (survives rapid taps). */
+export function getSharedMonth(): MonthKey {
+  return currentMonth;
+}
+
 function setSharedMonth(next: MonthKey): void {
   const parsed = monthKeySchema.parse(next);
   if (parsed === currentMonth) {

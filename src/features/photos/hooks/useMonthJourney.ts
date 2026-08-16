@@ -88,10 +88,9 @@ export function useMonthJourney(
     const hydrated = hydrateVisitPlacesFromPhotos(photos);
     if (hydrated.length > 0) {
       setVisitPlaces((prev) => (sameVisitPlaces(prev, hydrated) ? prev : hydrated));
-    } else if (resetKey) {
-      // New month with no disk hits — clear previous month chips.
-      setVisitPlaces([]);
     }
+    // Disk miss: keep previous chips until progress/final — avoids empty flash
+    // under the new month title while geocode catches up.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by photosKey/resetKey
   }, [photosKey, resetKey]);
 

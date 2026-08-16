@@ -16,7 +16,7 @@ const RADIUS = 8;
 const CARET_W = 12;
 const CARET_H = 8;
 /** Let Image paint into the layer before view-shot. */
-const CAPTURE_SETTLE_MS = 80;
+const CAPTURE_SETTLE_MS = 50;
 
 /**
  * Off-screen host (outside NaverMapView). Bakes one framed pin PNG at a time

@@ -19,7 +19,7 @@ import { clusterSeedId } from '../components/MapClusterMarker';
 import { HomeNavBar } from '../components/HomeNavBar';
 import { PhotoPreviewSheet } from '../components/PhotoPreviewSheet';
 import { VisitChipRow } from '../components/VisitChipRow';
-import { useCurrentMonth } from '../hooks/useCurrentMonth';
+import { getSharedMonth, useCurrentMonth } from '../hooks/useCurrentMonth';
 import { useJourneyPathOrder } from '../hooks/useJourneyPathOrder';
 import { useMonthJourney } from '../hooks/useMonthJourney';
 import { useMonthlyPhotos } from '../hooks/useMonthlyPhotos';
@@ -31,6 +31,7 @@ import {
   startMonthImageWarmup,
   startMonthThumbPrewarm,
 } from '../services/monthImageWarmup';
+import { prefetchNeighborMonths } from '../services/monthWarmup';
 import type { MonthKey, PlaceCluster } from '../types';
 import { currentMonthKey, shiftMonthKey } from '../utils/month';
 import { placeBucketKey } from '../utils/placeJourney';
@@ -70,7 +71,15 @@ export function MonthlyMapScreen() {
   const { month, setMonth, canOpenMonth } = useCurrentMonth();
   const { covers, setCover } = usePinCovers(month);
   const { showPathOrder, togglePathOrder } = useJourneyPathOrder();
-  const { data, isPending, isFetching, isError, refetch, isRefetching } = useMonthlyPhotos(month, {
+  const {
+    data,
+    isPending,
+    isFetching,
+    isError,
+    refetch,
+    isRefetching,
+    isStaleMonth,
+  } = useMonthlyPhotos(month, {
     enabled: isReady && hasAccess,
   });
   const [zoom, setZoom] = useState(DEFAULT_MAP_ZOOM);
@@ -94,15 +103,29 @@ export function MonthlyMapScreen() {
   }, [canOpenMonth, month]);
 
   const goPrevMonth = useCallback(() => {
-    if (prevMonth) {
-      setMonth(prevMonth);
+    const next = shiftMonthKey(getSharedMonth(), -1);
+    if (canOpenMonth(next)) {
+      setMonth(next);
     }
-  }, [prevMonth, setMonth]);
+  }, [canOpenMonth, setMonth]);
   const goNextMonth = useCallback(() => {
-    if (nextMonth) {
-      setMonth(nextMonth);
+    const next = shiftMonthKey(getSharedMonth(), 1);
+    if (next > currentMonthKey()) {
+      return;
     }
-  }, [nextMonth, setMonth]);
+    if (canOpenMonth(next)) {
+      setMonth(next);
+    }
+  }, [canOpenMonth, setMonth]);
+
+  // Keep ±1 month GPS warm so ‹ › rarely hits a cold MediaLibrary pass.
+  useEffect(() => {
+    prefetchNeighborMonths(prevMonth, nextMonth);
+  }, [nextMonth, prevMonth]);
+
+  useEffect(() => {
+    setSelected(null);
+  }, [month]);
 
   const clusters = useMemo(
     () => clusterPhotos(monthPhotos, zoom),
@@ -128,37 +151,32 @@ export function MonthlyMapScreen() {
   }, []);
 
   const { places: journeyPlaces, isResolving } = useMonthJourney(monthPhotos, {
-    // Start as soon as this month has photos. Waiting for !isFetching delayed
-    // chips on cached-month swipes (background refetch kept isFetching true).
-    enabled: Boolean(data) && monthPhotos.length > 0,
+    // Skip while placeholder (previous month) is on screen — avoid geocode churn.
+    enabled: Boolean(data) && monthPhotos.length > 0 && !isStaleMonth,
     resetKey: month,
   });
 
   // Full-album stamp sync — session-once, after first month GPS finishes.
   useEffect(() => {
-    if (!isReady || !hasLibraryAccess || isFetching) {
+    if (!isReady || !hasLibraryAccess || isFetching || isStaleMonth) {
       return;
     }
     scheduleStampLibrarySyncFromMap();
-  }, [hasLibraryAccess, isReady, isFetching]);
+  }, [hasLibraryAccess, isReady, isFetching, isStaleMonth]);
 
   useEffect(() => {
     resetClusterCellCache();
   }, [month]);
 
   const bootBusy = !isReady;
-  const dataBusy =
-    isReady &&
-    hasAccess &&
-    ((isPending && !data) ||
-      Boolean(data && data.photos.length === 0 && isFetching));
-  // One held flag — boot→data handoff must not remount LoadingView (bike hitch).
+  // Month ‹ › keeps placeholder data — don't force the 1.5s bike for that path.
+  const dataBusy = isReady && hasAccess && isPending && !data;
   const showLoading = useHeldBusy(bootBusy || dataBusy, 1500);
 
   // Middle-path prewarm after month GPS settles (not on every zoom recluster).
   // Skip while the bike is up — pin bake steals frames from the spin.
   useEffect(() => {
-    if (!data || isFetching || showLoading) {
+    if (!data || isFetching || showLoading || isStaleMonth) {
       return;
     }
     startMonthThumbPrewarm({
@@ -166,18 +184,24 @@ export function MonthlyMapScreen() {
       priorityIds: Object.values(covers),
       monthAssetIds: data.photos.map((p) => p.assetId),
     });
-  }, [covers, data, isFetching, month, showLoading]);
+  }, [covers, data, isFetching, isStaleMonth, month, showLoading]);
 
   // Pin seeds change with zoom grain — bump them to the front only.
   useEffect(() => {
-    if (!data || isFetching || showLoading || clusters.length === 0) {
+    if (
+      !data ||
+      isFetching ||
+      showLoading ||
+      isStaleMonth ||
+      clusters.length === 0
+    ) {
       return;
     }
     startMonthImageWarmup({
       month,
       assetIds: clusters.map((c) => clusterSeedId(c)),
     });
-  }, [clusters, data, isFetching, month, showLoading]);
+  }, [clusters, data, isFetching, isStaleMonth, month, showLoading]);
 
   // Keep the open pin across zoom: cluster.id includes grain and changes, but
   // the seed asset usually survives. Drop selection only if the seed is gone.
@@ -226,7 +250,7 @@ export function MonthlyMapScreen() {
     return <LoadingView />;
   }
 
-  if (isError || !data) {
+  if (isError && !data) {
     return (
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
         <StateView
@@ -237,6 +261,10 @@ export function MonthlyMapScreen() {
         />
       </SafeAreaView>
     );
+  }
+
+  if (!data) {
+    return <LoadingView />;
   }
 
   const monthLabel = formatMonthLabel(month);
@@ -328,10 +356,12 @@ export function MonthlyMapScreen() {
                 </Text>
               </Pressable>
               <Text style={styles.monthMeta} numberOfLines={1}>
-                {(isFetching || isResolving) && data
+                {(isFetching || isResolving || isStaleMonth) && data
                   ? strings.map.resolvingLocations
                   : strings.map.monthMeta(monthLabel, clusters.length)}
-                {journeyPlaces.length === 1 ? ` · ${journeyPlaces[0]}` : ''}
+                {!isStaleMonth && journeyPlaces.length === 1
+                  ? ` · ${journeyPlaces[0]}`
+                  : ''}
               </Text>
             </View>
 
@@ -386,16 +416,17 @@ export function MonthlyMapScreen() {
           </View>
         ) : null}
 
-        {journeyPlaces.length > 1 ? (
+        {journeyPlaces.length > 1 && !isStaleMonth ? (
           <View style={styles.journeyChips}>
             <VisitChipRow labels={journeyPlaces} tone="quiet" />
           </View>
         ) : null}
 
-        <View style={styles.mapBlock}>
+        <View style={[styles.mapBlock, isStaleMonth && styles.mapBlockStale]}>
           <MapCanvas
             clusters={clusters}
-            frameKey={month}
+            // pending→ready bumps frameKey so camera refits the real month pins.
+            frameKey={isStaleMonth ? `${month}:pending` : month}
             onZoomChange={onZoomChange}
             onSelectCluster={onSelectCluster}
             selectedClusterId={selectedSeedId}
@@ -403,7 +434,7 @@ export function MonthlyMapScreen() {
             showPathOrder={showPathOrder}
             onTogglePathOrder={togglePathOrder}
           />
-          {data.photos.length === 0 ? (
+          {!isStaleMonth && data.photos.length === 0 ? (
             <View style={styles.emptyOverlay} pointerEvents="box-none">
               <Text style={styles.emptyOverlayText}>
                 {data.homeExcludedCount > 0
@@ -593,6 +624,9 @@ const styles = StyleSheet.create({
     flex: 1,
     position: 'relative',
     marginTop: theme.spacing.xs,
+  },
+  mapBlockStale: {
+    opacity: 0.55,
   },
   fabWrap: {
     ...StyleSheet.absoluteFillObject,
