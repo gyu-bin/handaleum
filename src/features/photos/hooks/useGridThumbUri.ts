@@ -4,7 +4,6 @@ import { Platform } from 'react-native';
 import type { DummyImageSize } from '../services/dummyPhotos';
 import { isDummyAssetId } from '../services/dummyPhotos';
 import {
-  isGridThumbWarmPaused,
   peekAssetFileUri,
   resolveAssetUri,
   scheduleGridThumbWarm,
@@ -13,10 +12,9 @@ import {
 
 /**
  * Grid cell URI for the scroll hot path.
- * - iOS: always `ph://` for display (pin-export `file://` is for Naver; a bad
- *   export must not replace a working Photos URI with a blank frame).
- * - Android: sync cache, else one resolve + peek retries.
- * Warm still runs in the background for map pins / recycle.
+ * Display must not wait on thumb-warm pause — pause only slows pin exports.
+ * - iOS: `ph://` sync
+ * - Android: MediaStore `content://` sync when id is numeric; else resolve
  */
 export function useGridThumbUri(
   assetId: string,
@@ -34,38 +32,34 @@ export function useGridThumbUri(
   }, [assetId]);
 
   useEffect(() => {
-    if (Platform.OS === 'ios' && !isDummyAssetId(assetId)) {
-      return;
-    }
-    if (syncUri != null && !syncUri.startsWith('ph://')) {
+    // Already have a sync display URI (ph:// / content:// / file:// / https).
+    if (syncUri != null) {
       return;
     }
     let cancelled = false;
     let attempt = 0;
     const run = async () => {
-      if (syncUri == null) {
-        const first = await resolveAssetUri(assetId, { imageSize });
-        if (cancelled) {
-          return;
-        }
-        if (first) {
-          setAsyncHit({ id: assetId, uri: first });
-          return;
-        }
-      }
-      while (!cancelled && attempt < 20) {
-        if (isGridThumbWarmPaused()) {
-          await new Promise((r) => setTimeout(r, 200));
-          continue;
-        }
+      while (!cancelled && attempt < 40) {
         const peek = peekAssetFileUri(assetId);
         if (peek) {
           setAsyncHit({ id: assetId, uri: peek });
           return;
         }
+        try {
+          const resolved = await resolveAssetUri(assetId, { imageSize });
+          if (cancelled) {
+            return;
+          }
+          if (resolved) {
+            setAsyncHit({ id: assetId, uri: resolved });
+            return;
+          }
+        } catch {
+          // Overflow / transient — retry.
+        }
         attempt += 1;
         await new Promise((r) =>
-          setTimeout(r, Math.min(1200, 150 * attempt)),
+          setTimeout(r, Math.min(1200, 100 * attempt)),
         );
       }
     };
@@ -77,6 +71,10 @@ export function useGridThumbUri(
 
   if (Platform.OS === 'ios' && !isDummyAssetId(assetId)) {
     return `ph://${assetId}`;
+  }
+  // Prefer MediaStore content URI over pin-export file:// (can be missing/corrupt).
+  if (Platform.OS === 'android' && !isDummyAssetId(assetId) && /^\d+$/.test(assetId)) {
+    return `content://media/external/images/media/${assetId}`;
   }
   if (asyncHit?.id === assetId) {
     return asyncHit.uri;

@@ -7,8 +7,8 @@ import {
 } from '../services/placeResolve';
 import { labelsForVisitLevel } from '../utils/placeLabels';
 
-/** Swallow time-slider noise; GPS progressive batches need a longer settle. */
-const RESOLVE_DEBOUNCE_MS = 400;
+/** Swallow rapid GPS batch churn; month swipe should not wait half a second. */
+const RESOLVE_DEBOUNCE_MS = 120;
 
 /**
  * O(n) fingerprint without allocating a multi-MB join string (2600+ months).

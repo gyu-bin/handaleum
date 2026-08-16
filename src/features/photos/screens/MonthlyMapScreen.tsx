@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Redirect, useRouter, type Href } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button } from '@/shared/components/Button';
 import { LoadingView } from '@/shared/components/LoadingView';
 import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
@@ -33,6 +32,7 @@ import {
   startMonthThumbPrewarm,
 } from '../services/monthImageWarmup';
 import type { MonthKey, PlaceCluster } from '../types';
+import { currentMonthKey, shiftMonthKey } from '../utils/month';
 import { placeBucketKey } from '../utils/placeJourney';
 
 /** Own the progress store so scan ticks don't re-render the whole map tree. */
@@ -60,11 +60,14 @@ const MAP_NAV_ITEMS = [
 
 export function MonthlyMapScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  // Pull chrome closer to the status bar — full inset leaves too much empty top.
+  const headerPadTop = Math.max(0, insets.top - 10);
   const { seen: onboardingSeen } = useOnboarding();
   const { status, isReady } = usePhotoPermission();
   const hasLibraryAccess = status === 'granted' || status === 'limited';
   const hasAccess = hasLibraryAccess || isDevDummyPhotosEnabled();
-  const { month } = useCurrentMonth();
+  const { month, setMonth, canOpenMonth } = useCurrentMonth();
   const { covers, setCover } = usePinCovers(month);
   const { showPathOrder, togglePathOrder } = useJourneyPathOrder();
   const { data, isPending, isFetching, isError, refetch, isRefetching } = useMonthlyPhotos(month, {
@@ -77,6 +80,29 @@ export function MonthlyMapScreen() {
   const [showNotices, setShowNotices] = useState(false);
 
   const monthPhotos = data?.photos ?? [];
+
+  const prevMonth = useMemo(() => {
+    const next = shiftMonthKey(month, -1);
+    return canOpenMonth(next) ? next : null;
+  }, [canOpenMonth, month]);
+  const nextMonth = useMemo(() => {
+    const next = shiftMonthKey(month, 1);
+    if (next > currentMonthKey()) {
+      return null;
+    }
+    return canOpenMonth(next) ? next : null;
+  }, [canOpenMonth, month]);
+
+  const goPrevMonth = useCallback(() => {
+    if (prevMonth) {
+      setMonth(prevMonth);
+    }
+  }, [prevMonth, setMonth]);
+  const goNextMonth = useCallback(() => {
+    if (nextMonth) {
+      setMonth(nextMonth);
+    }
+  }, [nextMonth, setMonth]);
 
   const clusters = useMemo(
     () => clusterPhotos(monthPhotos, zoom),
@@ -102,9 +128,9 @@ export function MonthlyMapScreen() {
   }, []);
 
   const { places: journeyPlaces, isResolving } = useMonthJourney(monthPhotos, {
-    // Disk hydrate runs always; network geocode waits until the month GPS pass
-    // finishes so progressive batches don't cancel/restart the queue (main jank).
-    enabled: Boolean(data) && !isFetching,
+    // Start as soon as this month has photos. Waiting for !isFetching delayed
+    // chips on cached-month swipes (background refetch kept isFetching true).
+    enabled: Boolean(data) && monthPhotos.length > 0,
     resetKey: month,
   });
 
@@ -219,60 +245,116 @@ export function MonthlyMapScreen() {
   // low-frequency config, so it sits as a quiet link in the header instead.
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-      <View style={styles.body}>
+    <SafeAreaView style={styles.safe} edges={['left', 'right']}>
+      <View style={[styles.body, { paddingTop: headerPadTop }]}>
         <View style={styles.header}>
-          <View style={styles.hero}>
+          <View style={styles.headerTop}>
             <Text style={styles.brandEyebrow}>{strings.brand}</Text>
-            <Text style={styles.wordmark} numberOfLines={1}>
-              {strings.map.monthTitle(monthNumber)}
-            </Text>
-            <Text style={styles.monthMeta} numberOfLines={1}>
-              {(isFetching || isResolving) && data
-                ? strings.map.resolvingLocations
-                : strings.map.monthMeta(monthLabel, clusters.length)}
-              {journeyPlaces.length === 1 ? ` · ${journeyPlaces[0]}` : ''}
-            </Text>
-          </View>
-
-          <View style={styles.headerActions}>
-            <Pressable
-              onPress={() => router.push('/settings')}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel={strings.map.settings}
-              style={({ pressed }) => [
-                styles.actionBtn,
-                pressed && styles.actionBtnPressed,
-              ]}
-            >
-              <Text style={styles.actionLabel}>{strings.map.settings}</Text>
-            </Pressable>
-
-            {data.noLocationCount > 0 || data.homeExcludedCount > 0 ? (
+            <View style={styles.headerActions}>
               <Pressable
-                onPress={() => setShowNotices((v) => !v)}
+                onPress={() => router.push('/settings')}
                 hitSlop={10}
                 accessibilityRole="button"
-                accessibilityState={{ expanded: showNotices }}
-                accessibilityLabel={strings.map.infoToggle}
+                accessibilityLabel={strings.map.settings}
                 style={({ pressed }) => [
                   styles.actionBtn,
                   pressed && styles.actionBtnPressed,
                 ]}
               >
-                <View style={[styles.infoDot, showNotices && styles.infoDotActive]}>
-                  <Text
-                    style={[
-                      styles.infoDotText,
-                      showNotices && styles.infoDotTextActive,
-                    ]}
-                  >
-                    !
-                  </Text>
-                </View>
+                <Text style={styles.actionLabel}>{strings.map.settings}</Text>
               </Pressable>
-            ) : null}
+
+              {data.noLocationCount > 0 || data.homeExcludedCount > 0 ? (
+                <Pressable
+                  onPress={() => setShowNotices((v) => !v)}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: showNotices }}
+                  accessibilityLabel={strings.map.infoToggle}
+                  style={({ pressed }) => [
+                    styles.actionBtn,
+                    pressed && styles.actionBtnPressed,
+                  ]}
+                >
+                  <View
+                    style={[styles.infoDot, showNotices && styles.infoDotActive]}
+                  >
+                    <Text
+                      style={[
+                        styles.infoDotText,
+                        showNotices && styles.infoDotTextActive,
+                      ]}
+                    >
+                      !
+                    </Text>
+                  </View>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+
+          <View style={styles.headerTitleRow}>
+            <Pressable
+              onPress={goPrevMonth}
+              disabled={prevMonth == null}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={strings.map.monthPrev}
+              style={({ pressed }) => [
+                styles.monthEdgeBtn,
+                pressed && prevMonth != null && styles.monthEdgeBtnPressed,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.monthEdgeChevron,
+                  prevMonth == null && styles.monthEdgeChevronOff,
+                ]}
+              >
+                ‹
+              </Text>
+            </Pressable>
+
+            <View style={styles.hero}>
+              <Pressable
+                onPress={() => router.push('/months')}
+                accessibilityRole="button"
+                accessibilityLabel={strings.months.title}
+                hitSlop={4}
+                style={styles.heroTitleHit}
+              >
+                <Text style={styles.wordmark} numberOfLines={1}>
+                  {strings.map.monthTitle(monthNumber)}
+                </Text>
+              </Pressable>
+              <Text style={styles.monthMeta} numberOfLines={1}>
+                {(isFetching || isResolving) && data
+                  ? strings.map.resolvingLocations
+                  : strings.map.monthMeta(monthLabel, clusters.length)}
+                {journeyPlaces.length === 1 ? ` · ${journeyPlaces[0]}` : ''}
+              </Text>
+            </View>
+
+            <Pressable
+              onPress={goNextMonth}
+              disabled={nextMonth == null}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={strings.map.monthNext}
+              style={({ pressed }) => [
+                styles.monthEdgeBtn,
+                pressed && nextMonth != null && styles.monthEdgeBtnPressed,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.monthEdgeChevron,
+                  nextMonth == null && styles.monthEdgeChevronOff,
+                ]}
+              >
+                ›
+              </Text>
+            </Pressable>
           </View>
         </View>
 
@@ -330,15 +412,21 @@ export function MonthlyMapScreen() {
               </Text>
             </View>
           ) : null}
-        </View>
-
-        <View style={styles.footer}>
-          <Button
-            title={strings.cards.createTitle}
-            variant="primary"
-            style={styles.createBtn}
-            onPress={() => router.push('/cards/create')}
-          />
+          <View style={styles.fabWrap} pointerEvents="box-none">
+            <Pressable
+              onPress={() => router.push('/cards/create')}
+              accessibilityRole="button"
+              accessibilityLabel={strings.cards.createTitle}
+              style={({ pressed }) => [
+                styles.createFab,
+                pressed && styles.createFabPressed,
+              ]}
+            >
+              <Text style={styles.createFabPlus}>+</Text>
+              <Text style={styles.createFabLine}>카드</Text>
+              <Text style={styles.createFabLine}>만들기</Text>
+            </Pressable>
+          </View>
         </View>
       </View>
 
@@ -363,19 +451,47 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
+    paddingHorizontal: theme.spacing.sm,
+    paddingTop: 0,
+    paddingBottom: 2,
+    gap: 0,
+  },
+  headerTop: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.md,
-    paddingTop: 2,
-    paddingBottom: theme.spacing.xs,
+    minHeight: 18,
+    paddingHorizontal: theme.spacing.xs,
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: -2,
+  },
+  monthEdgeBtn: {
+    width: 40,
+    paddingVertical: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthEdgeBtnPressed: {
+    opacity: 0.45,
+  },
+  monthEdgeChevron: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 28,
+    lineHeight: 28,
+    fontWeight: '300',
+    color: theme.colors.ink,
+    opacity: 0.55,
+  },
+  monthEdgeChevronOff: {
+    opacity: 0.18,
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingTop: 4,
   },
   actionBtn: {
     paddingVertical: 4,
@@ -392,9 +508,13 @@ const styles = StyleSheet.create({
   },
   hero: {
     flex: 1,
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 1,
-    paddingRight: theme.spacing.sm,
+    minWidth: 0,
+    paddingHorizontal: theme.spacing.xs,
+  },
+  heroTitleHit: {
+    alignItems: 'center',
   },
   brandEyebrow: {
     ...theme.type.micro,
@@ -410,12 +530,14 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     letterSpacing: -0.4,
     fontWeight: '700',
+    textAlign: 'center',
   },
   monthMeta: {
     ...theme.type.micro,
     fontFamily: theme.fonts.sans,
     color: theme.colors.subtle,
     marginTop: 1,
+    textAlign: 'center',
   },
   infoDot: {
     width: 22,
@@ -472,6 +594,45 @@ const styles = StyleSheet.create({
     position: 'relative',
     marginTop: theme.spacing.xs,
   },
+  fabWrap: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
+    paddingRight: theme.spacing.md,
+    paddingBottom: theme.spacing.md,
+  },
+  createFab: {
+    width: 56,
+    height: 56,
+    paddingTop: 6,
+    paddingBottom: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 1,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.ink,
+    ...theme.shadows.raised,
+  },
+  createFabPlus: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 20,
+    lineHeight: 22,
+    fontWeight: '500',
+    color: theme.colors.surface,
+    marginBottom: 1,
+  },
+  createFabLine: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 10,
+    lineHeight: 12,
+    fontWeight: '700',
+    letterSpacing: -0.4,
+    color: theme.colors.surface,
+  },
+  createFabPressed: {
+    opacity: 0.88,
+    transform: [{ scale: 0.98 }],
+  },
   emptyOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
@@ -488,13 +649,5 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.sm,
     borderRadius: theme.radius.sm,
     overflow: 'hidden',
-  },
-  footer: {
-    paddingHorizontal: theme.spacing.md,
-    paddingTop: theme.spacing.xs,
-    paddingBottom: theme.spacing.xs,
-  },
-  createBtn: {
-    borderRadius: theme.radius.sm,
   },
 });

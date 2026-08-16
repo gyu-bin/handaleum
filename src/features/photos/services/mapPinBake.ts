@@ -44,7 +44,8 @@ function emit() {
 }
 
 function bakeKey(photoUri: string, selected: boolean, cardSize: number): string {
-  return `${photoUri}|${selected ? 1 : 0}|${cardSize}`;
+  // v2: softer inkSoft frame (invalidate prior dark-ink PNGs).
+  return `v2|${photoUri}|${selected ? 1 : 0}|${cardSize}`;
 }
 
 function trimQueue() {

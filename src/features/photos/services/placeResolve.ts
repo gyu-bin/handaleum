@@ -224,6 +224,13 @@ export async function resolveVisitPlaces(
     }
   }
 
+  // Geocode busy places first so journey chips fill in the obvious stops sooner.
+  pending.sort(
+    (a, b) =>
+      b.photoCount - a.photoCount ||
+      a.firstTakenAt.localeCompare(b.firstTakenAt),
+  );
+
   let emitted = collectVisitPlaces(buckets, resolved);
   options?.onProgress?.(emitted);
 
@@ -267,12 +274,14 @@ export async function resolveVisitPlaces(
         debug.resolvedBuckets += 1;
       }
       const next = collectVisitPlaces(buckets, resolved);
-      const grew = next.length !== emitted.length;
+      const changed =
+        next.length !== emitted.length ||
+        next.some((place, i) => place.label !== emitted[i]?.label);
       emitted = next;
       if (debug) {
         debug.labels = emitted.map((p) => p.label);
       }
-      if (grew) {
+      if (changed) {
         options?.onProgress?.(emitted);
       }
     }

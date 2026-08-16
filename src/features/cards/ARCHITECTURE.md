@@ -27,7 +27,7 @@
 | 카드 만들기: 코멘트 좌·중·우 정렬. 컨트롤은 종이색 동그라미 반대(오른쪽). 글 뒤 commentStrip 배경 제거 | strip 유지 / 왼쪽 배치 | 사용자 지시 | 2026-08-07 |
 | 카드 만들기: 템플릿 피커 제거 · 스토리 카드 미리보기+드래그 · 선택 계기판 · sand CTA · 그리드 필드시트 헤더/링 | 정사각 콜라주+템플릿칩 | 사용자 지시 리디자인 (claude design 참조는 MCP 미연결로 지시서만 적용) | 2026-07-31 |
 | 카드 만들기 sticky 프리뷰 = **인스타식** height+top scale (시트 덮개/shadow 제거). 콜라주 재측정 없음 | clip-only / zIndex 덮개 | 스펙 `2026-08-09-collapse-header-scroll-design.md` | 2026-08-10 |
-| 만들기 성공 후 선택 초안 **즉시 비움** + preview 복귀는 `back()` + stack `freezeOnBlur`. blur 중 grid warm pause | dismissTo/replace 재마운트 / 선택 유지 | 저장→뒤로 시 멈춤·충돌 | 2026-08-10 |
+| 만들기 성공 후 선택 초안 **즉시 비움** + preview 복귀는 `back()` + stack `freezeOnBlur`. 미리보기 push 직전에만 warm pause (탭 전환 blur에 pause 고정 금지) | dismissTo/replace 재마운트 / blur마다 pause | 저장→뒤로 충돌 + 안드 그리드 warm 고착 | 2026-08-10 |
 
 ## 경계
 

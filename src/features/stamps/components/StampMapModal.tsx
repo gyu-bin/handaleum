@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   LayoutChangeEvent,
   Modal,
@@ -7,6 +7,12 @@ import {
   Text,
   View,
 } from 'react-native';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -24,6 +30,9 @@ export interface StampMapModalProps {
   onClose: () => void;
 }
 
+const MIN_SCALE = 1;
+const MAX_SCALE = 4;
+
 function CloseXMark({ color }: { color: string }) {
   return (
     <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
@@ -38,7 +47,8 @@ function CloseXMark({ color }: { color: string }) {
 }
 
 /**
- * Visit map — empty land + pastel 동 blobs (no legend).
+ * Visit map — empty land + pastel 동 blobs.
+ * Pinch to zoom, pan while zoomed; resets when the modal closes.
  */
 export function StampMapModal({
   visible,
@@ -47,6 +57,25 @@ export function StampMapModal({
 }: StampMapModalProps) {
   const insets = useSafeAreaInsets();
   const [mapSize, setMapSize] = useState({ width: 0, height: 0 });
+
+  const scale = useSharedValue(1);
+  const tx = useSharedValue(0);
+  const ty = useSharedValue(0);
+  const startScale = useSharedValue(1);
+  const startTx = useSharedValue(0);
+  const startTy = useSharedValue(0);
+
+  useEffect(() => {
+    if (visible) {
+      return;
+    }
+    scale.value = 1;
+    tx.value = 0;
+    ty.value = 0;
+    startScale.value = 1;
+    startTx.value = 0;
+    startTy.value = 0;
+  }, [scale, startScale, startTx, startTy, tx, ty, visible]);
 
   const visitCount = Object.keys(collected).length;
   const sidoCount = useMemo(
@@ -65,6 +94,50 @@ export function StampMapModal({
     setMapSize({ width, height });
   };
 
+  const pinch = Gesture.Pinch()
+    .onBegin(() => {
+      startScale.value = scale.value;
+    })
+    .onUpdate((e) => {
+      const next = Math.min(
+        MAX_SCALE,
+        Math.max(MIN_SCALE, startScale.value * e.scale),
+      );
+      scale.value = next;
+    })
+    .onEnd(() => {
+      if (scale.value <= 1.02) {
+        scale.value = withTiming(1);
+        tx.value = withTiming(0);
+        ty.value = withTiming(0);
+        startTx.value = 0;
+        startTy.value = 0;
+      }
+    });
+
+  const pan = Gesture.Pan()
+    .onBegin(() => {
+      startTx.value = tx.value;
+      startTy.value = ty.value;
+    })
+    .onUpdate((e) => {
+      if (scale.value <= 1.02) {
+        return;
+      }
+      tx.value = startTx.value + e.translationX;
+      ty.value = startTy.value + e.translationY;
+    });
+
+  const gesture = Gesture.Simultaneous(pinch, pan);
+
+  const mapTransformStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: tx.value },
+      { translateY: ty.value },
+      { scale: scale.value },
+    ],
+  }));
+
   const subtitle =
     visitCount === 0
       ? strings.stamps.mapEmpty
@@ -77,6 +150,7 @@ export function StampMapModal({
       presentationStyle="fullScreen"
       onRequestClose={onClose}
     >
+      <GestureHandlerRootView style={styles.flex}>
       <View
         style={[
           styles.root,
@@ -92,6 +166,7 @@ export function StampMapModal({
           <View style={styles.headerCopy}>
             <Text style={styles.title}>{strings.stamps.mapTitle}</Text>
             <Text style={styles.subtitle}>{subtitle}</Text>
+            <Text style={styles.hint}>{strings.stamps.mapPinchHint}</Text>
           </View>
           <Pressable
             onPress={onClose}
@@ -108,23 +183,31 @@ export function StampMapModal({
           </Pressable>
         </View>
 
-        <View style={styles.mapStage} onLayout={onMapLayout}>
-          {mapSize.width > 0 && mapSize.height > 0 ? (
-            <StampKoreaMap
-              collected={collected}
-              style={{
-                width: mapSize.width,
-                height: mapSize.height,
-              }}
-            />
-          ) : null}
-        </View>
+        <GestureDetector gesture={gesture}>
+          <Animated.View style={styles.mapStage} onLayout={onMapLayout}>
+            {mapSize.width > 0 && mapSize.height > 0 ? (
+              <Animated.View style={[{ flex: 1 }, mapTransformStyle]}>
+                <StampKoreaMap
+                  collected={collected}
+                  style={{
+                    width: mapSize.width,
+                    height: mapSize.height,
+                  }}
+                />
+              </Animated.View>
+            ) : null}
+          </Animated.View>
+        </GestureDetector>
       </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
   root: {
     flex: 1,
     backgroundColor: theme.colors.background,
@@ -163,6 +246,13 @@ const styles = StyleSheet.create({
     color: theme.colors.inkSoft,
     textAlign: 'center',
   },
+  hint: {
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.subtle,
+    textAlign: 'center',
+    marginTop: 2,
+  },
   sideBtn: {
     minWidth: 52,
     paddingVertical: 6,
@@ -180,5 +270,6 @@ const styles = StyleSheet.create({
   mapStage: {
     flex: 1,
     zIndex: 1,
+    overflow: 'hidden',
   },
 });

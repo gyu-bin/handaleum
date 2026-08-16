@@ -16,6 +16,8 @@ export type PlaceBucket = {
   lat: number;
   lng: number;
   firstTakenAt: string;
+  /** Photos in this bucket — used to geocode busy places first. */
+  photoCount: number;
 };
 
 /**
@@ -38,12 +40,16 @@ export function collectBuckets(photos: PhotoRef[]): PlaceBucket[] {
         lat: photo.lat,
         lng: photo.lng,
         firstTakenAt: photo.takenAt,
+        photoCount: 1,
       });
-    } else if (photo.takenAt < existing.firstTakenAt) {
-      // Geocode the earliest photo's real coordinates (not just its timestamp).
-      existing.firstTakenAt = photo.takenAt;
-      existing.lat = photo.lat;
-      existing.lng = photo.lng;
+    } else {
+      existing.photoCount += 1;
+      if (photo.takenAt < existing.firstTakenAt) {
+        // Geocode the earliest photo's real coordinates (not just its timestamp).
+        existing.firstTakenAt = photo.takenAt;
+        existing.lat = photo.lat;
+        existing.lng = photo.lng;
+      }
     }
   }
   return [...map.values()].sort((a, b) =>

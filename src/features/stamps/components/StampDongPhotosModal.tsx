@@ -2,7 +2,6 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  InteractionManager,
   Modal,
   Platform,
   Pressable,
@@ -35,8 +34,8 @@ import {
   type StampDongPhotosQuery,
 } from '../services/stampDongPhotos';
 
-const COLS = 2;
-const GAP = 10;
+const COLS = 3;
+const GAP = 8;
 const H_PAD = theme.spacing.md;
 /** Same tier as card/playback grids — warm 128px file://, not full ph://. */
 const THUMB_IMAGE_SIZE = 128;
@@ -46,8 +45,10 @@ const VIEWER_IMAGE_SIZE = 1080;
 const LABEL_GAP = 5;
 const LABEL_H = theme.type.micro.lineHeight;
 const ROW_GAP_BOTTOM = GAP + 4;
+/** Prefetch this many display URIs so first screens paint together. */
+const GRID_PREFETCH = 180;
 /** Hold thumb bake after fling so decode doesn't fight scroll. */
-const GRID_WARM_RESUME_MS = 220;
+const GRID_WARM_RESUME_MS = 180;
 
 type SortMode = 'newest' | 'oldest';
 
@@ -109,6 +110,21 @@ function prefetchViewerAround(items: ThumbItem[], center: number): void {
   }
 }
 
+/** Kick expo-image decode for the first screens before FlatList mounts cells. */
+function prefetchStampGrid(assetIds: string[]): void {
+  const n = Math.min(assetIds.length, GRID_PREFETCH);
+  for (let i = 0; i < n; i += 1) {
+    const id = assetIds[i]!;
+    const uri =
+      Platform.OS === 'ios'
+        ? `ph://${id}`
+        : syncAssetDisplayUri(id, THUMB_IMAGE_SIZE);
+    if (uri) {
+      void Image.prefetch(uri, 'memory-disk');
+    }
+  }
+}
+
 function CloseXMark({ color }: { color: string }) {
   return (
     <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
@@ -149,6 +165,7 @@ const Thumb = memo(function Thumb({
           assetId={assetId}
           size={size}
           imageSize={THUMB_IMAGE_SIZE}
+          priority="high"
         />
       </View>
       <Text style={styles.takenAt} numberOfLines={1}>
@@ -289,10 +306,9 @@ export function StampDongPhotosModal({
     if (peeked !== null) {
       setPhotos(peeked);
       setLoading(false);
-      warmGridThumbs(
-        peeked.map((p) => p.assetId),
-        24,
-      );
+      const ids = peeked.map((p) => p.assetId);
+      prefetchStampGrid(ids);
+      warmGridThumbs(ids, GRID_PREFETCH);
     } else {
       setPhotos([]);
       setLoading(true);
@@ -302,10 +318,9 @@ export function StampDongPhotosModal({
       .then((list) => {
         if (!cancelled) {
           setPhotos(list);
-          warmGridThumbs(
-            list.map((p) => p.assetId),
-            24,
-          );
+          const ids = list.map((p) => p.assetId);
+          prefetchStampGrid(ids);
+          warmGridThumbs(ids, GRID_PREFETCH);
         }
       })
       .catch((error) => {
@@ -328,13 +343,9 @@ export function StampDongPhotosModal({
     if (photos.length === 0 || viewerOpen) {
       return;
     }
-    const handle = InteractionManager.runAfterInteractions(() => {
-      warmGridThumbs(
-        photos.map((p) => p.assetId),
-        64,
-      );
-    });
-    return () => handle.cancel();
+    const ids = photos.map((p) => p.assetId);
+    prefetchStampGrid(ids);
+    warmGridThumbs(ids, Math.min(ids.length, 400));
   }, [photos, viewerOpen]);
 
   // Viewer decode must not compete with pin-thumb bake.
@@ -596,11 +607,13 @@ export function StampDongPhotosModal({
                   keyExtractor={(item) => item.key}
                   contentContainerStyle={styles.grid}
                   showsVerticalScrollIndicator={false}
-                  initialNumToRender={6}
-                  maxToRenderPerBatch={3}
-                  windowSize={5}
-                  updateCellsBatchingPeriod={50}
-                  removeClippedSubviews={Platform.OS === 'android'}
+                  // Paint many rows in the first commit so thumbs don't trickle in.
+                  initialNumToRender={40}
+                  maxToRenderPerBatch={24}
+                  windowSize={21}
+                  updateCellsBatchingPeriod={16}
+                  // Clipping blanks recycled thumbs in long (1000+) grids.
+                  removeClippedSubviews={false}
                   getItemLayout={getItemLayout}
                   renderItem={renderItem}
                   onScrollBeginDrag={onGridScrollBegin}

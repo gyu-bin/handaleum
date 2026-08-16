@@ -385,14 +385,12 @@ export function CardCreateScreen() {
     }
   }, [selectedAssetIds.length, resetScroll]);
 
-  // While preview sits on top, freeze thumb bake — resuming a fully-selected
-  // create + warm storm after 만들기 was jetsamming the process.
+  // Only pause warm while this screen is covered (preview on top). Do NOT leave
+  // paused=true when switching tabs — that stuck Android grids / stamp warm.
   useFocusEffect(
     useCallback(() => {
       setGridThumbWarmPaused(false);
-      return () => {
-        setGridThumbWarmPaused(true);
-      };
+      return undefined;
     }, []),
   );
 
@@ -565,6 +563,8 @@ export function CardCreateScreen() {
       setComment('');
       setCollageDragging(false);
       resetScroll();
+      // Pause bake while preview/export is on top (create stays mounted underneath).
+      setGridThumbWarmPaused(true);
       // Keep create under preview so back returns to 카드 만들기.
       router.push({
         pathname: '/cards/[id]',

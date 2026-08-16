@@ -20,6 +20,7 @@ import { usePauseGridThumbWarmOnScroll } from '../hooks/usePauseGridThumbWarmOnS
 import { warmGridThumbs } from '../services/mediaLibrary';
 import type { PlaceCluster, PhotoRef } from '../types';
 import { placeBucketKey, resolveClusterDetailLabel } from '../utils/placeJourney';
+import { peekResolvedPlace } from '../services/placeResolve';
 
 /** Photos appended per scroll page in the pin sheet grid. */
 const PAGE_SIZE = 18;
@@ -120,14 +121,20 @@ export function PhotoPreviewSheet({
       return;
     }
     let cancelled = false;
-    setPlaceLabel(null);
-    setLabelLoading(true);
     const pin =
       (coverAssetId
         ? cluster.photos.find((p) => p.assetId === coverAssetId)
         : undefined) ?? cluster.photos[0];
     const lat = pin?.lat ?? cluster.centerLat;
     const lng = pin?.lng ?? cluster.centerLng;
+    const cached = peekResolvedPlace(lat, lng);
+    if (cached?.detailLabel) {
+      setPlaceLabel(cached.detailLabel);
+      setLabelLoading(false);
+    } else {
+      setPlaceLabel(null);
+      setLabelLoading(true);
+    }
     void resolveClusterDetailLabel(lat, lng)
       .then((label) => {
         if (!cancelled) {
@@ -138,7 +145,6 @@ export function PhotoPreviewSheet({
       .catch((error) => {
         console.warn('resolveClusterDetailLabel failed', error);
         if (!cancelled) {
-          setPlaceLabel(null);
           setLabelLoading(false);
         }
       });

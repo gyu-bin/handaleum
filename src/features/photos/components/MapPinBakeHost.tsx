@@ -83,8 +83,8 @@ export function MapPinBakeHost() {
   }
 
   const cardSize = job.cardSize;
-  const frame = job.selected ? theme.colors.ink : theme.colors.ink;
-  const tip = theme.colors.ink;
+  const frame = job.selected ? theme.colors.ink : theme.colors.inkSoft;
+  const tip = job.selected ? theme.colors.ink : theme.colors.inkSoft;
   const outerW = cardSize + BORDER * 2;
   const outerH = outerW + CARET_H;
 

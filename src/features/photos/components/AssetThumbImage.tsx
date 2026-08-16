@@ -13,16 +13,20 @@ export interface AssetThumbImageProps {
   size: number;
   style?: StyleProp<ImageStyle>;
   imageSize?: DummyImageSize;
+  /** expo-image load priority — stamp grids use high so cells paint together. */
+  priority?: 'low' | 'normal' | 'high';
 }
 
 /**
  * Camera-roll thumb for dense grids — fixed size, no fade, recycle-friendly.
+ * Uses sync ph:// / content:// when possible so any list length paints on mount.
  */
 export const AssetThumbImage = memo(function AssetThumbImage({
   assetId,
   size,
   style,
   imageSize = 128,
+  priority = 'normal',
 }: AssetThumbImageProps) {
   const uri = useGridThumbUri(assetId, imageSize);
 
@@ -46,7 +50,7 @@ export const AssetThumbImage = memo(function AssetThumbImage({
       recyclingKey={assetId}
       cachePolicy="memory-disk"
       transition={0}
-      priority="low"
+      priority={priority}
       allowDownscaling
     />
   );

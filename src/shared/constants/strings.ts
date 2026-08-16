@@ -90,6 +90,9 @@ export const strings = {
     homeExcludedNotice: (count: number) =>
       `집에서 찍은 ${count}장은 지도에만 안 띄웁니다 (카드에는 쓸 수 있어요)`,
     settings: '설정',
+    /** Header edge steppers — previous / next calendar month. */
+    monthPrev: '이전 달',
+    monthNext: '다음 달',
     timeFilter: '이 날짜까지',
     timeFilterHint: '슬라이더로 월 안에서 사진 기간을 줄입니다',
     clusterCount: (count: number) => `사진 ${count}장`,
@@ -364,6 +367,7 @@ export const strings = {
     mapHint: '한눈에 보는 발자취',
     mapClose: '닫기',
     mapOpen: '모은 동네 보기',
+    mapPinchHint: '두 손가락으로 확대 · 드래그로 이동',
     mapVisitCount: (dongs: number, sidos: number) =>
       `${dongs}개 동 · ${sidos}개 시·도`,
     mapLegendDong: (n: number) => `동 ${n}`,

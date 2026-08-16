@@ -141,7 +141,7 @@ function MapClusterMarkerInner({
     };
   }, [displayAssetId]);
 
-  // Paper frame on every pin (ink border). Selected uses map accent.
+  // Soft paper frame (inkSoft). Selected keeps full ink.
   // Bake is cached by uri|selected|size — remounts after zoom hit memory.
   useEffect(() => {
     if (!photoUri || !displayAssetId) {
@@ -171,7 +171,7 @@ function MapClusterMarkerInner({
         // Size in the id so selected grow doesn't reuse the wrong bitmap.
         // Asset id only — not cluster grain — so Naver can keep the texture.
         reuseIdentifier: framedUri
-          ? `framed-${displayAssetId}-${cardSize}`
+          ? `framed-v2-${displayAssetId}-${cardSize}`
           : `thumb-${displayAssetId}-${cardSize}`,
       };
       lastHttpRef.current = next;

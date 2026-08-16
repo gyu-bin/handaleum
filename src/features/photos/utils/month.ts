@@ -26,3 +26,11 @@ export function monthTimeBoundsIso(month: MonthKey): { from: string; to: string 
     to: new Date(endMs - 1).toISOString(),
   };
 }
+
+/** Shift YYYY-MM by whole months (local calendar). */
+export function shiftMonthKey(month: MonthKey, deltaMonths: number): MonthKey {
+  const [y, m] = month.split('-').map(Number) as [number, number];
+  const d = new Date(y, m - 1 + deltaMonths, 1);
+  const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  return monthKeySchema.parse(key);
+}

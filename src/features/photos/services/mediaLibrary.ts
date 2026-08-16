@@ -55,16 +55,17 @@ const LOCATION_BATCH = 32;
 const PIN_EXPORT_CONCURRENCY = 2;
 /** Cap simultaneous Android URI lookups while scrolling grids. */
 const ANDROID_URI_CONCURRENCY = 2;
+/** Bound waiters — drop-oldest so scrolling into new cells is not starved. */
+const ANDROID_URI_MAX_QUEUE = 96;
 /** Bound in-memory URI maps so multi-month sessions don't grow forever. */
 const URI_CACHE_MAX = 400;
 /** Pins + grid scroll backlog — warm file thumbs so remounts skip ph:// decode. */
 const FILE_URI_CACHE_MAX = 360;
-/** Idle grid warm — keep at 1 so scroll never competes with a manipulator storm. */
-const GRID_THUMB_WARM_CONCURRENCY = 1;
+/** Idle grid warm — 2 keeps scroll calm while stamp/card open fills faster. */
+const GRID_THUMB_WARM_CONCURRENCY = 2;
 /** Bound waiters so a dense month cannot enqueue thousands of manipulator jobs. */
 const PIN_EXPORT_MAX_QUEUE = 64;
-const GRID_THUMB_WARM_MAX_QUEUE = 48;
-const ANDROID_URI_MAX_QUEUE = 32;
+const GRID_THUMB_WARM_MAX_QUEUE = 160;
 /** After export failure, skip re-export for this long (ms). */
 const FILE_URI_FAIL_TTL_MS = 8_000;
 
@@ -112,7 +113,7 @@ const limitPinExport = createConcurrencyLimiter(PIN_EXPORT_CONCURRENCY, {
 });
 const limitAndroidUri = createConcurrencyLimiter(ANDROID_URI_CONCURRENCY, {
   maxQueue: ANDROID_URI_MAX_QUEUE,
-  onOverflow: 'drop-newest',
+  onOverflow: 'drop-oldest',
 });
 
 /** assetId → Date.now() until which resolveAssetFileUri should return null. */
@@ -789,7 +790,15 @@ export function syncAssetDisplayUri(
   if (Platform.OS === 'ios') {
     return `ph://${assetId}`;
   }
-  return uriCache.get(assetId) ?? null;
+  const cached = uriCache.get(assetId);
+  if (cached) {
+    return cached;
+  }
+  // MediaStore id → sync content URI (no getAssetInfo). Matches iOS ph:// immediacy.
+  if (/^\d+$/.test(assetId)) {
+    return `content://media/external/images/media/${assetId}`;
+  }
+  return null;
 }
 
 /**
