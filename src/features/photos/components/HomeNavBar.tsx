@@ -34,11 +34,12 @@ function NavIcon({
   name: HomeNavItem['icon'];
   active: boolean;
 }) {
-  const color = active ? theme.colors.ink : theme.colors.inkSoft;
-  const stroke = 1.6;
+  const color = active ? theme.colors.ink : theme.colors.subtle;
+  const stroke = 1.65;
+  const size = 20;
   if (name === 'calendar') {
     return (
-      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+      <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
         <Rect
           x={3.5}
           y={5}
@@ -60,7 +61,7 @@ function NavIcon({
   }
   if (name === 'play') {
     return (
-      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+      <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
         <Circle cx={12} cy={12} r={8.5} stroke={color} strokeWidth={stroke} />
         <Path d="M10.2 8.8l6 3.2-6 3.2V8.8z" fill={color} />
       </Svg>
@@ -68,7 +69,7 @@ function NavIcon({
   }
   if (name === 'card') {
     return (
-      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+      <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
         <Rect
           x={4}
           y={5}
@@ -90,14 +91,14 @@ function NavIcon({
   if (name === 'stamp') {
     return (
       <StampSneakerIcon
-        size={24}
+        size={20}
         color={color}
         active={active}
       />
     );
   }
   return (
-    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
         d="M5 18V11M10 18V7M15 18v-5M20 18V9"
         stroke={color}
@@ -129,7 +130,7 @@ export function HomeNavBar({ items }: HomeNavBarProps) {
     <View
       style={[
         styles.wrap,
-        { paddingBottom: Math.max(insets.bottom, theme.spacing.sm) },
+        { paddingBottom: Math.max(insets.bottom, 4) },
       ]}
     >
       <View style={styles.bar}>
@@ -147,7 +148,7 @@ export function HomeNavBar({ items }: HomeNavBarProps) {
                 pressed && styles.itemPressed,
               ]}
             >
-              <View style={[styles.itemInner, active && styles.itemInnerActive]}>
+              <View style={styles.itemInner}>
                 <View style={styles.iconWrap}>
                   <NavIcon name={item.icon} active={active} />
                   {item.icon === 'stamp' ? (
@@ -162,6 +163,7 @@ export function HomeNavBar({ items }: HomeNavBarProps) {
                 >
                   {item.label}
                 </Text>
+                {active ? <View style={styles.activeTick} /> : null}
               </View>
             </Pressable>
           );
@@ -175,62 +177,66 @@ const styles = StyleSheet.create({
   wrap: {
     paddingHorizontal: theme.spacing.md,
     paddingTop: theme.spacing.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.hairline,
+    backgroundColor: theme.colors.background,
   },
   bar: {
     flexDirection: 'row',
-    alignItems: 'stretch',
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.hairline,
-    paddingVertical: 4,
-    paddingHorizontal: 4,
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    minHeight: 46,
+    paddingBottom: 2,
   },
   item: {
     flex: 1,
-    borderRadius: theme.radius.sm,
+    maxWidth: 88,
   },
   itemPressed: {
-    opacity: 0.85,
+    opacity: 0.7,
   },
   itemInner: {
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-    paddingVertical: 6,
-    paddingHorizontal: 2,
-    borderRadius: theme.radius.sm,
-  },
-  itemInnerActive: {
-    // Weight via ink label/icon only — no soft fill capsule.
+    justifyContent: 'flex-end',
+    gap: 3,
+    paddingVertical: 2,
+    minHeight: 44,
   },
   iconWrap: {
-    width: 24,
-    height: 24,
+    width: 22,
+    height: 22,
     overflow: 'visible',
     alignItems: 'center',
     justifyContent: 'center',
   },
   badge: {
     position: 'absolute',
-    top: -2,
-    right: -3,
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+    top: -1,
+    right: -2,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: theme.colors.notify,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.surface,
+    borderColor: theme.colors.background,
   },
   label: {
-    ...theme.type.micro,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.inkSoft,
+    fontSize: 10,
+    lineHeight: 13,
+    letterSpacing: -0.15,
+    color: theme.colors.subtle,
     fontWeight: '500',
-    letterSpacing: -0.2,
   },
   labelActive: {
     color: theme.colors.ink,
-    fontWeight: '700',
+    fontWeight: '600',
+  },
+  activeTick: {
+    width: 14,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: theme.colors.ink,
+    marginTop: 1,
   },
 });

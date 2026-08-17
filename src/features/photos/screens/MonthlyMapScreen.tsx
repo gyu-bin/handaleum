@@ -18,10 +18,8 @@ import { DEFAULT_MAP_ZOOM, MapCanvas } from '../components/MapCanvas';
 import { clusterSeedId } from '../components/MapClusterMarker';
 import { HomeNavBar } from '../components/HomeNavBar';
 import { PhotoPreviewSheet } from '../components/PhotoPreviewSheet';
-import { VisitChipRow } from '../components/VisitChipRow';
 import { getSharedMonth, useCurrentMonth } from '../hooks/useCurrentMonth';
 import { useJourneyPathOrder } from '../hooks/useJourneyPathOrder';
-import { useMonthJourney } from '../hooks/useMonthJourney';
 import { useMonthlyPhotos } from '../hooks/useMonthlyPhotos';
 import { usePhotoPermission } from '../hooks/usePhotoPermission';
 import { usePinCovers } from '../hooks/usePinCovers';
@@ -131,6 +129,11 @@ export function MonthlyMapScreen() {
     () => clusterPhotos(monthPhotos, zoom),
     [monthPhotos, zoom],
   );
+  // Header "N곳" is a month fact — not the visible pin count at the current zoom.
+  const placeCount = useMemo(
+    () => clusterPhotos(monthPhotos, DEFAULT_MAP_ZOOM).length,
+    [monthPhotos],
+  );
 
   // Debounce zoom→recluster so every camera-idle tick doesn't remount markers.
   const zoomTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -150,11 +153,7 @@ export function MonthlyMapScreen() {
     };
   }, []);
 
-  const { places: journeyPlaces, isResolving } = useMonthJourney(monthPhotos, {
-    // Skip while placeholder (previous month) is on screen — avoid geocode churn.
-    enabled: Boolean(data) && monthPhotos.length > 0 && !isStaleMonth,
-    resetKey: month,
-  });
+  // Location chips removed from home header — geocode only when opening sheets.
 
   // Full-album stamp sync — session-once, after first month GPS finishes.
   useEffect(() => {
@@ -356,12 +355,9 @@ export function MonthlyMapScreen() {
                 </Text>
               </Pressable>
               <Text style={styles.monthMeta} numberOfLines={1}>
-                {(isFetching || isResolving || isStaleMonth) && data
+                {(isFetching || isStaleMonth) && data
                   ? strings.map.resolvingLocations
-                  : strings.map.monthMeta(monthLabel, clusters.length)}
-                {!isStaleMonth && journeyPlaces.length === 1
-                  ? ` · ${journeyPlaces[0]}`
-                  : ''}
+                  : strings.map.monthMeta(monthLabel, placeCount)}
               </Text>
             </View>
 
@@ -413,12 +409,6 @@ export function MonthlyMapScreen() {
                 </Text>
               </Pressable>
             ) : null}
-          </View>
-        ) : null}
-
-        {journeyPlaces.length > 1 && !isStaleMonth ? (
-          <View style={styles.journeyChips}>
-            <VisitChipRow labels={journeyPlaces} tone="quiet" />
           </View>
         ) : null}
 
@@ -594,10 +584,6 @@ const styles = StyleSheet.create({
     color: theme.colors.surface,
   },
 
-  journeyChips: {
-    paddingHorizontal: theme.spacing.md,
-    paddingBottom: theme.spacing.xs,
-  },
   noticeRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
