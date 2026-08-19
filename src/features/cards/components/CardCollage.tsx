@@ -22,7 +22,7 @@ export function CollagePlaceChip({
       style={[
         styles.chip,
         {
-          left: 4 * s,
+          right: 4 * s,
           bottom: 4 * s,
           paddingHorizontal: 5 * s,
           paddingVertical: 2 * s,

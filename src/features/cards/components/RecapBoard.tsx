@@ -3,14 +3,11 @@ import {
   Alert,
   Platform,
   Pressable,
-  ScrollView,
   Share,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
 } from 'react-native';
 import { saveToLibraryAsync } from 'expo-media-library';
 import { captureRef } from 'react-native-view-shot';
@@ -19,29 +16,37 @@ import Svg, { Path } from 'react-native-svg';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
+import { usePinCovers } from '../../photos/hooks/usePinCovers';
+import { placeBucketKey } from '../../photos/services/placeCache';
 import { AssetThumbImage } from '../../photos/components/AssetThumbImage';
 import type { MonthKey, PhotoRef, VisitPlace } from '../../photos/types';
 import { usePlaceAliases } from '../hooks/usePlaceAliases';
+import { useRecapCovers } from '../hooks/useRecapCovers';
 import { formatMonthDot } from '../utils/cardMeta';
 import {
   applyPlaceAliases,
-  recapBoardPages,
   recapDayCalendarNodes,
+  resolveRecapCoverAssetId,
   chunkRows,
   snakeRailPath,
   snakeRows,
   type RecapBoardMode,
   type RecapBoardNode,
 } from '../utils/recapBoard';
-import { recapPlaceNodes } from '../utils/recapPlaceNodes';
+import {
+  recapPlaceNodes,
+  recapNodePhotos,
+  pinCoverAmongPhotos,
+} from '../utils/recapPlaceNodes';
 import { PlaceAliasModal } from './PlaceAliasModal';
+import { RecapPhotosModal } from './RecapPhotosModal';
 
 const PLACE_COLS = 4;
 const DAY_COLS = 7;
-const MAX_ROWS = 3;
 const CIRCLE_INSET = 10;
+const DAY_INSET = 4;
 const CELL_GAP_X = 16;
-const DAY_GAP_X = 8;
+const DAY_GAP_X = 5;
 const CAPTION_GAP = 4;
 const CAPTION_LINE = 16;
 const CELL_PAD_BOTTOM = 14;
@@ -67,22 +72,24 @@ export interface RecapBoardProps {
 const NodeCell = memo(function NodeCell({
   node,
   size,
+  inset,
   rowH,
   selected,
   renameable,
-  onToggle,
+  onOpen,
   onRename,
 }: {
   node: RecapBoardNode;
   size: number;
+  inset: number;
   rowH: number;
   selected: boolean;
   renameable: boolean;
-  onToggle: (id: string) => void;
+  onOpen: (id: string) => void;
   onRename: (id: string) => void;
 }) {
   const empty = node.assetId == null;
-  const inner = Math.max(12, size - CIRCLE_INSET);
+  const inner = Math.max(12, size - inset);
 
   if (node.blank) {
     return <View style={{ width: size, height: rowH }} />;
@@ -92,7 +99,7 @@ const NodeCell = memo(function NodeCell({
     <Pressable
       onPress={() => {
         if (!empty) {
-          onToggle(node.id);
+          onOpen(node.id);
         }
       }}
       onLongPress={() => {
@@ -103,8 +110,8 @@ const NodeCell = memo(function NodeCell({
       delayLongPress={350}
       disabled={empty}
       style={[styles.cell, { width: size, height: rowH }]}
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked: selected, disabled: empty }}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: empty }}
       accessibilityLabel={node.label || undefined}
       accessibilityHint={
         renameable ? strings.cards.boardRenameHint : undefined
@@ -139,12 +146,13 @@ function BoardPage({
   mode,
   cols,
   size,
+  inset,
   inner,
   rowH,
   gridW,
   gapX,
   selectedIds,
-  onToggle,
+  onOpen,
   onRename,
   onBindRef,
 }: {
@@ -152,12 +160,13 @@ function BoardPage({
   mode: RecapBoardMode;
   cols: number;
   size: number;
+  inset: number;
   inner: number;
   rowH: number;
   gridW: number;
   gapX: number;
   selectedIds: Set<string>;
-  onToggle: (id: string) => void;
+  onOpen: (id: string) => void;
   onRename: (id: string) => void;
   onBindRef: (el: View | null) => void;
 }) {
@@ -218,10 +227,11 @@ function BoardPage({
                 key={node.id}
                 node={node}
                 size={size}
+                inset={inset}
                 rowH={rowH}
                 selected={selectedIds.has(node.id)}
                 renameable={mode === 'place' && canRenamePlace(node.id)}
-                onToggle={onToggle}
+                onOpen={onOpen}
                 onRename={onRename}
               />
             ))}
@@ -240,13 +250,14 @@ export function RecapBoard({
 }: RecapBoardProps) {
   const { width } = useWindowDimensions();
   const boardRef = useRef<View>(null);
-  const pageEls = useRef<(View | null)[]>([]);
-  const [pageIndex, setPageIndex] = useState(0);
   const { aliases, setAlias } = usePlaceAliases();
+  const { covers: recapCovers, setCover: setRecapCover } = useRecapCovers(month);
+  const { covers: pinCovers, setCover: setPinCover } = usePinCovers(month);
   const [mode, setMode] = useState<RecapBoardMode>('place');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sharing, setSharing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [viewerNodeId, setViewerNodeId] = useState<string | null>(null);
 
   const placeBase = useMemo(
     () => recapPlaceNodes(photos, visitPlaces),
@@ -260,7 +271,33 @@ export function RecapBoard({
     () => recapDayCalendarNodes(month, photos),
     [month, photos],
   );
-  const nodes = mode === 'day' ? dayNodes : placeNodes;
+  const rawNodes = mode === 'day' ? dayNodes : placeNodes;
+  const nodes = useMemo(
+    () =>
+      rawNodes.map((node) => {
+        if (node.blank || node.assetId == null) {
+          return node;
+        }
+        const list = recapNodePhotos(node.id, mode, photos);
+        const assetId = resolveRecapCoverAssetId(
+          node.id,
+          list.map((photo) => photo.assetId),
+          recapCovers,
+          pinCoverAmongPhotos(list, pinCovers),
+        );
+        return assetId && assetId !== node.assetId
+          ? { ...node, assetId }
+          : node;
+      }),
+    [mode, photos, pinCovers, rawNodes, recapCovers],
+  );
+  const viewerPhotos = viewerNodeId
+    ? recapNodePhotos(viewerNodeId, mode, photos)
+    : null;
+  const viewerCover =
+    viewerNodeId == null
+      ? null
+      : nodes.find((node) => node.id === viewerNodeId)?.assetId ?? null;
 
   const filledIds = useMemo(
     () => nodes.filter((n) => n.assetId).map((n) => n.id),
@@ -276,36 +313,36 @@ export function RecapBoard({
 
   const cols = mode === 'day' ? DAY_COLS : PLACE_COLS;
   const gapX = mode === 'day' ? DAY_GAP_X : CELL_GAP_X;
+  const inset = mode === 'day' ? DAY_INSET : CIRCLE_INSET;
   const pad = theme.spacing.lg * 2;
   const pageW = width - pad;
   const size = Math.max(
     28,
     Math.floor((pageW - gapX * (cols - 1)) / cols),
   );
-  const inner = Math.max(12, size - CIRCLE_INSET);
+  const inner = Math.max(12, size - inset);
   const rowH = inner + CAPTION_GAP + CAPTION_LINE + CELL_PAD_BOTTOM;
-  const pages = useMemo(
-    () =>
-      mode === 'day' ? [nodes] : recapBoardPages(nodes, cols, MAX_ROWS),
-    [mode, nodes, cols],
-  );
   const gridW = cols * size + gapX * (cols - 1);
 
-  useEffect(() => {
-    setPageIndex(0);
-  }, [mode, month]);
-
-  const onToggle = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
+  const onOpen = useCallback((id: string) => {
+    setViewerNodeId(id);
   }, []);
+
+  const onSetViewerCover = useCallback(
+    (assetId: string) => {
+      if (!viewerNodeId) {
+        return;
+      }
+      setRecapCover(viewerNodeId, assetId);
+      const photo = recapNodePhotos(viewerNodeId, mode, photos).find(
+        (item) => item.assetId === assetId,
+      );
+      if (photo) {
+        setPinCover(placeBucketKey(photo.lat, photo.lng), assetId);
+      }
+    },
+    [mode, photos, setPinCover, setRecapCover, viewerNodeId],
+  );
 
   const onRename = useCallback((id: string) => {
     if (canRenamePlace(id)) {
@@ -326,7 +363,7 @@ export function RecapBoard({
     if (selectedCount === 0) {
       return;
     }
-    const target = pageEls.current[pageIndex] ?? boardRef.current;
+    const target = boardRef.current;
     if (!target) {
       return;
     }
@@ -349,7 +386,7 @@ export function RecapBoard({
     } finally {
       setSharing(false);
     }
-  }, [month, pageIndex, selectedCount]);
+  }, [month, selectedCount]);
 
   useEffect(() => {
     if (photos.length === 0) {
@@ -419,81 +456,30 @@ export function RecapBoard({
       </Text>
 
       <View style={styles.board}>
-        {pages.length > 1 ? (
-          <ScrollView
-            horizontal
-            pagingEnabled
-            nestedScrollEnabled
-            directionalLockEnabled
-            decelerationRate="fast"
-            showsHorizontalScrollIndicator={false}
-            style={{ width: pageW }}
-            onMomentumScrollEnd={(
-              event: NativeSyntheticEvent<NativeScrollEvent>,
-            ) => {
-              const next = Math.round(
-                event.nativeEvent.contentOffset.x / pageW,
-              );
-              setPageIndex(Math.max(0, Math.min(pages.length - 1, next)));
-            }}
-          >
-            {pages.map((pageNodes, i) => (
-              <View
-                key={`page-${i}`}
-                style={[styles.page, { width: pageW }]}
-              >
-                <BoardPage
-                  pageNodes={pageNodes}
-                  mode={mode}
-                  cols={cols}
-                  size={size}
-                  inner={inner}
-                  rowH={rowH}
-                  gridW={gridW}
-                  gapX={gapX}
-                  selectedIds={selectedIds}
-                  onToggle={onToggle}
-                  onRename={onRename}
-                  onBindRef={(el) => {
-                    pageEls.current[i] = el;
-                    if (i === 0) {
-                      boardRef.current = el;
-                    }
-                  }}
-                />
-              </View>
-            ))}
-          </ScrollView>
-        ) : (
-          <BoardPage
-            pageNodes={pages[0] ?? []}
-            mode={mode}
-            cols={cols}
-            size={size}
-            inner={inner}
-            rowH={rowH}
-            gridW={gridW}
-            gapX={gapX}
-            selectedIds={selectedIds}
-            onToggle={onToggle}
-            onRename={onRename}
-            onBindRef={(el) => {
-              pageEls.current[0] = el;
-              boardRef.current = el;
-            }}
-          />
-        )}
-        {pages.length > 1 ? (
-          <View style={styles.dots} accessibilityElementsHidden>
-            {pages.map((_, i) => (
-              <View
-                key={`dot-${i}`}
-                style={[styles.dot, i === pageIndex && styles.dotOn]}
-              />
-            ))}
-          </View>
-        ) : null}
+        <BoardPage
+          pageNodes={nodes}
+          mode={mode}
+          cols={cols}
+          size={size}
+          inset={inset}
+          inner={inner}
+          rowH={rowH}
+          gridW={gridW}
+          gapX={gapX}
+          selectedIds={selectedIds}
+          onOpen={onOpen}
+          onRename={onRename}
+          onBindRef={(el) => {
+            boardRef.current = el;
+          }}
+        />
       </View>
+      <RecapPhotosModal
+        photos={viewerPhotos && viewerPhotos.length > 0 ? viewerPhotos : null}
+        coverAssetId={viewerCover}
+        onSetCover={onSetViewerCover}
+        onClose={() => setViewerNodeId(null)}
+      />
       <PlaceAliasModal
         visible={editingId != null && editingAdmin != null}
         adminLabel={editingAdmin?.label ?? ''}
@@ -564,9 +550,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: theme.spacing.sm,
   },
-  page: {
-    alignItems: 'center',
-  },
   grid: {
     alignSelf: 'center',
     position: 'relative',
@@ -594,21 +577,6 @@ const styles = StyleSheet.create({
   },
   rowRtl: {
     justifyContent: 'flex-end',
-  },
-  dots: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 6,
-    paddingTop: theme.spacing.sm,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: theme.tint.soft,
-  },
-  dotOn: {
-    backgroundColor: theme.colors.ink,
   },
   cell: {
     alignItems: 'center',

@@ -11,7 +11,9 @@ import {
   localDayKey,
   recapDayCalendarNodes,
   recapDayNodes,
+  recapDayPhotos,
   recapBoardPages,
+  resolveRecapCoverAssetId,
   monthStartWeekday,
   chunkRows,
   snakeCell,
@@ -100,5 +102,25 @@ const aliased = applyPlaceAliases(
 );
 assert.equal(aliased[0]?.label, '한옥마을');
 assert.equal(aliased[1]?.label, '');
+
+assert.deepEqual(
+  recapDayPhotos('2026-08-06', photos).map((p) => p.assetId),
+  ['a', 'b'],
+);
+assert.equal(recapDayPhotos('2026-08-01', photos).length, 0);
+
+assert.equal(
+  resolveRecapCoverAssetId('2026-08-06', ['a', 'b'], { '2026-08-06': 'b' }, null),
+  'b',
+);
+assert.equal(
+  resolveRecapCoverAssetId('2026-08-06', ['a', 'b'], {}, 'b'),
+  'b',
+);
+assert.equal(
+  resolveRecapCoverAssetId('2026-08-06', ['a', 'b'], { '2026-08-06': 'z' }, null),
+  'a',
+);
+assert.equal(resolveRecapCoverAssetId('x', [], {}, null), null);
 
 console.log('ok recapBoard');

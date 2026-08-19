@@ -149,6 +149,24 @@ function AlignGlyph({
   );
 }
 
+function PlaceChipGlyph({ color }: { color: string }) {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 20 20">
+      <Path
+        d="M10 2.8c-2.5 0-4.6 2-4.6 4.4 0 3.4 4.6 9.2 4.6 9.2s4.6-5.8 4.6-9.2c0-2.4-2.1-4.4-4.6-4.4z"
+        stroke={color}
+        strokeWidth={1.6}
+        fill="none"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M10 5.6a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2z"
+        fill={color}
+      />
+    </Svg>
+  );
+}
+
 /**
  * Owns hero height locally so FlatList header memo identity stays stable
  * while CollageEditor measures — avoids remount mid-drag.
@@ -339,26 +357,21 @@ function CreateCardPreview({
               </Pressable>
             );
           })}
+          <Pressable
+            onPress={() => onPlaceOverlayChange(!placeOverlay)}
+            hitSlop={6}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: placeOverlay }}
+            accessibilityLabel={strings.cards.placeOverlayA11y}
+            style={[styles.alignDot, placeOverlay && styles.alignDotOn]}
+          >
+            <PlaceChipGlyph
+              color={placeOverlay ? theme.colors.ink : theme.colors.inkSoft}
+            />
+          </Pressable>
         </View>
       </View>
 
-      <Pressable
-        onPress={() => onPlaceOverlayChange(!placeOverlay)}
-        hitSlop={8}
-        accessibilityRole="switch"
-        accessibilityState={{ checked: placeOverlay }}
-        accessibilityLabel={strings.cards.placeOverlayA11y}
-        style={styles.placeToggle}
-      >
-        <Text
-          style={[
-            styles.placeToggleText,
-            placeOverlay && styles.placeToggleTextOn,
-          ]}
-        >
-          {strings.cards.placeOverlay}
-        </Text>
-      </Pressable>
       <Text style={styles.hint}>{strings.cards.arrangeHint}</Text>
     </View>
   );
@@ -1010,22 +1023,6 @@ const styles = StyleSheet.create({
     color: theme.colors.subtle,
     textAlign: 'center',
     paddingHorizontal: theme.spacing.md,
-  },
-  placeToggle: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 4,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.hairline,
-    backgroundColor: theme.colors.surface,
-  },
-  placeToggleText: {
-    ...theme.type.micro,
-    color: theme.colors.subtle,
-    fontWeight: '600',
-  },
-  placeToggleTextOn: {
-    color: theme.colors.ink,
   },
   previewStage: {
     backgroundColor: theme.colors.surfaceAlt,

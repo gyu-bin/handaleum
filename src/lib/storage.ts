@@ -285,6 +285,17 @@ export function setJourneyPathOrderVisible(visible: boolean): void {
   storage.set(JOURNEY_PATH_ORDER_KEY, visible ? '1' : '0');
 }
 
+/** JSON map of recap nodeId → assetId for one month. */
+const RECAP_COVERS_PREFIX = 'recapCovers:';
+
+export function getRecapCoversRaw(month: string): string | null {
+  return storage.getString(`${RECAP_COVERS_PREFIX}${month}`) ?? null;
+}
+
+export function setRecapCoversRaw(month: string, json: string): void {
+  storage.set(`${RECAP_COVERS_PREFIX}${month}`, json);
+}
+
 /** JSON map of place identity → user alias for recap board labels. */
 const PLACE_ALIASES_KEY = 'placeAliases';
 

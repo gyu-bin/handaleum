@@ -148,6 +148,36 @@ export function recapDayNodes(
   return nodes;
 }
 
+export function recapDayPhotos(
+  dayKey: string,
+  photos: PhotoRef[],
+): PhotoRef[] {
+  return photos
+    .filter((photo) => localDayKey(photo.takenAt) === dayKey)
+    .sort((a, b) => a.takenAt.localeCompare(b.takenAt));
+}
+
+/** Chosen cover, else a pin-cover that is in this node, else the first photo. */
+export function resolveRecapCoverAssetId(
+  nodeId: string,
+  assetIds: string[],
+  recapCovers: Record<string, string>,
+  pinCoverAssetId: string | null,
+): string | null {
+  if (assetIds.length === 0) {
+    return null;
+  }
+  const ids = new Set(assetIds);
+  const recap = recapCovers[nodeId];
+  if (recap && ids.has(recap)) {
+    return recap;
+  }
+  if (pinCoverAssetId && ids.has(pinCoverAssetId)) {
+    return pinCoverAssetId;
+  }
+  return assetIds[0] ?? null;
+}
+
 /** Sunday = 0 … Saturday = 6, local calendar. */
 export function monthStartWeekday(month: MonthKey): number {
   const [year, mon] = month.split('-').map(Number) as [number, number];

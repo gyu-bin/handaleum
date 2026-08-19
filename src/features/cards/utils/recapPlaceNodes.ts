@@ -1,7 +1,47 @@
 import { placeBucketKey } from '../../photos/services/placeCache';
 import { peekResolvedPlace } from '../../photos/services/placeResolve';
 import type { PhotoRef, VisitPlace } from '../../photos/types';
-import { placeIdentity, type RecapBoardNode } from './recapBoard';
+import {
+  placeIdentity,
+  recapDayPhotos,
+  type RecapBoardMode,
+  type RecapBoardNode,
+} from './recapBoard';
+
+export function recapPhotoPlaceId(photo: PhotoRef): string {
+  const place = peekResolvedPlace(photo.lat, photo.lng);
+  return place
+    ? placeIdentity(place)
+    : `pending:${placeBucketKey(photo.lat, photo.lng)}`;
+}
+
+/** Photos belonging to a day (`YYYY-MM-DD`) or place identity node. */
+export function recapNodePhotos(
+  nodeId: string,
+  mode: RecapBoardMode,
+  photos: PhotoRef[],
+): PhotoRef[] {
+  return mode === 'day'
+    ? recapDayPhotos(nodeId, photos)
+    : [...photos.filter((photo) => recapPhotoPlaceId(photo) === nodeId)].sort(
+        (a, b) => a.takenAt.localeCompare(b.takenAt),
+      );
+}
+
+/** First pin-cover that still belongs to this node's photos. */
+export function pinCoverAmongPhotos(
+  photos: PhotoRef[],
+  pinCovers: Record<string, string>,
+): string | null {
+  const ids = new Set(photos.map((photo) => photo.assetId));
+  for (const photo of photos) {
+    const cover = pinCovers[placeBucketKey(photo.lat, photo.lng)];
+    if (cover && ids.has(cover)) {
+      return cover;
+    }
+  }
+  return null;
+}
 
 /**
  * One node per visit-place identity. Cover = earliest photo in that place.
@@ -13,10 +53,7 @@ export function recapPlaceNodes(
 ): RecapBoardNode[] {
   const photosByIdentity = new Map<string, PhotoRef[]>();
   for (const photo of photos) {
-    const place = peekResolvedPlace(photo.lat, photo.lng);
-    const id = place
-      ? placeIdentity(place)
-      : `pending:${placeBucketKey(photo.lat, photo.lng)}`;
+    const id = recapPhotoPlaceId(photo);
     const list = photosByIdentity.get(id);
     if (list) {
       list.push(photo);
