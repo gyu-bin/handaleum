@@ -284,3 +284,14 @@ export function getJourneyPathOrderVisible(): boolean {
 export function setJourneyPathOrderVisible(visible: boolean): void {
   storage.set(JOURNEY_PATH_ORDER_KEY, visible ? '1' : '0');
 }
+
+/** JSON map of place identity → user alias for recap board labels. */
+const PLACE_ALIASES_KEY = 'placeAliases';
+
+export function getPlaceAliasesRaw(): string | null {
+  return storage.getString(PLACE_ALIASES_KEY) ?? null;
+}
+
+export function setPlaceAliasesRaw(json: string): void {
+  storage.set(PLACE_ALIASES_KEY, json);
+}

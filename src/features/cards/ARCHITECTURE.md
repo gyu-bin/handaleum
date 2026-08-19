@@ -27,11 +27,14 @@
 | 카드 만들기: 코멘트 좌·중·우 정렬. 컨트롤은 종이색 동그라미 반대(오른쪽). 글 뒤 commentStrip 배경 제거 | strip 유지 / 왼쪽 배치 | 사용자 지시 | 2026-08-07 |
 | 카드 만들기: 템플릿 피커 제거 · 스토리 카드 미리보기+드래그 · 선택 계기판 · sand CTA · 그리드 필드시트 헤더/링 | 정사각 콜라주+템플릿칩 | 사용자 지시 리디자인 (claude design 참조는 MCP 미연결로 지시서만 적용) | 2026-07-31 |
 | 카드 만들기 sticky 프리뷰 = **인스타식** height+top scale (시트 덮개/shadow 제거). 콜라주 재측정 없음 | clip-only / zIndex 덮개 | 스펙 `2026-08-09-collapse-header-scroll-design.md` | 2026-08-10 |
-| 만들기 성공 후 선택 초안 **즉시 비움** + preview 복귀는 `back()` + stack `freezeOnBlur`. 미리보기 push 직전에만 warm pause (탭 전환 blur에 pause 고정 금지) | dismissTo/replace 재마운트 / blur마다 pause | 저장→뒤로 충돌 + 안드 그리드 warm 고착 | 2026-08-10 |
+| 내 회고 보드 = 곳/날 토글, 라벨은 행정 위치(detailLabel). 선택 칸 view-shot 공유 | 랜드마크 POI / 라벨 편집 persist | 사용자 2026-08-19. 편집은 보류 | 2026-08-19 |
+| 내 회고 위치 칸 = 뱀 레일 헤어라인으로 이음. 마지막 줄은 레일 쪽에 붙임 | 가운데 정렬 마지막 줄 | 사용자 2026-08-19 기차 요청 | 2026-08-19 |
+| 곳 칸 이름 = 길게 눌러 별명. kv `placeAliases` (identity→alias). 다음 달에도 유지 | 세션만 / 랜드마크 API | 사용자 2026-08-19 | 2026-08-19 |
+| 카드 만들기 대량 월 = 캐시 섹션 즉시 + 버킷 geocode 진행 바. 전체 스피너 대기 금지 | 위치별 끝날 때까지 그리드 숨김 | 호출 체감 | 2026-08-19 |
 
 ## 경계
 
-- 이 feature가 의존하는 것: photos (photoRefSchema, monthKeySchema, useMonthlyPhotos, useCurrentMonth), lib/storage(MMKV), react-native-view-shot, shared/constants
+- 이 feature가 의존하는 것: photos (photoRefSchema, monthKeySchema, useMonthlyPhotos, useCurrentMonth, useMonthJourney), lib/storage(MMKV), react-native-view-shot, shared/constants
 - 이 feature에 의존하는 것: 없음
 
 ## 범위 제외

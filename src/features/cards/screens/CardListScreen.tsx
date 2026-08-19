@@ -1,8 +1,10 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
+  BackHandler,
   FlatList,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -11,6 +13,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/shared/components/Button';
+import { LoadProgressBanner } from '@/shared/components/LoadProgressBanner';
 import { LoadingView } from '@/shared/components/LoadingView';
 import { PaperGrain } from '@/shared/components/PaperGrain';
 import { ScreenHeader } from '@/shared/components/ScreenHeader';
@@ -19,17 +22,33 @@ import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 
+import { RecapBoard, type RecapBoardShareState } from '../components/RecapBoard';
 import { useCards, useDeleteCards } from '../hooks/useCards';
 import type { RecapCard } from '../types';
+import { useCurrentMonth } from '../../photos/hooks/useCurrentMonth';
+import { useMonthJourney } from '../../photos/hooks/useMonthJourney';
+import { useMonthLoadProgress } from '../../photos/hooks/useMonthLoadProgress';
+import { useMonthlyPhotos } from '../../photos/hooks/useMonthlyPhotos';
 
 export function CardListScreen() {
   const router = useRouter();
   const { data, isPending, isError, refetch } = useCards();
   const deleteCards = useDeleteCards();
   const showLoading = useHeldBusy(isPending);
+  const { month } = useCurrentMonth();
+  const monthQuery = useMonthlyPhotos(month);
+  const loadProgress = useMonthLoadProgress();
+  const monthPhotos = monthQuery.data?.photos ?? [];
+  const { visitPlaces } = useMonthJourney(monthPhotos, {
+    resetKey: month,
+  });
 
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [boardShare, setBoardShare] = useState<RecapBoardShareState | null>(
+    null,
+  );
 
   /**
    * Pop back to home (native back animation). `replace('/')` slides home in
@@ -44,6 +63,29 @@ export function CardListScreen() {
     setEditing(false);
     setSelectedIds(new Set());
   }, []);
+
+  const openArchive = useCallback(() => {
+    setArchiveOpen(true);
+    setEditing(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  const closeArchive = useCallback(() => {
+    setArchiveOpen(false);
+    setEditing(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  useEffect(() => {
+    if (!archiveOpen) {
+      return;
+    }
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      closeArchive();
+      return true;
+    });
+    return () => sub.remove();
+  }, [archiveOpen, closeArchive]);
 
   const enterEdit = useCallback(() => {
     setEditing(true);
@@ -151,129 +193,178 @@ export function CardListScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <PaperGrain style={styles.grain} />
       <ScreenHeader
-        title={strings.cards.listTitle}
-        onBack={goHome}
+        title={
+          archiveOpen ? strings.cards.listArchive : strings.cards.listTitle
+        }
+        onBack={archiveOpen ? closeArchive : goHome}
         trailing={
-          data.length > 0 ? (
+          archiveOpen ? (
+            data.length > 0 ? (
+              <Pressable
+                onPress={editing ? exitEdit : enterEdit}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  editing ? strings.cards.listDone : strings.cards.listEdit
+                }
+              >
+                <Text style={styles.headerAction}>
+                  {editing ? strings.cards.listDone : strings.cards.listEdit}
+                </Text>
+              </Pressable>
+            ) : null
+          ) : (
             <Pressable
-              onPress={editing ? exitEdit : enterEdit}
+              onPress={openArchive}
               hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel={
-                editing ? strings.cards.listDone : strings.cards.listEdit
-              }
+              accessibilityLabel={strings.cards.listArchive}
             >
               <Text style={styles.headerAction}>
-                {editing ? strings.cards.listDone : strings.cards.listEdit}
+                {strings.cards.listArchive}
               </Text>
             </Pressable>
-          ) : null
+          )
         }
       />
 
-      {data.length === 0 ? (
-        <View style={styles.emptyWrap}>
-          <StateView
-            icon="🗂️"
-            title={strings.cards.listEmpty}
-            actionLabel={strings.cards.createTitle}
-            onAction={() => router.push('/cards/create')}
-          />
+      {archiveOpen && editing && data.length > 0 ? (
+        <View style={styles.selectBar}>
+          <Pressable
+            onPress={allSelected ? deselectAll : selectAll}
+            hitSlop={6}
+            accessibilityRole="button"
+          >
+            <Text style={styles.selectBarAction}>
+              {allSelected
+                ? strings.cards.deselectAll
+                : strings.cards.selectAll}
+            </Text>
+          </Pressable>
+          <Text style={styles.selectBarCount}>
+            {selectedCount > 0
+              ? strings.cards.deleteSelected(selectedCount)
+              : ' '}
+          </Text>
         </View>
-      ) : (
-        <>
-          {editing ? (
-            <View style={styles.selectBar}>
+      ) : null}
+
+      {archiveOpen ? (
+        <FlatList
+          data={data}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.list}
+          ListEmptyComponent={
+            <Text style={styles.cardsEmpty}>{strings.cards.listEmpty}</Text>
+          }
+          ItemSeparatorComponent={() => <View style={styles.sep} />}
+          renderItem={({ item }) => {
+            const selected = selectedIds.has(item.id);
+            return (
               <Pressable
-                onPress={allSelected ? deselectAll : selectAll}
-                hitSlop={6}
+                style={({ pressed }) => [
+                  styles.card,
+                  selected && styles.cardSelected,
+                  pressed && styles.cardPressed,
+                ]}
+                onPress={() => onRowPress(item)}
+                onLongPress={() => onRowLongPress(item)}
+                delayLongPress={350}
                 accessibilityRole="button"
+                accessibilityState={editing ? { selected } : undefined}
               >
-                <Text style={styles.selectBarAction}>
-                  {allSelected
-                    ? strings.cards.deselectAll
-                    : strings.cards.selectAll}
-                </Text>
-              </Pressable>
-              <Text style={styles.selectBarCount}>
-                {selectedCount > 0
-                  ? strings.cards.deleteSelected(selectedCount)
-                  : ' '}
-              </Text>
-            </View>
-          ) : null}
-
-          <FlatList
-            data={data}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.list}
-            ItemSeparatorComponent={() => <View style={styles.sep} />}
-            renderItem={({ item }) => {
-              const selected = selectedIds.has(item.id);
-              return (
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.card,
-                    selected && styles.cardSelected,
-                    pressed && styles.cardPressed,
-                  ]}
-                  onPress={() => onRowPress(item)}
-                  onLongPress={() => onRowLongPress(item)}
-                  delayLongPress={350}
-                  accessibilityRole="button"
-                  accessibilityState={editing ? { selected } : undefined}
-                >
-                  {editing ? (
-                    <View
-                      style={[styles.check, selected && styles.checkOn]}
-                      accessibilityElementsHidden
-                    >
-                      {selected ? (
-                        <Text style={styles.checkMark}>✓</Text>
-                      ) : null}
-                    </View>
-                  ) : null}
-                  <View style={styles.rowText}>
-                    <Text style={styles.title} numberOfLines={1}>
-                      {item.title}
-                    </Text>
-                    <Text style={styles.meta}>
-                      {item.month} ·{' '}
-                      {item.template === 'story'
-                        ? strings.cards.templateStory
-                        : strings.cards.templateFeed}
-                    </Text>
+                {editing ? (
+                  <View
+                    style={[styles.check, selected && styles.checkOn]}
+                    accessibilityElementsHidden
+                  >
+                    {selected ? (
+                      <Text style={styles.checkMark}>✓</Text>
+                    ) : null}
                   </View>
-                  {!editing ? <Text style={styles.chevron}>›</Text> : null}
-                </Pressable>
-              );
-            }}
-          />
-        </>
-      )}
-
-      {data.length > 0 ? (
-        <View style={styles.footer}>
-          {editing ? (
-            <Button
-              title={
-                selectedCount > 0
-                  ? strings.cards.deleteSelected(selectedCount)
-                  : strings.cards.delete
+                ) : null}
+                <View style={styles.rowText}>
+                  <Text style={styles.title} numberOfLines={1}>
+                    {item.title}
+                  </Text>
+                  <Text style={styles.meta}>
+                    {item.month} ·{' '}
+                    {item.template === 'story'
+                      ? strings.cards.templateStory
+                      : strings.cards.templateFeed}
+                  </Text>
+                </View>
+                {!editing ? <Text style={styles.chevron}>›</Text> : null}
+              </Pressable>
+            );
+          }}
+        />
+      ) : (
+        <ScrollView contentContainerStyle={styles.boardScroll}>
+          {monthQuery.isPending && monthPhotos.length === 0 ? (
+            <LoadProgressBanner
+              label={
+                loadProgress.total > 0 && loadProgress.month === month
+                  ? strings.cards.loadingPhotos(
+                      loadProgress.done,
+                      loadProgress.total,
+                    )
+                  : strings.cards.loadingAlbum
               }
-              variant="accent"
-              disabled={selectedCount === 0 || deleteCards.isPending}
-              onPress={() => confirmDelete([...selectedIds])}
+              done={loadProgress.month === month ? loadProgress.done : 0}
+              total={loadProgress.month === month ? loadProgress.total : 0}
             />
           ) : (
+            <RecapBoard
+              month={month}
+              photos={monthPhotos}
+              visitPlaces={visitPlaces}
+              onShareState={setBoardShare}
+            />
+          )}
+        </ScrollView>
+      )}
+
+      <View style={styles.footer}>
+        {editing ? (
+          <Button
+            title={
+              selectedCount > 0
+                ? strings.cards.deleteSelected(selectedCount)
+                : strings.cards.delete
+            }
+            variant="accent"
+            disabled={selectedCount === 0 || deleteCards.isPending}
+            onPress={() => confirmDelete([...selectedIds])}
+          />
+        ) : archiveOpen ? (
+          <Button
+            title={strings.cards.createTitle}
+            variant="primary"
+            onPress={() => router.push('/cards/create')}
+          />
+        ) : (
+          <View style={styles.footerRow}>
+            <Button
+              title={strings.cards.share}
+              variant="secondary"
+              size="md"
+              loading={boardShare?.sharing ?? false}
+              disabled={!boardShare || boardShare.disabled}
+              onPress={() => boardShare?.run()}
+              accessibilityLabel={boardShare?.label ?? strings.cards.share}
+              style={styles.footerBtn}
+            />
             <Button
               title={strings.cards.createTitle}
               variant="primary"
+              size="md"
               onPress={() => router.push('/cards/create')}
+              style={styles.footerBtn}
             />
-          )}
-        </View>
-      ) : null}
+          </View>
+        )}
+      </View>
     </SafeAreaView>
   );
 }
@@ -311,6 +402,9 @@ const styles = StyleSheet.create({
   list: {
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.xl,
+  },
+  boardScroll: {
     paddingBottom: theme.spacing.xl,
   },
   card: {
@@ -376,12 +470,23 @@ const styles = StyleSheet.create({
   sep: {
     height: theme.spacing.sm,
   },
-  emptyWrap: {
-    flex: 1,
+  cardsEmpty: {
+    ...theme.type.label,
+    color: theme.colors.inkSoft,
+    textAlign: 'center',
+    paddingVertical: theme.spacing.lg,
   },
   footer: {
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.sm,
     paddingBottom: theme.spacing.md,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+  },
+  footerBtn: {
+    flex: 1,
+    paddingVertical: 10,
   },
 });

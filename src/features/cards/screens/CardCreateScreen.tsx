@@ -13,16 +13,17 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import Svg, { Path } from 'react-native-svg';
 
+import { LoadProgressBanner } from '@/shared/components/LoadProgressBanner';
 import { LoadingView } from '@/shared/components/LoadingView';
 import { ScreenHeader } from '@/shared/components/ScreenHeader';
 import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 import { useCollapseOnScroll } from '@/shared/hooks/useCollapseOnScroll';
-import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 
 import { useCurrentMonth } from '../../photos/hooks/useCurrentMonth';
 import { useMonthlyPhotos } from '../../photos/hooks/useMonthlyPhotos';
+import { useMonthLoadProgress } from '../../photos/hooks/useMonthLoadProgress';
 import { setGridThumbWarmPaused } from '../../photos/services/mediaLibrary';
 import {
   startMonthImageWarmup,
@@ -38,6 +39,10 @@ import {
   type PaperSkinId,
 } from '../constants/paperSkins';
 import { useSaveCard } from '../hooks/useCards';
+import {
+  placeChipsForPhotos,
+  useCardPlaceChips,
+} from '../hooks/useCardPlaceChips';
 import {
   usePhotoPlaceSections,
   type PickerSortMode,
@@ -164,6 +169,9 @@ function CreateCardPreview({
   onDraggingChange,
   onDeselect,
   cardW,
+  placeOverlay,
+  onPlaceOverlayChange,
+  placeLabelsById,
 }: {
   assetIds: string[];
   photos: PhotoRef[];
@@ -178,6 +186,9 @@ function CreateCardPreview({
   onDraggingChange: (dragging: boolean) => void;
   onDeselect: (assetId: string) => void;
   cardW: number;
+  placeOverlay: boolean;
+  onPlaceOverlayChange: (next: boolean) => void;
+  placeLabelsById: Record<string, string>;
 }) {
   const [heroH, setHeroH] = useState<number | null>(null);
   const cardInner = cardW - CARD_CHROME;
@@ -264,6 +275,7 @@ function CreateCardPreview({
                     onSwap={onSwap}
                     onDraggingChange={onDraggingChange}
                     onPressCell={onDeselect}
+                    placeLabelsById={placeOverlay ? placeLabelsById : undefined}
                   />
                 ) : null}
               </View>
@@ -330,6 +342,23 @@ function CreateCardPreview({
         </View>
       </View>
 
+      <Pressable
+        onPress={() => onPlaceOverlayChange(!placeOverlay)}
+        hitSlop={8}
+        accessibilityRole="switch"
+        accessibilityState={{ checked: placeOverlay }}
+        accessibilityLabel={strings.cards.placeOverlayA11y}
+        style={styles.placeToggle}
+      >
+        <Text
+          style={[
+            styles.placeToggleText,
+            placeOverlay && styles.placeToggleTextOn,
+          ]}
+        >
+          {strings.cards.placeOverlay}
+        </Text>
+      </Pressable>
       <Text style={styles.hint}>{strings.cards.arrangeHint}</Text>
     </View>
   );
@@ -342,9 +371,11 @@ function CreateCardPreview({
 export function CardCreateScreen() {
   const router = useRouter();
   const { month } = useCurrentMonth();
-  const { data, isPending, isError, refetch } = useMonthlyPhotos(month);
+  const { data, isPending, isFetching, isError, isStaleMonth, refetch } =
+    useMonthlyPhotos(month);
   const saveCard = useSaveCard();
-  const showLoading = useHeldBusy(isPending);
+  const loadProgress = useMonthLoadProgress();
+  const showFullLoad = (isPending && !data) || isStaleMonth;
 
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   const [selectionUndoStack, setSelectionUndoStack] = useState<string[][]>([]);
@@ -352,6 +383,7 @@ export function CardCreateScreen() {
   const [paperSkin, setPaperSkin] = useState<PaperSkinId>(DEFAULT_PAPER_SKIN);
   const [commentAlign, setCommentAlign] = useState<CommentAlign>('left');
   const [comment, setComment] = useState('');
+  const [placeOverlay, setPlaceOverlay] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
   const [collageDragging, setCollageDragging] = useState(false);
   const [sortMode, setSortMode] = useState<PickerSortMode>('newest');
@@ -396,7 +428,7 @@ export function CardCreateScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!data || showLoading) {
+      if (!data || showFullLoad) {
         return;
       }
       startMonthThumbPrewarm({
@@ -405,7 +437,7 @@ export function CardCreateScreen() {
         monthAssetIds: data.allPhotos.map((p) => p.assetId),
         maxMonthFill: 48,
       });
-    }, [data, month, showLoading]),
+    }, [data, month, showFullLoad]),
   );
 
   useEffect(() => {
@@ -429,7 +461,11 @@ export function CardCreateScreen() {
     return next;
   }, [data, sortMode]);
 
-  const { sections: placeSections, isLoading: placeLoading } = usePhotoPlaceSections(
+  const {
+    sections: placeSections,
+    isLoading: placeLoading,
+    progress: placeProgress,
+  } = usePhotoPlaceSections(
     pickerPhotos,
     sortMode === 'place',
   );
@@ -441,6 +477,8 @@ export function CardCreateScreen() {
       .map((id) => byId.get(id))
       .filter((p): p is PhotoRef => p != null);
   }, [pickerPhotos, selectedAssetIds]);
+
+  const placeLabelsById = useCardPlaceChips(selectedPhotos);
 
   const onSwap = useCallback((a: number, b: number) => {
     setSelectedAssetIds((prev) => {
@@ -553,6 +591,10 @@ export function CardCreateScreen() {
         template: 'story',
         paperSkin,
         commentAlign,
+        placeOverlay,
+        placeLabels: placeOverlay
+          ? await placeChipsForPhotos(selectedPhotos)
+          : undefined,
         mapSnapshot,
       });
       // Clear heavy draft before preview mounts under-stack create stays alive.
@@ -712,8 +754,24 @@ export function CardCreateScreen() {
     ],
   );
 
-  if (showLoading) {
-    return <LoadingView />;
+  if (showFullLoad) {
+    const listing =
+      loadProgress.phase === 'listing' ||
+      loadProgress.total <= 0 ||
+      loadProgress.month !== month;
+    return (
+      <LoadingView
+        message={
+          listing
+            ? strings.cards.loadingAlbum
+            : strings.cards.loadingPhotos(loadProgress.done, loadProgress.total)
+        }
+        progress={{
+          done: listing ? 0 : loadProgress.done,
+          total: listing ? 0 : loadProgress.total,
+        }}
+      />
+    );
   }
 
   if (isError || !data) {
@@ -785,23 +843,41 @@ export function CardCreateScreen() {
                 onDraggingChange={setCollageDragging}
                 onDeselect={onToggle}
                 cardW={cardW}
+                placeOverlay={placeOverlay}
+                onPlaceOverlayChange={setPlaceOverlay}
+                placeLabelsById={placeLabelsById}
               />
             </Animated.View>
           </Animated.View>
         ) : null}
         <View style={styles.gridSheet}>
           {sheetChrome}
+          {isFetching ? (
+            <LoadProgressBanner
+              label={
+                loadProgress.total > 0 && loadProgress.month === month
+                  ? strings.cards.loadingPhotos(
+                      loadProgress.done,
+                      loadProgress.total,
+                    )
+                  : strings.cards.loadingAlbum
+              }
+              done={loadProgress.month === month ? loadProgress.done : 0}
+              total={loadProgress.month === month ? loadProgress.total : 0}
+            />
+          ) : null}
           <View style={styles.gridFlex}>
             <PhotoSelectGrid
               photos={pickerPhotos}
               sections={
                 sortMode !== 'place'
                   ? null
-                  : placeLoading
-                    ? null
-                    : placeSections
+                  : placeSections.length > 0
+                    ? placeSections
+                    : null
               }
               sectionsLoading={sortMode === 'place' && placeLoading}
+              sectionsProgress={placeProgress}
               selectedAssetIds={selectedAssetIds}
               onToggle={onToggle}
               scrollEnabled={!collageDragging}
@@ -934,6 +1010,22 @@ const styles = StyleSheet.create({
     color: theme.colors.subtle,
     textAlign: 'center',
     paddingHorizontal: theme.spacing.md,
+  },
+  placeToggle: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.hairline,
+    backgroundColor: theme.colors.surface,
+  },
+  placeToggleText: {
+    ...theme.type.micro,
+    color: theme.colors.subtle,
+    fontWeight: '600',
+  },
+  placeToggleTextOn: {
+    color: theme.colors.ink,
   },
   previewStage: {
     backgroundColor: theme.colors.surfaceAlt,

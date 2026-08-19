@@ -18,6 +18,8 @@ import { theme } from '@/shared/constants/theme';
 export interface StampBadgeProps {
   name: string;
   collected: boolean;
+  /** First collected this calendar month. */
+  isNew?: boolean;
   /** Play press-in stamp animation once (newly earned). */
   animateIn?: boolean;
   /** Deterministic slight rotation for collected stamps (−8…8 deg). */
@@ -39,6 +41,7 @@ const never = { reduceMotion: ReduceMotion.Never as const };
 export function StampBadge({
   name,
   collected,
+  isNew = false,
   animateIn = false,
   tiltDeg = 0,
   onPress,
@@ -147,6 +150,14 @@ export function StampBadge({
       <Animated.View style={[styles.sealWrap, sealStyle]}>
         <SealFace name={name} hero={hero} />
       </Animated.View>
+      {isNew && !hero ? (
+        <View
+          style={styles.newBadge}
+          accessibilityLabel={strings.stamps.newBadgeA11y}
+        >
+          <Text style={styles.newBadgeText}>{strings.stamps.newBadge}</Text>
+        </View>
+      ) : null}
     </View>
   ) : (
     <View
@@ -236,6 +247,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: theme.spacing.xs,
+    overflow: 'visible',
   },
   slotHero: {
     width: 140,
@@ -296,5 +308,22 @@ const styles = StyleSheet.create({
     ...theme.type.micro,
     color: theme.colors.subtle,
     marginTop: 2,
+  },
+  newBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: theme.colors.ink,
+  },
+  newBadgeText: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 9,
+    lineHeight: 11,
+    letterSpacing: 0.4,
+    color: theme.colors.surface,
+    fontWeight: '700',
   },
 });

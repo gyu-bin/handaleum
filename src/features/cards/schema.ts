@@ -30,6 +30,10 @@ export const recapCardSchema = z.object({
   paperSkin: paperSkinSchema.default('ivory'),
   /** One-line comment horizontal alignment. */
   commentAlign: commentAlignSchema.default('left'),
+  /** Short 구/시 chips on collage cells. */
+  placeOverlay: z.boolean().default(false),
+  /** Same order as photoRefs. Empty string = no chip. */
+  placeLabels: z.array(z.string()).max(5).optional(),
   mapSnapshot: mapSnapshotSchema,
   createdAt: z.iso.datetime(),
 });
@@ -39,3 +43,12 @@ export const recapCardDraftSchema = recapCardSchema.omit({
   id: true,
   createdAt: true,
 });
+
+/** Recap board cell caption — short enough to sit under a circle. */
+export const PLACE_ALIAS_MAX = 16;
+
+/** place identity → user alias. Empty values are dropped on write. */
+export const placeAliasesSchema = z.record(
+  z.string().min(1),
+  z.string().min(1).max(PLACE_ALIAS_MAX),
+);

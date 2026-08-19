@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { theme } from '@/shared/constants/theme';
@@ -15,9 +16,24 @@ const CHIP_H = 40;
  * Fixed chip height + generous scroll padding so Hangul is not clipped.
  */
 export function RegionChips({ sidos, selected, onSelect }: RegionChipsProps) {
+  const scrollRef = useRef<ScrollView>(null);
+  const xFor = useRef<Record<string, number>>({});
+
+  useEffect(() => {
+    const x = xFor.current[selected];
+    if (x == null) {
+      return;
+    }
+    scrollRef.current?.scrollTo({
+      x: Math.max(0, x - theme.spacing.lg),
+      animated: true,
+    });
+  }, [selected]);
+
   return (
     <View style={styles.wrap}>
       <ScrollView
+        ref={scrollRef}
         horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.scroll}
@@ -29,6 +45,9 @@ export function RegionChips({ sidos, selected, onSelect }: RegionChipsProps) {
             <Pressable
               key={sido}
               onPress={() => onSelect(sido)}
+              onLayout={(e) => {
+                xFor.current[sido] = e.nativeEvent.layout.x;
+              }}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
               style={[styles.chip, active && styles.chipActive]}

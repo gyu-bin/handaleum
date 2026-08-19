@@ -1,4 +1,4 @@
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { theme } from '@/shared/constants/theme';
 
@@ -8,6 +8,8 @@ export type CityStampUnit = {
   id: string;
   name: string;
   collected: boolean;
+  /** First collected in the current calendar month. */
+  isNew?: boolean;
   animateIn: boolean;
   tiltDeg: number;
 };
@@ -51,14 +53,16 @@ export function CityStampSections({
   onSelectCollected,
 }: CityStampSectionsProps) {
   return (
-    <FlatList
-      data={sections}
-      keyExtractor={(item) => item.city}
-      contentContainerStyle={styles.list}
-      renderItem={({ item: section }) => {
+    <ScrollView
+      style={styles.list}
+      contentContainerStyle={styles.content}
+      nestedScrollEnabled
+      directionalLockEnabled
+    >
+      {sections.map((section) => {
         const rows = chunkRows(section.units, COLS);
         return (
-          <View style={styles.section}>
+          <View key={section.city} style={styles.section}>
             {section.showHeader ? (
               <View style={styles.header}>
                 <Text style={styles.headerTitle}>{section.city}</Text>
@@ -76,6 +80,7 @@ export function CityStampSections({
                       <StampBadge
                         name={unit.name}
                         collected={unit.collected}
+                        isNew={unit.isNew}
                         animateIn={unit.animateIn || nonce > 0}
                         tiltDeg={unit.tiltDeg}
                         onPress={
@@ -96,13 +101,16 @@ export function CityStampSections({
             ))}
           </View>
         );
-      }}
-    />
+      })}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   list: {
+    flex: 1,
+  },
+  content: {
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: theme.spacing.xl,
   },
@@ -133,6 +141,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: theme.spacing.sm,
     gap: theme.spacing.sm,
+    overflow: 'visible',
   },
   cell: {
     flex: 1,

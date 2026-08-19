@@ -1,11 +1,13 @@
 import type { PhotoRef } from '../types';
 import {
   ensurePlacePermission,
+  peekResolvedPlace,
   placeBucketKey,
   resolveDetailLabel,
   resolvePlace,
   resolveVisitPlaces,
 } from '../services/placeResolve';
+import { collectBuckets, type PlaceBucket } from './visitPlaceBuild';
 
 import {
   formatAlbumPlaceLabel,
@@ -69,38 +71,21 @@ export type PlacePhotoSection = {
   data: PhotoRef[];
 };
 
-/**
- * Group month photos under journey-style place headers for the card picker.
- */
-export async function groupPhotosByJourneyPlace(
+export type PlaceGroupProgress = {
+  done: number;
+  total: number;
+};
+
+function sectionsFromPhotos(
   photos: PhotoRef[],
   unknownLabel: string,
-): Promise<PlacePhotoSection[]> {
-  if (photos.length === 0) {
-    return [];
-  }
-
-  const allowed = await ensurePlacePermission(true);
-  if (!allowed) {
-    return [
-      {
-        title: unknownLabel,
-        data: [...photos].sort((a, b) => b.takenAt.localeCompare(a.takenAt)),
-      },
-    ];
-  }
-
-  const bucketLabel = new Map<string, string>();
+): PlacePhotoSection[] {
   type Acc = { title: string; photos: PhotoRef[]; firstTakenAt: string };
   const groups = new Map<string, Acc>();
 
   for (const photo of photos) {
-    const key = placeBucketKey(photo.lat, photo.lng);
-    if (!bucketLabel.has(key)) {
-      const place = await resolvePlace(photo.lat, photo.lng);
-      bucketLabel.set(key, place?.journeyLabel ?? unknownLabel);
-    }
-    const title = bucketLabel.get(key)!;
+    const place = peekResolvedPlace(photo.lat, photo.lng);
+    const title = place?.journeyLabel ?? unknownLabel;
     let acc = groups.get(title);
     if (!acc) {
       acc = { title, photos: [], firstTakenAt: photo.takenAt };
@@ -118,4 +103,66 @@ export async function groupPhotosByJourneyPlace(
       title: group.title,
       data: [...group.photos].sort((a, b) => b.takenAt.localeCompare(a.takenAt)),
     }));
+}
+
+/**
+ * Group month photos under journey-style place headers for the card picker.
+ * Cache hits paint immediately; remaining ~110m buckets geocode one at a time.
+ */
+export async function groupPhotosByJourneyPlace(
+  photos: PhotoRef[],
+  unknownLabel: string,
+  options?: {
+    onProgress?: (
+      sections: PlacePhotoSection[],
+      progress: PlaceGroupProgress,
+    ) => void;
+    signal?: { cancelled: boolean };
+  },
+): Promise<PlacePhotoSection[]> {
+  if (photos.length === 0) {
+    return [];
+  }
+
+  const buckets = collectBuckets(photos);
+  const pending: PlaceBucket[] = [];
+  for (const bucket of buckets) {
+    if (!peekResolvedPlace(bucket.lat, bucket.lng)) {
+      pending.push(bucket);
+    }
+  }
+
+  const emit = (done: number) => {
+    const sections = sectionsFromPhotos(photos, unknownLabel);
+    options?.onProgress?.(sections, { done, total: buckets.length });
+    return sections;
+  };
+
+  const cached = buckets.length - pending.length;
+  const initial = emit(cached);
+  if (pending.length === 0) {
+    return initial;
+  }
+
+  const allowed = await ensurePlacePermission(true);
+  if (!allowed) {
+    return [
+      {
+        title: unknownLabel,
+        data: [...photos].sort((a, b) => b.takenAt.localeCompare(a.takenAt)),
+      },
+    ];
+  }
+
+  let done = cached;
+  for (const bucket of pending) {
+    if (options?.signal?.cancelled) {
+      return sectionsFromPhotos(photos, unknownLabel);
+    }
+    await resolvePlace(bucket.lat, bucket.lng);
+    done += 1;
+    emit(done);
+  }
+
+  return sectionsFromPhotos(photos, unknownLabel);
 }

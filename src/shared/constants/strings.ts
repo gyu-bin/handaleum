@@ -115,7 +115,7 @@ export const strings = {
     monthTitle: (monthNumber: number) => `${MONTH_NAMES[monthNumber - 1]}의 지도`,
     /** Evidence line under the title — cluster count, not walk steps. */
     monthMeta: (monthLabel: string, places: number) =>
-      places > 0 ? `${monthLabel} · ${countWord(places)}곳` : monthLabel,
+      places > 0 ? `${monthLabel} · ${countWord(places)} 곳` : monthLabel,
     /** Shown while GPS for this month is still resolving in the background. */
     resolvingLocations: '이번 달 위치 확인 중…',
     /** Full-album stamp indexing banner (home map). */
@@ -264,6 +264,7 @@ export const strings = {
   },
   cards: {
     listTitle: '내 회고',
+    listArchive: '카드 기록',
     listEmpty: '아직 만든 회고 카드가 없습니다',
     createTitle: '카드 만들기',
     /** Primary CTA on the create screen (not the edit "저장"). */
@@ -289,8 +290,24 @@ export const strings = {
     sortOldest: '오래된순',
     sortByPlace: '위치별',
     placeUnknown: '위치 미확인',
+    placeGrouping: '위치 묶는 중',
+    loadingAlbum: '앨범 읽는 중',
+    loadingPhotos: (done: number, total: number) =>
+      `사진 ${done.toLocaleString('ko-KR')}/${total.toLocaleString('ko-KR')}`,
+    boardPlace: '위치',
+    boardDay: '날',
+    boardEmpty: '이번 달 위치 사진이 없습니다',
+    boardSharePlaces: (count: number) => `${count}개 위치 공유`,
+    boardShareDays: (count: number) => `${count}일 공유`,
+    boardRenameTitle: '이 위치 이름',
+    boardRenamePlaceholder: '예: 한옥마을',
+    boardRenameHint: '탭하면 공유할 위치. 길게 누르면 이름 수정.',
+    boardDayHint: '탭하면 공유할 날을 고릅니다.',
+    boardRenameReset: '위치 이름으로 되돌리기',
     arrangeLabel: '배치',
     arrangeHint: '카드 사진 탭으로 해제 · 길게 눌러 위치 변경 · 실수는 되돌리기',
+    placeOverlay: '장소에 이름',
+    placeOverlayA11y: '사진 위에 구·시 이름 표시',
     selectionUndo: '되돌리기',
     selectionReset: '초기화',
     maxPhotosHint: '사진은 최대 5장까지예요',
@@ -343,7 +360,8 @@ export const strings = {
     progress: (a: number, b: number) => `${a}/${b}`,
     progressLabel: (sido: string) => `${sido} · `,
     cityProgressLabel: (city: string) => `${city} · `,
-    newThisMonth: (n: number) => `이번 달 +${n}`,
+    newBadge: 'NEW',
+    newBadgeA11y: '이번 달에 새로 모은 도장',
     earned: (name: string) => `${name} 도장!`,
     emptyTitle: '아직 모은 동네가 없어요',
     empty: '위치가 있는 사진이 있으면 동 단위로 도장이 생겨요',

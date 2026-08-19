@@ -5,10 +5,13 @@ import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
 import { BikeLoader } from './BikeLoader';
+import { LoadProgressBanner } from './LoadProgressBanner';
 
 export interface LoadingViewProps {
   /** Optional line under the mark. Defaults to the common loading string. */
   message?: string;
+  /** When set, bike + hairline progress. `total === 0` pulses. */
+  progress?: { done: number; total: number };
 }
 
 /**
@@ -17,6 +20,7 @@ export interface LoadingViewProps {
  */
 export function LoadingView({
   message = strings.common.loading,
+  progress,
 }: LoadingViewProps) {
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
@@ -25,7 +29,17 @@ export function LoadingView({
         <Text style={styles.brand} accessibilityRole="header">
           {strings.brand}
         </Text>
-        <Text style={styles.message}>{message}</Text>
+        {progress ? (
+          <View style={styles.progress}>
+            <LoadProgressBanner
+              label={message}
+              done={progress.done}
+              total={progress.total}
+            />
+          </View>
+        ) : (
+          <Text style={styles.message}>{message}</Text>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -58,5 +72,10 @@ const styles = StyleSheet.create({
     color: theme.colors.subtle,
     textAlign: 'center',
     letterSpacing: 0.3,
+  },
+  progress: {
+    alignSelf: 'stretch',
+    maxWidth: 240,
+    marginTop: theme.spacing.xs,
   },
 });

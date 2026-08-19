@@ -15,6 +15,7 @@ import {
   resolveAssetUri,
   syncAssetDisplayUri,
 } from '../../photos/services/mediaLibrary';
+import { CollagePlaceChip } from './CardCollage';
 import { collageRects, COLLAGE_MAX, type CollageRect } from '../utils/collageLayout';
 
 const GUTTER = 6;
@@ -57,6 +58,8 @@ function EditableCell({
   onDragMove,
   onDragEnd,
   onPress,
+  placeLabel,
+  chipScale,
 }: {
   assetId: string;
   rect: CollageRect;
@@ -71,6 +74,8 @@ function EditableCell({
   onDragMove: (assetId: string, tx: number, ty: number) => void;
   onDragEnd: () => void;
   onPress?: (assetId: string) => void;
+  placeLabel?: string;
+  chipScale: number;
 }) {
   const uri = useUri(assetId);
   const left = useSharedValue(rect.x);
@@ -185,6 +190,9 @@ function EditableCell({
         ) : (
           <View style={[styles.image, styles.placeholder]} />
         )}
+        {placeLabel ? (
+          <CollagePlaceChip label={placeLabel} scale={chipScale} />
+        ) : null}
       </Animated.View>
     </GestureDetector>
   );
@@ -205,6 +213,8 @@ export interface CollageEditorProps {
   onDraggingChange?: (dragging: boolean) => void;
   /** Short tap on a cell (e.g. remove from selection on create). */
   onPressCell?: (assetId: string) => void;
+  /** assetId → 구/시 chip. */
+  placeLabelsById?: Record<string, string>;
 }
 
 /**
@@ -219,9 +229,11 @@ export function CollageEditor({
   onSwap,
   onDraggingChange,
   onPressCell,
+  placeLabelsById,
 }: CollageEditorProps) {
   const w = width ?? size ?? 0;
   const h = height ?? size ?? 0;
+  const chipScale = w / 270;
   const shown = assetIds.slice(0, COLLAGE_MAX);
   const rects = useMemo(
     () => collageRects(shown.length, w, h, GUTTER),
@@ -288,6 +300,8 @@ export function CollageEditor({
           onDragMove={handleDragMove}
           onDragEnd={handleDragEnd}
           onPress={onPressCell}
+          placeLabel={placeLabelsById?.[id]}
+          chipScale={chipScale}
         />
       ))}
     </View>

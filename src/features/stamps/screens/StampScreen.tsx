@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { useNavigation, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 
@@ -15,7 +17,7 @@ import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 
-import { useCurrentMonth } from '@/features/photos/hooks/useCurrentMonth';
+import { currentMonthKey } from '@/features/photos/utils/month';
 import { usePhotoPermission } from '@/features/photos/hooks/usePhotoPermission';
 
 import { CityList, type CityRow } from '../components/CityList';
@@ -30,6 +32,7 @@ import { StampDongPhotosModal } from '../components/StampDongPhotosModal';
 import { StampEarnOverlay } from '../components/StampEarnOverlay';
 import { StampIndexingGate } from '../components/StampIndexingGate';
 import { StampMapModal } from '../components/StampMapModal';
+import { StampPager } from '../components/StampPager';
 import { StampScanIntroModal } from '../components/StampScanIntroModal';
 import { useStampLibraryProgress } from '../hooks/useStampLibraryProgress';
 import { useStampLibrarySync } from '../hooks/useStampLibrarySync';
@@ -47,7 +50,7 @@ import {
   prebuildStampDongPhotoIndex,
   type StampDongPhotosQuery,
 } from '../services/stampDongPhotos';
-import { firstsInMonth } from '../services/stampsStorage';
+import type { StampsCollected } from '../types';
 
 function tiltForName(name: string): number {
   let h = 0;
@@ -55,6 +58,69 @@ function tiltForName(name: string): number {
     h = (h + name.charCodeAt(i) * (i + 1)) % 17;
   }
   return h - 8;
+}
+
+function cityRowsForSido(
+  sido: string,
+  collected: StampsCollected,
+): CityRow[] {
+  const rows = l1UnitsForSido(sido).map((unit) => {
+    const leaves = l2LeavesForUnit(sido, unit);
+    return {
+      key: unit.key,
+      label: unit.label,
+      collected: countCollectedInLeaves(
+        collected,
+        sido,
+        unit.stampCity,
+        leaves,
+      ),
+      total: leaves.length,
+    };
+  });
+  rows.sort((a, b) => {
+    if ((a.collected > 0) !== (b.collected > 0)) {
+      return a.collected > 0 ? -1 : 1;
+    }
+    return a.label.localeCompare(b.label, 'ko');
+  });
+  return rows;
+}
+
+function leafSectionForUnit(
+  sido: string,
+  unit: StampL1Unit,
+  collected: StampsCollected,
+  animateIds: Set<string>,
+): CityStampSection {
+  const leaves = l2LeavesForUnit(sido, unit);
+  const thisMonth = currentMonthKey();
+  const units = leaves.map((name) => {
+    const id = stampId(sido, unit.stampCity, name);
+    const entry = collected[id];
+    return {
+      id,
+      name,
+      collected: Boolean(entry),
+      isNew: Boolean(entry) && entry.firstMonth === thisMonth,
+      animateIn: animateIds.has(id),
+      tiltDeg: tiltForName(name),
+    };
+  });
+  units.sort((a, b) => {
+    if (a.collected !== b.collected) {
+      return a.collected ? -1 : 1;
+    }
+    return a.name.localeCompare(b.name, 'ko');
+  });
+  return {
+    city: unit.label,
+    grouped: true,
+    showHeader: false,
+    collected: countCollectedInLeaves(collected, sido, unit.stampCity, leaves),
+    total: leaves.length,
+    units,
+  };
 }
 
 function MapIcon({ color }: { color: string }) {
@@ -80,7 +146,8 @@ function MapIcon({ color }: { color: string }) {
  * 발도장 — 시·도 → L1(구·시·군) → L2(동 / 읍·면).
  */
 export function StampScreen() {
-  const { month } = useCurrentMonth();
+  const navigation = useNavigation();
+  const router = useRouter();
   const { isReady, status: permissionStatus } = usePhotoPermission();
   const { syncing } = useStampLibrarySync({
     isReady,
@@ -126,8 +193,79 @@ export function StampScreen() {
     setShowScanIntro(false);
   }, []);
 
+  /** In-screen layers sit above the stamps route; native pop would skip to the map. */
+  const popStampLayer = useCallback((): boolean => {
+    if (dongPhotos) {
+      setDongPhotos(null);
+      return true;
+    }
+    if (mapOpen) {
+      setMapOpen(false);
+      return true;
+    }
+    if (l1Key) {
+      setL1Key(null);
+      return true;
+    }
+    return false;
+  }, [dongPhotos, l1Key, mapOpen]);
+
+  const popStampLayerRef = useRef(popStampLayer);
+  popStampLayerRef.current = popStampLayer;
+  const nestedBack = Boolean(l1Key) || mapOpen || dongPhotos != null;
+
   useEffect(() => {
-    setL1Key(null);
+    // Horizontal pager owns in-content swipes; left-edge back is custom.
+    navigation.setOptions({ gestureEnabled: false });
+  }, [navigation]);
+
+  useEffect(() => {
+    const stop = navigation.addListener('beforeRemove', (e) => {
+      if (!popStampLayerRef.current()) {
+        return;
+      }
+      e.preventDefault();
+    });
+    return stop;
+  }, [navigation]);
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (popStampLayerRef.current()) {
+        return true;
+      }
+      return false;
+    });
+    return () => sub.remove();
+  }, []);
+
+  const edgeBack = useMemo(
+    () =>
+      Gesture.Pan()
+        .runOnJS(true)
+        .activeOffsetX(16)
+        .failOffsetY([-28, 28])
+        .onEnd((e) => {
+          if (e.translationX <= 56) {
+            return;
+          }
+          if (popStampLayerRef.current()) {
+            return;
+          }
+          if (router.canGoBack()) {
+            router.back();
+          }
+        }),
+    [router],
+  );
+
+  useEffect(() => {
+    setL1Key((key) => {
+      if (!key) {
+        return null;
+      }
+      return l1UnitsForSido(sido).some((unit) => unit.key === key) ? key : null;
+    });
   }, [sido]);
 
   const l1Units = useMemo(() => l1UnitsForSido(sido), [sido]);
@@ -194,54 +332,98 @@ export function StampScreen() {
     setReplayNonce((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
   }, []);
 
-  const onSelectCollected = useCallback(
-    (unit: CityStampUnit) => {
-      if (!selectedL1) {
-        return;
-      }
+  const openDongPhotos = useCallback(
+    (unit: CityStampUnit, stampCity: string) => {
       onReplayStamp(unit.id);
       setDongPhotos({
         sido,
-        city: selectedL1.stampCity,
+        city: stampCity,
         leaf: unit.name,
       });
     },
-    [onReplayStamp, selectedL1, sido],
+    [onReplayStamp, sido],
   );
 
-  const monthFirsts = firstsInMonth(collected, month);
-
-  const leavesByL1 = useMemo(() => {
-    const map = new Map<string, string[]>();
+  const l1Rows = useMemo(
+    () => cityRowsForSido(sido, collected),
+    [collected, sido],
+  );
+  const l1UnitByKey = useMemo(() => {
+    const map = new Map<string, StampL1Unit>();
     for (const unit of l1Units) {
-      map.set(unit.key, l2LeavesForUnit(sido, unit));
+      map.set(unit.key, unit);
     }
     return map;
-  }, [l1Units, sido]);
+  }, [l1Units]);
+  const sidoIndex = Math.max(0, SIDO_ORDER.indexOf(sido));
+  const l1Index = Math.max(
+    0,
+    l1Rows.findIndex((row) => row.key === l1Key),
+  );
 
-  const l1Rows: CityRow[] = useMemo(() => {
-    const rows = l1Units.map((unit) => {
-      const leaves = leavesByL1.get(unit.key) ?? [];
-      return {
-        key: unit.key,
-        label: unit.label,
-        collected: countCollectedInLeaves(
-          collected,
-          sido,
-          unit.stampCity,
-          leaves,
-        ),
-        total: leaves.length,
-      };
-    });
-    rows.sort((a, b) => {
-      if ((a.collected > 0) !== (b.collected > 0)) {
-        return a.collected > 0 ? -1 : 1;
+  const onSidoPage = useCallback(
+    (index: number) => {
+      const next = SIDO_ORDER[index];
+      if (next) {
+        setSido(next);
       }
-      return a.label.localeCompare(b.label, 'ko');
-    });
-    return rows;
-  }, [collected, l1Units, leavesByL1, sido]);
+    },
+    [],
+  );
+  const onL1Page = useCallback(
+    (index: number) => {
+      const next = l1Rows[index];
+      if (next) {
+        setL1Key(next.key);
+      }
+    },
+    [l1Rows],
+  );
+  const renderSidoPage = useCallback(
+    (pageSido: string) => (
+      <ScrollView style={styles.pageScroll} nestedScrollEnabled directionalLockEnabled>
+        <CityList
+          cities={cityRowsForSido(pageSido, collected)}
+          onSelect={(key) => {
+            setSido(pageSido);
+            setL1Key(key);
+          }}
+        />
+      </ScrollView>
+    ),
+    [collected],
+  );
+  const renderL1Page = useCallback(
+    (row: CityRow) => {
+      const unit = l1UnitByKey.get(row.key);
+      if (!unit) {
+        return null;
+      }
+      const section = leafSectionForUnit(sido, unit, collected, animateIds);
+      if (section.total === 0) {
+        return (
+          <View style={styles.emptyWrap}>
+            <StateView
+              title={unit.label}
+              description={
+                unit.kind === 'gun'
+                  ? strings.stamps.gunLeafListEmpty
+                  : strings.stamps.leafListEmpty
+              }
+            />
+          </View>
+        );
+      }
+      return (
+        <CityStampSections
+          sections={[section]}
+          replayNonce={replayNonce}
+          onSelectCollected={(stamp) => openDongPhotos(stamp, unit.stampCity)}
+        />
+      );
+    },
+    [animateIds, collected, l1UnitByKey, openDongPhotos, replayNonce, sido],
+  );
 
   const sidoCollected = useMemo(
     () => l1Rows.reduce((n, r) => n + r.collected, 0),
@@ -258,38 +440,13 @@ export function StampScreen() {
     if (!selectedL1) {
       return null;
     }
-    const leaves = leavesByL1.get(selectedL1.key) ?? [];
-    const units = leaves.map((name) => {
-      const id = stampId(sido, selectedL1.stampCity, name);
-      return {
-        id,
-        name,
-        collected: Boolean(collected[id]),
-        animateIn: animateIds.has(id),
-        tiltDeg: tiltForName(name),
-      };
-    });
-    units.sort((a, b) => {
-      if (a.collected !== b.collected) {
-        return a.collected ? -1 : 1;
-      }
-      return a.name.localeCompare(b.name, 'ko');
-    });
-    return {
-      city: selectedL1.label,
-      grouped: true,
-      showHeader: false,
-      collected: countCollectedInLeaves(
-        collected,
-        sido,
-        selectedL1.stampCity,
-        leaves,
-      ),
-      total: leaves.length,
-      units,
-    };
-  }, [animateIds, collected, leavesByL1, selectedL1, sido]);
+    return leafSectionForUnit(sido, selectedL1, collected, animateIds);
+  }, [animateIds, collected, selectedL1, sido]);
 
+  const pagerTick = useMemo(
+    () => [collected, replayNonce, animateIds] as const,
+    [animateIds, collected, replayNonce],
+  );
   const showBootLoading = useHeldBusy(!isReady, 1500);
 
   if (showBootLoading) {
@@ -317,31 +474,22 @@ export function StampScreen() {
       <ScreenHeader
         title={strings.stamps.title}
         onBack={
-          gateOpen ? undefined : l1Key ? () => setL1Key(null) : undefined
+          gateOpen ? undefined : nestedBack ? popStampLayer : undefined
         }
         trailing={
           gateOpen ? null : (
-            <View style={styles.trailing}>
-              {monthFirsts > 0 ? (
-                <View style={styles.pill}>
-                  <Text style={styles.pillText}>
-                    {strings.stamps.newThisMonth(monthFirsts)}
-                  </Text>
-                </View>
-              ) : null}
-              <Pressable
-                onPress={() => setMapOpen(true)}
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityLabel={strings.stamps.mapOpen}
-                style={({ pressed }) => [
-                  styles.mapBtn,
-                  pressed && styles.mapBtnPressed,
-                ]}
-              >
-                <MapIcon color={theme.colors.ink} />
-              </Pressable>
-            </View>
+            <Pressable
+              onPress={() => setMapOpen(true)}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={strings.stamps.mapOpen}
+              style={({ pressed }) => [
+                styles.mapBtn,
+                pressed && styles.mapBtnPressed,
+              ]}
+            >
+              <MapIcon color={theme.colors.ink} />
+            </Pressable>
           )
         }
       />
@@ -406,32 +554,33 @@ export function StampScreen() {
                 description={strings.stamps.empty}
               />
             </View>
-          ) : selectedL1 && leafSection ? (
-            leafSection.total === 0 ? (
-              <View style={styles.emptyWrap}>
-                <StateView
-                  title={selectedL1.label}
-                  description={
-                    selectedL1.kind === 'gun'
-                      ? strings.stamps.gunLeafListEmpty
-                      : strings.stamps.leafListEmpty
-                  }
-                />
-              </View>
-            ) : (
-              <CityStampSections
-                sections={[leafSection]}
-                replayNonce={replayNonce}
-                onSelectCollected={onSelectCollected}
-              />
-            )
+          ) : l1Key ? (
+            <StampPager
+              data={l1Rows}
+              index={l1Index}
+              onIndexChange={onL1Page}
+              keyExtractor={(row) => row.key}
+              renderPage={renderL1Page}
+              extraData={pagerTick}
+            />
           ) : (
-            <ScrollView>
-              <CityList cities={l1Rows} onSelect={setL1Key} />
-            </ScrollView>
+            <StampPager
+              data={SIDO_ORDER}
+              index={sidoIndex}
+              onIndexChange={onSidoPage}
+              keyExtractor={(name) => name}
+              renderPage={renderSidoPage}
+              extraData={pagerTick}
+            />
           )}
         </>
       )}
+
+      {!gateOpen && !mapOpen && !dongPhotos ? (
+        <GestureDetector gesture={edgeBack}>
+          <View style={styles.edgeBack} />
+        </GestureDetector>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -443,11 +592,6 @@ const styles = StyleSheet.create({
   },
   grain: {
     opacity: 0.3,
-  },
-  trailing: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
   },
   mapBtn: {
     width: 36,
@@ -461,18 +605,6 @@ const styles = StyleSheet.create({
   },
   mapBtnPressed: {
     opacity: 0.7,
-  },
-  pill: {
-    backgroundColor: theme.colors.ink,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  pillText: {
-    ...theme.type.micro,
-    fontFamily: theme.fonts.sans,
-    color: theme.colors.surface,
-    fontWeight: '700',
   },
   progressBlock: {
     paddingHorizontal: theme.spacing.lg,
@@ -500,5 +632,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: theme.spacing.md,
     paddingHorizontal: theme.spacing.lg,
+  },
+  pageScroll: {
+    flex: 1,
+  },
+  edgeBack: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 28,
+    zIndex: 8,
   },
 });

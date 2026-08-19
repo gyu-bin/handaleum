@@ -1,6 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, type ComponentProps, type ReactElement } from 'react';
 import {
-  ActivityIndicator,
   InteractionManager,
   Platform,
   type ListRenderItemInfo,
@@ -14,6 +13,8 @@ import {
 } from 'react-native';
 import Animated from 'react-native-reanimated';
 
+import { LoadProgressBanner } from '@/shared/components/LoadProgressBanner';
+import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
 import { AssetThumbImage } from '../../photos/components/AssetThumbImage';
@@ -28,6 +29,8 @@ export interface PhotoSelectGridProps {
   sections?: PlacePhotoSection[] | null;
   /** Place-mode resolve in flight — show a quiet spinner under the header. */
   sectionsLoading?: boolean;
+  /** Bucket resolve ratio while `sectionsLoading`. */
+  sectionsProgress?: { done: number; total: number } | null;
   selectedAssetIds: string[];
   onToggle: (assetId: string) => void;
   /** Rendered above the grid, inside the same (virtualized) scroll container. */
@@ -137,6 +140,7 @@ export function PhotoSelectGrid({
   photos,
   sections = null,
   sectionsLoading = false,
+  sectionsProgress = null,
   selectedAssetIds,
   onToggle,
   ListHeaderComponent,
@@ -175,9 +179,15 @@ export function PhotoSelectGrid({
     <View>
       {ListHeaderComponent}
       {sectionsLoading ? (
-        <View style={styles.loadingRow}>
-          <ActivityIndicator color={theme.colors.terracotta} />
-        </View>
+        <LoadProgressBanner
+          label={
+            sectionsProgress && sectionsProgress.total > 0
+              ? `${strings.cards.placeGrouping}  ${sectionsProgress.done}/${sectionsProgress.total}`
+              : strings.cards.placeGrouping
+          }
+          done={sectionsProgress?.done ?? 0}
+          total={sectionsProgress?.total ?? 0}
+        />
       ) : null}
     </View>
   );
@@ -288,10 +298,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  loadingRow: {
-    alignItems: 'center',
-    paddingVertical: theme.spacing.sm,
-  },
   sectionHeader: {
     paddingTop: theme.spacing.md,
     paddingBottom: theme.spacing.xs,

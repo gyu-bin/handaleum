@@ -26,6 +26,10 @@ import {
   isDummyAssetId,
   type DummyImageSize,
 } from './dummyPhotos';
+import {
+  resetMonthLoadProgress,
+  setMonthLoadProgress,
+} from './monthLoadProgress';
 import { readPinThumbFromDisk, writePinThumbToDisk } from './pinThumbCache';
 
 /**
@@ -271,72 +275,83 @@ export async function loadMonthlyPhotos(
 
   const { onPartial, shouldContinue } = options ?? {};
   const { startMs, endMs } = monthBounds(month);
-  const assets = await collectAssets({
-    createdAfter: startMs,
-    createdBefore: endMs,
-  });
+  setMonthLoadProgress({ month, phase: 'listing', done: 0, total: 0 });
+  try {
+    const assets = await collectAssets({
+      createdAfter: startMs,
+      createdBefore: endMs,
+    });
 
-  const photos: PhotoRef[] = [];
-  let noLocationCount = 0;
-  const uncached: Asset[] = [];
-  let softBudget = SOFT_RECHECK_CAP;
+    const photos: PhotoRef[] = [];
+    let noLocationCount = 0;
+    const uncached: Asset[] = [];
+    let softBudget = SOFT_RECHECK_CAP;
 
-  for (const asset of assets) {
-    const hit = fromCache(asset);
-    if (hit === 'miss') {
-      uncached.push(asset);
-    } else if (hit === 'no-location') {
-      // Recheck a capped set of prior misses (iCloud may have caught up).
-      if (softBudget > 0 && !softRecheckedNoLoc.has(asset.id)) {
-        softBudget -= 1;
-        softRecheckedNoLoc.add(asset.id);
+    for (const asset of assets) {
+      const hit = fromCache(asset);
+      if (hit === 'miss') {
         uncached.push(asset);
+      } else if (hit === 'no-location') {
+        // Recheck a capped set of prior misses (iCloud may have caught up).
+        if (softBudget > 0 && !softRecheckedNoLoc.has(asset.id)) {
+          softBudget -= 1;
+          softRecheckedNoLoc.add(asset.id);
+          uncached.push(asset);
+        } else {
+          noLocationCount += 1;
+        }
       } else {
-        noLocationCount += 1;
+        photos.push(hit);
       }
-    } else {
-      photos.push(hit);
     }
+
+    const total = assets.length;
+    const settled = () => photos.length + noLocationCount;
+    setMonthLoadProgress({ month, phase: 'gps', done: settled(), total });
+
+    let lastPartialAt = 0;
+    const emitPartial = (force: boolean) => {
+      if (!onPartial) {
+        return;
+      }
+      if (photos.length === 0 && !force) {
+        return;
+      }
+      const now = Date.now();
+      if (!force && now - lastPartialAt < PARTIAL_MIN_MS) {
+        return;
+      }
+      lastPartialAt = now;
+      // Partial frames skip a full sort — final return is sorted.
+      onPartial(snapshot(month, photos, noLocationCount, force));
+    };
+
+    // Emit early only when we already have pins, or when there is nothing left to resolve.
+    // Avoid flashing the empty-month state while GPS is still resolving.
+    if (photos.length > 0 || uncached.length === 0) {
+      emitPartial(uncached.length === 0);
+    }
+
+    await resolveUncachedLocations(uncached, {
+      batchSize: LOCATION_BATCH,
+      yieldMs: BATCH_YIELD_MS,
+      yieldToPinExports: true,
+      shouldContinue,
+      locOpts: { networkFallback: false },
+      onBatch: async ({ located: batchLocated, noLocation }) => {
+        photos.push(...batchLocated);
+        noLocationCount += noLocation;
+        setMonthLoadProgress({ month, phase: 'gps', done: settled(), total });
+        emitPartial(false);
+      },
+    });
+    emitPartial(true);
+
+    return snapshot(month, photos, noLocationCount, true);
+  } catch (error) {
+    resetMonthLoadProgress();
+    throw error;
   }
-
-  let lastPartialAt = 0;
-  const emitPartial = (force: boolean) => {
-    if (!onPartial) {
-      return;
-    }
-    if (photos.length === 0 && !force) {
-      return;
-    }
-    const now = Date.now();
-    if (!force && now - lastPartialAt < PARTIAL_MIN_MS) {
-      return;
-    }
-    lastPartialAt = now;
-    // Partial frames skip a full sort — final return is sorted.
-    onPartial(snapshot(month, photos, noLocationCount, force));
-  };
-
-  // Emit early only when we already have pins, or when there is nothing left to resolve.
-  // Avoid flashing the empty-month state while GPS is still resolving.
-  if (photos.length > 0 || uncached.length === 0) {
-    emitPartial(uncached.length === 0);
-  }
-
-  await resolveUncachedLocations(uncached, {
-    batchSize: LOCATION_BATCH,
-    yieldMs: BATCH_YIELD_MS,
-    yieldToPinExports: true,
-    shouldContinue,
-    locOpts: { networkFallback: false },
-    onBatch: async ({ located: batchLocated, noLocation }) => {
-      photos.push(...batchLocated);
-      noLocationCount += noLocation;
-      emitPartial(false);
-    },
-  });
-  emitPartial(true);
-
-  return snapshot(month, photos, noLocationCount, true);
 }
 
 /** Photo counts per month, for the month picker. */
