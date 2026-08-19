@@ -129,11 +129,15 @@ export function MonthlyMapScreen() {
     () => clusterPhotos(monthPhotos, zoom),
     [monthPhotos, zoom],
   );
-  // Header "N곳" is a month fact — not the visible pin count at the current zoom.
-  const placeCount = useMemo(
-    () => clusterPhotos(monthPhotos, DEFAULT_MAP_ZOOM).length,
-    [monthPhotos],
-  );
+  // Month fact: distinct ~110m GPS spots. Zoom-independent (map pins merge on
+  // pinch-out; this count does not). Not dong-collapsed — home skips geocode.
+  const placeCount = useMemo(() => {
+    const seen = new Set<string>();
+    for (const photo of monthPhotos) {
+      seen.add(placeBucketKey(photo.lat, photo.lng));
+    }
+    return seen.size;
+  }, [monthPhotos]);
 
   // Debounce zoom→recluster so every camera-idle tick doesn't remount markers.
   const zoomTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -481,7 +485,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 18,
+    minHeight: 22,
     paddingHorizontal: theme.spacing.xs,
   },
   headerTitleRow: {
@@ -538,11 +542,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   brandEyebrow: {
-    ...theme.type.micro,
+    ...theme.type.label,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.subtle,
-    fontWeight: '500',
-    letterSpacing: 0.4,
+    color: theme.colors.ink,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   wordmark: {
     fontFamily: theme.fonts.sans,

@@ -219,6 +219,8 @@ export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
     template: data.template,
     paperSkin: data.paperSkin,
     commentAlign: data.commentAlign,
+    placeOverlay: data.placeOverlay,
+    placeLabels: data.placeLabels,
     mapSnapshot: data.mapSnapshot,
   };
 

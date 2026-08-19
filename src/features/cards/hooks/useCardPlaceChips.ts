@@ -13,10 +13,15 @@ export async function placeChipsForPhotos(
 ): Promise<string[]> {
   const labels: string[] = [];
   for (const photo of photos) {
-    const place =
-      peekResolvedPlace(photo.lat, photo.lng) ??
-      (await resolvePlace(photo.lat, photo.lng));
-    labels.push(place ? (cardPhotoPlaceChip(place) ?? '') : '');
+    try {
+      const place =
+        peekResolvedPlace(photo.lat, photo.lng) ??
+        (await resolvePlace(photo.lat, photo.lng));
+      labels.push(place ? (cardPhotoPlaceChip(place) ?? '') : '');
+    } catch (error) {
+      console.warn('place chip failed', photo.assetId, error);
+      labels.push('');
+    }
   }
   return labels;
 }
@@ -34,19 +39,23 @@ export function useCardPlaceChips(
       return;
     }
     let cancelled = false;
-    void placeChipsForPhotos(photos).then((chips) => {
-      if (cancelled) {
-        return;
-      }
-      const next: Record<string, string> = {};
-      photos.forEach((photo, i) => {
-        const chip = chips[i];
-        if (chip) {
-          next[photo.assetId] = chip;
+    void placeChipsForPhotos(photos)
+      .then((chips) => {
+        if (cancelled) {
+          return;
         }
+        const next: Record<string, string> = {};
+        photos.forEach((photo, i) => {
+          const chip = chips[i];
+          if (chip) {
+            next[photo.assetId] = chip;
+          }
+        });
+        setLabels(next);
+      })
+      .catch((error) => {
+        console.warn('useCardPlaceChips failed', error);
       });
-      setLabels(next);
-    });
     return () => {
       cancelled = true;
     };

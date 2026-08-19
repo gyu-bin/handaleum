@@ -34,8 +34,8 @@ function NavIcon({
   name: HomeNavItem['icon'];
   active: boolean;
 }) {
-  const color = active ? theme.colors.ink : theme.colors.subtle;
-  const stroke = 1.65;
+  const color = active ? theme.colors.ink : theme.colors.inkSoft;
+  const stroke = 2.2;
   const size = 20;
   if (name === 'calendar') {
     return (
@@ -225,12 +225,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 13,
     letterSpacing: -0.15,
-    color: theme.colors.subtle,
-    fontWeight: '500',
+    color: theme.colors.inkSoft,
+    fontWeight: '600',
   },
   labelActive: {
     color: theme.colors.ink,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   activeTick: {
     width: 14,

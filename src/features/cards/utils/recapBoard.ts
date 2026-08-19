@@ -8,6 +8,8 @@ export type RecapBoardNode = {
   label: string;
   assetId: string | null;
   photoCount: number;
+  /** Calendar pad — occupies a weekday slot, no circle. */
+  blank?: boolean;
 };
 
 function pad2(n: number): string {
@@ -35,6 +37,32 @@ export function snakeRows<T>(items: T[], cols: number): T[][] {
   return rows;
 }
 
+/** Left-to-right rows (monthly calendar, not snake). */
+export function chunkRows<T>(items: T[], cols: number): T[][] {
+  const rows: T[][] = [];
+  for (let i = 0; i < items.length; i += cols) {
+    rows.push(items.slice(i, i + cols));
+  }
+  return rows;
+}
+
+/** Split a snake into pages of `maxRows` so the board can page horizontally. */
+export function recapBoardPages<T>(
+  items: T[],
+  cols: number,
+  maxRows: number,
+): T[][] {
+  const perPage = Math.max(1, cols * maxRows);
+  if (items.length === 0) {
+    return [];
+  }
+  const pages: T[][] = [];
+  for (let i = 0; i < items.length; i += perPage) {
+    pages.push(items.slice(i, i + perPage));
+  }
+  return pages;
+}
+
 /** Grid slot for index `i` in a left-right / right-left snake. */
 export function snakeCell(
   index: number,
@@ -56,15 +84,17 @@ export function snakeRailPath(
   cell: number,
   rowH: number,
   circleCy: number,
+  gapX = 0,
 ): string {
   if (count < 2 || cols < 1) {
     return '';
   }
+  const step = cell + gapX;
   const pts: { x: number; y: number }[] = [];
   for (let i = 0; i < count; i += 1) {
     const { row, col } = snakeCell(i, cols);
     pts.push({
-      x: col * cell + cell / 2,
+      x: col * step + cell / 2,
       y: row * rowH + circleCy,
     });
   }
@@ -116,6 +146,35 @@ export function recapDayNodes(
     });
   }
   return nodes;
+}
+
+/** Sunday = 0 … Saturday = 6, local calendar. */
+export function monthStartWeekday(month: MonthKey): number {
+  const [year, mon] = month.split('-').map(Number) as [number, number];
+  return new Date(year, mon - 1, 1).getDay();
+}
+
+function blankNode(id: string): RecapBoardNode {
+  return { id, label: '', assetId: null, photoCount: 0, blank: true };
+}
+
+/**
+ * Month days plus leading/trailing pads so the grid is a Sun–Sat calendar.
+ */
+export function recapDayCalendarNodes(
+  month: MonthKey,
+  photos: PhotoRef[],
+): RecapBoardNode[] {
+  const days = recapDayNodes(month, photos);
+  const lead = monthStartWeekday(month);
+  const leadNodes = Array.from({ length: lead }, (_, i) =>
+    blankNode(`pad-lead:${i}`),
+  );
+  const trail = (7 - ((lead + days.length) % 7)) % 7;
+  const trailNodes = Array.from({ length: trail }, (_, i) =>
+    blankNode(`pad-trail:${i}`),
+  );
+  return [...leadNodes, ...days, ...trailNodes];
 }
 
 export function placeIdentity(place: {

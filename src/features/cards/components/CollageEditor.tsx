@@ -58,8 +58,6 @@ function EditableCell({
   onDragMove,
   onDragEnd,
   onPress,
-  placeLabel,
-  chipScale,
 }: {
   assetId: string;
   rect: CollageRect;
@@ -74,8 +72,6 @@ function EditableCell({
   onDragMove: (assetId: string, tx: number, ty: number) => void;
   onDragEnd: () => void;
   onPress?: (assetId: string) => void;
-  placeLabel?: string;
-  chipScale: number;
 }) {
   const uri = useUri(assetId);
   const left = useSharedValue(rect.x);
@@ -190,9 +186,6 @@ function EditableCell({
         ) : (
           <View style={[styles.image, styles.placeholder]} />
         )}
-        {placeLabel ? (
-          <CollagePlaceChip label={placeLabel} scale={chipScale} />
-        ) : null}
       </Animated.View>
     </GestureDetector>
   );
@@ -300,10 +293,32 @@ export function CollageEditor({
           onDragMove={handleDragMove}
           onDragEnd={handleDragEnd}
           onPress={onPressCell}
-          placeLabel={placeLabelsById?.[id]}
-          chipScale={chipScale}
         />
       ))}
+      {shown.map((id, i) => {
+        const label = placeLabelsById?.[id]?.trim();
+        const rect = rects[i];
+        if (!label || !rect) {
+          return null;
+        }
+        return (
+          <View
+            key={`chip-${id}`}
+            pointerEvents="none"
+            style={[
+              styles.chipSlot,
+              {
+                left: rect.x,
+                top: rect.y,
+                width: rect.w,
+                height: rect.h,
+              },
+            ]}
+          >
+            <CollagePlaceChip label={label} scale={chipScale} />
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -322,5 +337,9 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     opacity: 0.5,
+  },
+  chipSlot: {
+    position: 'absolute',
+    zIndex: 4,
   },
 });

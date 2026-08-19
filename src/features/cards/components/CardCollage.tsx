@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 
 import { theme } from '@/shared/constants/theme';
@@ -8,15 +8,51 @@ import { resolveAssetUri } from '../../photos/services/mediaLibrary';
 import type { PhotoRef } from '../../photos/types';
 import { collageRects, COLLAGE_MAX, type CollageRect } from '../utils/collageLayout';
 
+export function CollagePlaceChip({
+  label,
+  scale = 1,
+}: {
+  label: string;
+  scale?: number;
+}) {
+  const s = Math.max(0.85, Math.min(1.15, scale));
+  return (
+    <View
+      pointerEvents="none"
+      style={[
+        styles.chip,
+        {
+          left: 4 * s,
+          bottom: 4 * s,
+          paddingHorizontal: 5 * s,
+          paddingVertical: 2 * s,
+          maxWidth: '86%',
+        },
+      ]}
+    >
+      <Text
+        numberOfLines={1}
+        style={[styles.chipText, { fontSize: 8.5 * s, lineHeight: 11 * s }]}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
+
 function CollageCell({
   assetId,
   rect,
   radius,
+  placeLabel,
+  chipScale,
   onSettled,
 }: {
   assetId: string;
   rect: CollageRect;
   radius: number;
+  placeLabel?: string;
+  chipScale: number;
   onSettled: () => void;
 }) {
   const [uri, setUri] = useState<string | null>(null);
@@ -80,6 +116,9 @@ function CollageCell({
           onError={settle}
         />
       ) : null}
+      {placeLabel ? (
+        <CollagePlaceChip label={placeLabel} scale={chipScale} />
+      ) : null}
     </View>
   );
 }
@@ -92,6 +131,8 @@ export interface CardCollageProps {
   height: number;
   gutter?: number;
   radius?: number;
+  /** Short 구/시 labels, same order as photos. */
+  placeLabels?: string[];
   /** Fires once when every cell has resolved URI + image load (or failed). */
   onReady?: () => void;
 }
@@ -103,10 +144,12 @@ export function CardCollage({
   height,
   gutter = 6,
   radius = 4,
+  placeLabels,
   onReady,
 }: CardCollageProps) {
   const shown = photos.slice(0, COLLAGE_MAX);
   const rects = collageRects(shown.length, width, height, gutter);
+  const chipScale = width / 270;
   const done = useRef(0);
   const reported = useRef(false);
   const photosKey = shown.map((p) => p.assetId).join('|');
@@ -138,6 +181,8 @@ export function CardCollage({
           assetId={photo.assetId}
           rect={rects[i]!}
           radius={radius}
+          placeLabel={placeLabels?.[i]?.trim() || undefined}
+          chipScale={chipScale}
           onSettled={onSettled}
         />
       ))}
@@ -154,5 +199,16 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
+  },
+  chip: {
+    position: 'absolute',
+    backgroundColor: theme.colors.overlay,
+    borderRadius: 2,
+  },
+  chipText: {
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.ink,
+    fontWeight: '600',
+    letterSpacing: -0.15,
   },
 });

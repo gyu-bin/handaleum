@@ -9,7 +9,11 @@ import {
   applyPlaceAliases,
   daysInMonth,
   localDayKey,
+  recapDayCalendarNodes,
   recapDayNodes,
+  recapBoardPages,
+  monthStartWeekday,
+  chunkRows,
   snakeCell,
   snakeRailPath,
   snakeRows,
@@ -50,6 +54,16 @@ assert.equal(days[5]?.assetId, 'a');
 assert.equal(days[15]?.photoCount, 1);
 assert.equal(days[0]?.assetId, null);
 
+assert.equal(monthStartWeekday('2026-08'), 6);
+const cal = recapDayCalendarNodes('2026-08', photos);
+assert.equal(cal.length % 7, 0);
+assert.equal(cal[6]?.label, '1');
+assert.equal(cal[6]?.blank, undefined);
+assert.equal(cal[0]?.blank, true);
+assert.equal(cal[11]?.label, '6');
+assert.equal(cal[11]?.photoCount, 2);
+assert.deepEqual(chunkRows([1, 2, 3, 4, 5], 3), [[1, 2, 3], [4, 5]]);
+
 const rows = snakeRows([1, 2, 3, 4, 5, 6, 7], 3);
 assert.deepEqual(rows, [
   [1, 2, 3],
@@ -67,6 +81,15 @@ const rail = snakeRailPath(3, 3, 100, 80, 20);
 assert.equal(rail.startsWith('M 50 20'), true);
 assert.equal(rail.includes('L 150 20'), true);
 assert.equal(snakeRailPath(1, 3, 100, 80, 20), '');
+const gapped = snakeRailPath(2, 2, 100, 80, 20, 16);
+assert.equal(gapped.startsWith('M 50 20'), true);
+assert.equal(gapped.includes('L 166 20'), true);
+
+assert.deepEqual(recapBoardPages([1, 2, 3, 4, 5], 2, 2), [
+  [1, 2, 3, 4],
+  [5],
+]);
+assert.deepEqual(recapBoardPages([], 4, 3), []);
 
 const aliased = applyPlaceAliases(
   [

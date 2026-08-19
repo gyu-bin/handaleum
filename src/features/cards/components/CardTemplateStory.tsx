@@ -72,6 +72,9 @@ export function CardTemplateStory({
               height={heroBox.h}
               gutter={4 * s}
               radius={3 * s}
+              placeLabels={
+                card.placeOverlay === false ? undefined : card.placeLabels
+              }
               onReady={() => setCollageReady(true)}
             />
           ) : null}

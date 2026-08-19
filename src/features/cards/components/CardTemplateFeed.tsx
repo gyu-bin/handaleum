@@ -54,6 +54,9 @@ export function CardTemplateFeed({ card, width = BASE_WIDTH }: CardTemplateFeedP
               height={heroBox.h}
               gutter={6 * s}
               radius={2 * s}
+              placeLabels={
+                card.placeOverlay === false ? undefined : card.placeLabels
+              }
             />
           ) : null}
         </View>

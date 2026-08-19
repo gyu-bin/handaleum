@@ -113,7 +113,7 @@ export const strings = {
      * the year, the step count — is evidence and belongs in `monthMeta`.
      */
     monthTitle: (monthNumber: number) => `${MONTH_NAMES[monthNumber - 1]}의 지도`,
-    /** Evidence line under the title — cluster count, not walk steps. */
+    /** Evidence line under the title — unique spots this month, not walk steps. */
     monthMeta: (monthLabel: string, places: number) =>
       places > 0 ? `${monthLabel} · ${countWord(places)} 곳` : monthLabel,
     /** Shown while GPS for this month is still resolving in the background. */
@@ -296,13 +296,14 @@ export const strings = {
       `사진 ${done.toLocaleString('ko-KR')}/${total.toLocaleString('ko-KR')}`,
     boardPlace: '위치',
     boardDay: '날',
+    boardWeekdays: ['일', '월', '화', '수', '목', '금', '토'] as const,
     boardEmpty: '이번 달 위치 사진이 없습니다',
     boardSharePlaces: (count: number) => `${count}개 위치 공유`,
     boardShareDays: (count: number) => `${count}일 공유`,
     boardRenameTitle: '이 위치 이름',
     boardRenamePlaceholder: '예: 한옥마을',
     boardRenameHint: '탭하면 공유할 위치. 길게 누르면 이름 수정.',
-    boardDayHint: '탭하면 공유할 날을 고릅니다.',
+    boardDayHint: '달력에서 공유할 날을 고릅니다.',
     boardRenameReset: '위치 이름으로 되돌리기',
     arrangeLabel: '배치',
     arrangeHint: '카드 사진 탭으로 해제 · 길게 눌러 위치 변경 · 실수는 되돌리기',
