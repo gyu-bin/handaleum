@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -18,6 +18,16 @@ import { ThemeProvider, useDarkMode, useTheme } from '@/shared/theme/ThemeProvid
 configurePurchases();
 
 void SplashScreen.preventAutoHideAsync();
+
+/** First-run gates — bottom CTA must not sit under the OTA pill. */
+function hidesOtaToast(pathname: string): boolean {
+  return (
+    pathname === '/onboarding' ||
+    pathname.startsWith('/onboarding/') ||
+    pathname === '/permission' ||
+    pathname.startsWith('/permission/')
+  );
+}
 
 function AppNavigation() {
   const { colors } = useTheme();
@@ -41,6 +51,36 @@ function RootShell({ children }: { children: React.ReactNode }) {
       <StatusBar style={dark ? 'light' : 'dark'} />
       {children}
     </GestureHandlerRootView>
+  );
+}
+
+function OtaToasts({
+  progressMessage,
+  progressPersistent,
+  doneVisible,
+  onDoneHidden,
+}: {
+  progressMessage: string | null;
+  progressPersistent: boolean;
+  doneVisible: boolean;
+  onDoneHidden: () => void;
+}) {
+  const pathname = usePathname();
+  const quiet = hidesOtaToast(pathname);
+
+  return (
+    <>
+      <OtaToast
+        visible={!quiet && progressMessage != null}
+        message={progressMessage ?? ''}
+        persistent={progressPersistent}
+      />
+      <OtaToast
+        visible={!quiet && doneVisible}
+        message={strings.ota.done}
+        onHidden={onDoneHidden}
+      />
+    </>
   );
 }
 
@@ -83,15 +123,11 @@ export default function RootLayout() {
           <ErrorBoundary>
             <QueryClientProvider client={queryClient}>
               <AppNavigation />
-              <OtaToast
-                visible={otaToastMessage != null}
-                message={otaToastMessage ?? ''}
-                persistent={otaToastPersistent}
-              />
-              <OtaToast
-                visible={otaDoneToast}
-                message={strings.ota.done}
-                onHidden={hideOtaDoneToast}
+              <OtaToasts
+                progressMessage={otaToastMessage}
+                progressPersistent={otaToastPersistent}
+                doneVisible={otaDoneToast}
+                onDoneHidden={hideOtaDoneToast}
               />
             </QueryClientProvider>
           </ErrorBoundary>

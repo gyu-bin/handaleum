@@ -1,7 +1,7 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
-  LayoutChangeEvent,
   Pressable,
+  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -9,15 +9,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Path } from 'react-native-svg';
 
-import koreaGeo from '@/assets/geo/korea.json';
-import {
-  bboxOf,
-  createProjection,
-  geometryToPath,
-  type PackedGeometry,
-} from '@/features/photos/utils/geo';
 import { usePhotoPermission } from '@/features/photos/hooks/usePhotoPermission';
 import { Button } from '@/shared/components/Button';
 import { strings } from '@/shared/constants/strings';
@@ -25,50 +17,12 @@ import { theme } from '@/shared/constants/theme';
 import { useShellBackground, useShellInk } from '@/shared/hooks/useShellBackground';
 import { useTheme } from '@/shared/theme/ThemeProvider';
 
+import { PaperPanelArt } from '../components/PaperPanelArt';
 import { useOnboarding } from '../hooks/useOnboarding';
 
-function KoreaSilhouette() {
-  const { colors } = useTheme();
-  const [size, setSize] = useState({ width: 0, height: 0 });
-  const southKorea = koreaGeo.korea as unknown as PackedGeometry;
-
-  const onLayout = (e: LayoutChangeEvent) => {
-    const { width, height } = e.nativeEvent.layout;
-    if (Math.abs(width - size.width) < 1 && Math.abs(height - size.height) < 1) {
-      return;
-    }
-    setSize({ width, height });
-  };
-
-  const path = useMemo(() => {
-    if (size.width <= 0 || size.height <= 0) {
-      return '';
-    }
-    const projection = createProjection(
-      bboxOf(southKorea),
-      size.width,
-      size.height,
-      10,
-    );
-    return geometryToPath(southKorea, projection.project);
-  }, [size.height, size.width, southKorea]);
-
-  return (
-    <View style={styles.mapWrap} onLayout={onLayout}>
-      {path ? (
-        <Svg width={size.width} height={size.height}>
-          <Path
-            d={path}
-            fill={colors.shellInk}
-            fillOpacity={0.92}
-          />
-        </Svg>
-      ) : null}
-    </View>
-  );
-}
-
-/** Minimal first-run — brand, line, peninsula, photo toggle, start. */
+/**
+ * First-run B — headline + paper map panel (photo pins) + album toggle + start.
+ */
 export function OnboardingScreen() {
   const shellBg = useShellBackground();
   const shell = useShellInk();
@@ -106,7 +60,10 @@ export function OnboardingScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'bottom', 'left', 'right']}>
+    <SafeAreaView
+      style={[styles.safe, shellBg]}
+      edges={['top', 'bottom', 'left', 'right']}
+    >
       {isReplay ? (
         <View style={styles.topRow}>
           <Pressable
@@ -124,7 +81,12 @@ export function OnboardingScreen() {
         <View style={styles.topPad} />
       )}
 
-      <View style={styles.body}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.body}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
         <Text style={[styles.brand, shell.subtle]}>{strings.brand}</Text>
         <Text style={[styles.headline, shell.ink]}>
           {strings.onboarding.headline}
@@ -133,10 +95,17 @@ export function OnboardingScreen() {
           {strings.onboarding.subhead}
         </Text>
 
-        <KoreaSilhouette />
+        <View style={styles.panelSlot}>
+          <PaperPanelArt />
+        </View>
 
         {!isReplay ? (
-          <>
+          <View
+            style={[
+              styles.toggleBlock,
+              { borderTopColor: colors.hairline },
+            ]}
+          >
             <View style={styles.toggleRow}>
               <Text style={[styles.toggleLabel, shell.ink]}>
                 {strings.onboarding.photoToggle}
@@ -154,9 +123,9 @@ export function OnboardingScreen() {
             <Text style={[styles.toggleHint, shell.subtle]}>
               {strings.onboarding.photoToggleHint}
             </Text>
-          </>
+          </View>
         ) : null}
-      </View>
+      </ScrollView>
 
       <View style={styles.footer}>
         <Button
@@ -185,7 +154,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
   },
   topPad: {
-    height: theme.spacing.lg,
+    height: theme.spacing.md,
   },
   pressed: {
     opacity: 0.5,
@@ -193,74 +162,72 @@ const styles = StyleSheet.create({
   skipText: {
     ...theme.type.label,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.inkSoft,
     fontWeight: '500',
   },
-  body: {
+  scroll: {
     flex: 1,
+  },
+  body: {
+    flexGrow: 1,
     paddingHorizontal: theme.spacing.lg,
     alignItems: 'center',
+    paddingBottom: theme.spacing.md,
   },
   brand: {
     ...theme.type.micro,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.subtle,
     fontWeight: '500',
     letterSpacing: 1,
     marginBottom: theme.spacing.md,
   },
   headline: {
-    fontSize: 24,
-    lineHeight: 32,
+    fontSize: 26,
+    lineHeight: 36,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.ink,
     fontWeight: '700',
     textAlign: 'center',
-    letterSpacing: -0.6,
+    letterSpacing: -0.7,
   },
   subhead: {
-    ...theme.type.micro,
+    fontSize: 14,
+    lineHeight: 20,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.inkSoft,
     textAlign: 'center',
     marginTop: theme.spacing.sm,
   },
-  mapWrap: {
-    width: '70%',
-    aspectRatio: 0.72,
-    maxHeight: 280,
-    marginTop: theme.spacing.xl,
+  panelSlot: {
+    width: '100%',
+    marginTop: theme.spacing.lg,
     marginBottom: theme.spacing.lg,
   },
-  toggleRow: {
+  toggleBlock: {
     width: '100%',
+    marginTop: 'auto',
+    paddingTop: theme.spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: theme.spacing.md,
-    paddingTop: theme.spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.hairline,
   },
   toggleLabel: {
     ...theme.type.label,
     flex: 1,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.ink,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   toggleHint: {
     ...theme.type.micro,
     width: '100%',
     fontFamily: theme.fonts.sans,
-    color: theme.colors.subtle,
     marginTop: 8,
   },
   footer: {
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: theme.spacing.md,
-    alignItems: 'center',
-    gap: theme.spacing.sm,
+    paddingTop: theme.spacing.sm,
   },
   startBtn: {
     alignSelf: 'stretch',
