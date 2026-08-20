@@ -8,6 +8,7 @@ import { PaperGrain } from '@/shared/components/PaperGrain';
 import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
+import { useShellBackground, useShellInk } from '@/shared/hooks/useShellBackground';
 import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 
 import { MonthPickerList } from '../components/MonthPickerList';
@@ -18,6 +19,7 @@ import {
 } from '../hooks/useMonthlyPhotos';
 
 export function MonthPickerScreen() {
+  const shellBg = useShellBackground();
   const router = useRouter();
   const { month, setMonth, canOpenMonth } = useCurrentMonth();
   const { data, isPending, isError, refetch, isRefetching } = useMonthSummaries();
@@ -34,7 +36,7 @@ export function MonthPickerScreen() {
 
   if (showLoading) {
     return (
-      <View style={styles.safe}>
+      <View style={[styles.safe, shellBg]}>
         <PaperGrain style={styles.grain} />
         <LoadingView />
       </View>
@@ -43,7 +45,7 @@ export function MonthPickerScreen() {
 
   if (isError || !data) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
         <PaperGrain style={styles.grain} />
         <BackLink onPress={() => router.back()} />
         <StateView
@@ -59,7 +61,7 @@ export function MonthPickerScreen() {
 
   if (data.length === 0) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
         <PaperGrain style={styles.grain} />
         <BackLink onPress={() => router.back()} />
         <StateView title={strings.months.empty} />
@@ -68,7 +70,7 @@ export function MonthPickerScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
       <PaperGrain style={styles.grain} />
       <BackLink onPress={() => router.back()} />
       <MonthPickerList
@@ -82,6 +84,7 @@ export function MonthPickerScreen() {
 }
 
 function BackLink({ onPress }: { onPress: () => void }) {
+  const shell = useShellInk();
   return (
     <Pressable
       onPress={onPress}
@@ -90,7 +93,9 @@ function BackLink({ onPress }: { onPress: () => void }) {
       accessibilityLabel={strings.common.back}
       hitSlop={8}
     >
-      <Text style={styles.backText}>‹  {strings.common.back}</Text>
+      <Text style={[styles.backText, shell.soft]}>
+        ‹  {strings.common.back}
+      </Text>
     </Pressable>
   );
 }
@@ -98,7 +103,6 @@ function BackLink({ onPress }: { onPress: () => void }) {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: theme.colors.background,
   },
   grain: {
     opacity: 0.35,

@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { startOtaAutoApply } from '@/lib/applyOtaUpdate';
@@ -13,11 +13,36 @@ import { queryClient } from '@/lib/queryClient';
 import { ErrorBoundary } from '@/shared/components/ErrorBoundary';
 import { OtaToast } from '@/shared/components/OtaToast';
 import { strings } from '@/shared/constants/strings';
-import { theme } from '@/shared/constants/theme';
+import { ThemeProvider, useDarkMode, useTheme } from '@/shared/theme/ThemeProvider';
 
 configurePurchases();
 
 void SplashScreen.preventAutoHideAsync();
+
+function AppNavigation() {
+  const { colors } = useTheme();
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: colors.background },
+      }}
+    />
+  );
+}
+
+function RootShell({ children }: { children: React.ReactNode }) {
+  const { colors } = useTheme();
+  const { enabled: dark } = useDarkMode();
+  return (
+    <GestureHandlerRootView
+      style={{ flex: 1, backgroundColor: colors.canvas }}
+    >
+      <StatusBar style={dark ? 'light' : 'dark'} />
+      {children}
+    </GestureHandlerRootView>
+  );
+}
 
 export default function RootLayout() {
   const [otaToastMessage, setOtaToastMessage] = useState<string | null>(null);
@@ -53,30 +78,25 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <GestureHandlerRootView style={styles.root}>
-        <ErrorBoundary>
-          <QueryClientProvider client={queryClient}>
-            <Stack screenOptions={{ headerShown: false }} />
-            <OtaToast
-              visible={otaToastMessage != null}
-              message={otaToastMessage ?? ''}
-              persistent={otaToastPersistent}
-            />
-            <OtaToast
-              visible={otaDoneToast}
-              message={strings.ota.done}
-              onHidden={hideOtaDoneToast}
-            />
-          </QueryClientProvider>
-        </ErrorBoundary>
-      </GestureHandlerRootView>
+      <ThemeProvider>
+        <RootShell>
+          <ErrorBoundary>
+            <QueryClientProvider client={queryClient}>
+              <AppNavigation />
+              <OtaToast
+                visible={otaToastMessage != null}
+                message={otaToastMessage ?? ''}
+                persistent={otaToastPersistent}
+              />
+              <OtaToast
+                visible={otaDoneToast}
+                message={strings.ota.done}
+                onHidden={hideOtaDoneToast}
+              />
+            </QueryClientProvider>
+          </ErrorBoundary>
+        </RootShell>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: theme.colors.canvas,
-  },
-});

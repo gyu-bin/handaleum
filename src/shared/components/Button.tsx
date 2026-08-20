@@ -8,15 +8,19 @@ import {
 } from 'react-native';
 
 import { theme } from '@/shared/constants/theme';
+import { useTheme } from '@/shared/theme/ThemeProvider';
 
 export type ButtonVariant = 'primary' | 'accent' | 'sand' | 'secondary' | 'ghost';
 export type ButtonSize = 'md' | 'lg';
+/** Paper sheets keep the light palette; shell sits on the dark gray background. */
+export type ButtonSurface = 'shell' | 'paper';
 
 export interface ButtonProps extends Omit<PressableProps, 'style' | 'children'> {
   title: string;
   variant?: ButtonVariant;
   size?: ButtonSize;
   loading?: boolean;
+  surface?: ButtonSurface;
   /** Extra container style (e.g. margins). */
   style?: ViewStyle;
 }
@@ -30,12 +34,19 @@ export function Button({
   variant = 'primary',
   size = 'lg',
   loading = false,
+  surface = 'shell',
   disabled,
   style,
   ...pressableProps
 }: ButtonProps) {
+  const { colors } = useTheme();
   const isDisabled = disabled || loading;
   const isSolid = variant === 'primary' || variant === 'accent' || variant === 'sand';
+  const onPaper = surface === 'paper';
+  const fill = onPaper ? theme.colors.ink : colors.shellInk;
+  const onFill = onPaper ? theme.colors.surface : colors.canvas;
+  const outline = onPaper ? theme.colors.ink : colors.shellInk;
+  const hairline = onPaper ? theme.colors.hairline : colors.hairline;
 
   return (
     <Pressable
@@ -44,10 +55,14 @@ export function Button({
       style={({ pressed }) => [
         styles.base,
         size === 'lg' ? styles.lg : styles.md,
-        variant === 'primary' && styles.primary,
-        variant === 'accent' && styles.primary,
-        variant === 'sand' && styles.primary,
-        variant === 'secondary' && styles.secondary,
+        isSolid && { backgroundColor: fill },
+        variant === 'secondary' && [
+          styles.secondary,
+          {
+            backgroundColor: onPaper ? theme.colors.surface : 'transparent',
+            borderColor: hairline,
+          },
+        ],
         variant === 'ghost' && styles.ghost,
         isSolid && !isDisabled && theme.shadows.raised,
         pressed && !isDisabled && styles.pressed,
@@ -57,16 +72,15 @@ export function Button({
       {...pressableProps}
     >
       {loading ? (
-        <ActivityIndicator
-          color={!isSolid ? theme.colors.ink : theme.colors.surface}
-        />
+        <ActivityIndicator color={!isSolid ? outline : onFill} />
       ) : (
         <Text
           style={[
             styles.label,
-            isSolid && styles.labelOnSolid,
-            variant === 'secondary' && styles.labelInk,
-            variant === 'ghost' && styles.labelGhost,
+            isSolid && { color: onFill },
+            (variant === 'secondary' || variant === 'ghost') && {
+              color: outline,
+            },
           ]}
         >
           {title}
@@ -90,13 +104,8 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: theme.spacing.lg,
   },
-  primary: {
-    backgroundColor: theme.colors.ink,
-  },
   secondary: {
-    backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: theme.colors.hairline,
   },
   ghost: {
     backgroundColor: 'transparent',
@@ -118,14 +127,5 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
     fontWeight: '700',
     textAlignVertical: 'center',
-  },
-  labelOnSolid: {
-    color: theme.colors.surface,
-  },
-  labelInk: {
-    color: theme.colors.ink,
-  },
-  labelGhost: {
-    color: theme.colors.ink,
   },
 });

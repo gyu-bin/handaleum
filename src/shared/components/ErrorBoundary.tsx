@@ -2,7 +2,7 @@ import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { strings } from '@/shared/constants/strings';
-import { theme } from '@/shared/constants/theme';
+import { useTheme } from '@/shared/theme/ThemeProvider';
 
 import { StateView } from './StateView';
 
@@ -12,6 +12,20 @@ interface ErrorBoundaryProps {
 
 interface ErrorBoundaryState {
   hasError: boolean;
+}
+
+function ErrorFallback({ onRetry }: { onRetry: () => void }) {
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.fallback, { backgroundColor: colors.canvas }]}>
+      <StateView
+        icon="⚠️"
+        title={strings.common.error}
+        actionLabel={strings.common.retry}
+        onAction={onRetry}
+      />
+    </View>
+  );
 }
 
 /**
@@ -38,16 +52,7 @@ export class ErrorBoundary extends Component<
 
   render() {
     if (this.state.hasError) {
-      return (
-        <View style={styles.fallback}>
-          <StateView
-            icon="⚠️"
-            title={strings.common.error}
-            actionLabel={strings.common.retry}
-            onAction={this.reset}
-          />
-        </View>
-      );
+      return <ErrorFallback onRetry={this.reset} />;
     }
     return this.props.children;
   }
@@ -56,6 +61,5 @@ export class ErrorBoundary extends Component<
 const styles = StyleSheet.create({
   fallback: {
     flex: 1,
-    backgroundColor: theme.colors.canvas,
   },
 });

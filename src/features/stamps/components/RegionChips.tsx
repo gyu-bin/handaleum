@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { theme } from '@/shared/constants/theme';
+import { useShellInk } from '@/shared/hooks/useShellBackground';
+import { useTheme } from '@/shared/theme/ThemeProvider';
 
 export interface RegionChipsProps {
   sidos: string[];
@@ -16,6 +18,8 @@ const CHIP_H = 40;
  * Fixed chip height + generous scroll padding so Hangul is not clipped.
  */
 export function RegionChips({ sidos, selected, onSelect }: RegionChipsProps) {
+  const shell = useShellInk();
+  const { colors } = useTheme();
   const scrollRef = useRef<ScrollView>(null);
   const xFor = useRef<Record<string, number>>({});
 
@@ -50,10 +54,20 @@ export function RegionChips({ sidos, selected, onSelect }: RegionChipsProps) {
               }}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
-              style={[styles.chip, active && styles.chipActive]}
+              style={[
+                styles.chip,
+                active && {
+                  backgroundColor: colors.shellInk,
+                  borderColor: colors.shellInk,
+                },
+              ]}
             >
               <Text
-                style={[styles.label, active && styles.labelActive]}
+                style={[
+                  styles.label,
+                  shell.soft,
+                  active && { color: colors.canvas, fontWeight: '700' },
+                ]}
                 numberOfLines={1}
                 allowFontScaling={false}
               >

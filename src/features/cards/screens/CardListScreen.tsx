@@ -21,6 +21,8 @@ import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
+import { useShellBackground, useShellInk } from '@/shared/hooks/useShellBackground';
+import { useDarkMode, useTheme } from '@/shared/theme/ThemeProvider';
 
 import { RecapBoard, type RecapBoardShareState } from '../components/RecapBoard';
 import { useCards, useDeleteCards } from '../hooks/useCards';
@@ -32,6 +34,10 @@ import { useMonthlyPhotos } from '../../photos/hooks/useMonthlyPhotos';
 
 export function CardListScreen() {
   const router = useRouter();
+  const shellBg = useShellBackground();
+  const shell = useShellInk();
+  const { colors } = useTheme();
+  const { enabled: dark } = useDarkMode();
   const { data, isPending, isError, refetch } = useCards();
   const deleteCards = useDeleteCards();
   const showLoading = useHeldBusy(isPending);
@@ -174,7 +180,7 @@ export function CardListScreen() {
 
   if (isError || !data) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
         <ScreenHeader title={strings.cards.listTitle} onBack={goHome} />
         <StateView
           icon="⚠️"
@@ -190,8 +196,8 @@ export function CardListScreen() {
   const selectedCount = selectedIds.size;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-      <PaperGrain style={styles.grain} />
+    <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
+      {dark ? null : <PaperGrain style={styles.grain} />}
       <ScreenHeader
         title={
           archiveOpen ? strings.cards.listArchive : strings.cards.listTitle
@@ -208,7 +214,7 @@ export function CardListScreen() {
                   editing ? strings.cards.listDone : strings.cards.listEdit
                 }
               >
-                <Text style={styles.headerAction}>
+                <Text style={[styles.headerAction, shell.ink]}>
                   {editing ? strings.cards.listDone : strings.cards.listEdit}
                 </Text>
               </Pressable>
@@ -220,7 +226,7 @@ export function CardListScreen() {
               accessibilityRole="button"
               accessibilityLabel={strings.cards.listArchive}
             >
-              <Text style={styles.headerAction}>
+              <Text style={[styles.headerAction, shell.ink]}>
                 {strings.cards.listArchive}
               </Text>
             </Pressable>
@@ -235,13 +241,13 @@ export function CardListScreen() {
             hitSlop={6}
             accessibilityRole="button"
           >
-            <Text style={styles.selectBarAction}>
+            <Text style={[styles.selectBarAction, shell.ink]}>
               {allSelected
                 ? strings.cards.deselectAll
                 : strings.cards.selectAll}
             </Text>
           </Pressable>
-          <Text style={styles.selectBarCount}>
+          <Text style={[styles.selectBarCount, shell.soft]}>
             {selectedCount > 0
               ? strings.cards.deleteSelected(selectedCount)
               : ' '}
@@ -255,7 +261,9 @@ export function CardListScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           ListEmptyComponent={
-            <Text style={styles.cardsEmpty}>{strings.cards.listEmpty}</Text>
+            <Text style={[styles.cardsEmpty, shell.soft]}>
+              {strings.cards.listEmpty}
+            </Text>
           }
           ItemSeparatorComponent={() => <View style={styles.sep} />}
           renderItem={({ item }) => {
@@ -264,6 +272,10 @@ export function CardListScreen() {
               <Pressable
                 style={({ pressed }) => [
                   styles.card,
+                  {
+                    backgroundColor: colors.shellChip,
+                    borderColor: 'transparent',
+                  },
                   selected && styles.cardSelected,
                   pressed && styles.cardPressed,
                 ]}
@@ -284,17 +296,19 @@ export function CardListScreen() {
                   </View>
                 ) : null}
                 <View style={styles.rowText}>
-                  <Text style={styles.title} numberOfLines={1}>
+                  <Text style={[styles.title, shell.ink]} numberOfLines={1}>
                     {item.title}
                   </Text>
-                  <Text style={styles.meta}>
+                  <Text style={[styles.meta, shell.soft]}>
                     {item.month} ·{' '}
                     {item.template === 'story'
                       ? strings.cards.templateStory
                       : strings.cards.templateFeed}
                   </Text>
                 </View>
-                {!editing ? <Text style={styles.chevron}>›</Text> : null}
+                {!editing ? (
+                  <Text style={[styles.chevron, shell.subtle]}>›</Text>
+                ) : null}
               </Pressable>
             );
           }}
@@ -372,7 +386,6 @@ export function CardListScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: theme.colors.background,
   },
   grain: {
     opacity: 0.28,

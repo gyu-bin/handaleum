@@ -22,6 +22,7 @@
 | 마지막 조회 월 | sqlite kv + `useCurrentMonth` | 화면마다 useState면 월 선택이 지도에 반영 안 됨 |
 | 지도 팔레트 | sqlite kv + `useMapTheme` | 앱 설정. Zustand 대신 kv (기존 month 패턴) |
 | 핀 대표 사진 | sqlite kv + `usePinCovers(month)` | 월별 설정. 클러스터 id는 줌에 따라 변하므로 placeKey 사용 |
+| 숨긴 사진 | sqlite kv + `useHiddenPhotos(month)` | 지도·회고·몰아보기에서 제외. 앨범은 유지 |
 | 방문지 / 장소 라벨 | `placeCache` 메모리+디스크 (`placeRes:`) → `placeResolve` → `useMonthJourney` hydrate | GPS는 assetLoc. 이름은 geocode 후 디스크에 남겨 콜드스타트 칩 즉시 표시 |
 
 ## 결정 기록
@@ -85,6 +86,8 @@
 | 여정 칩: 디스크 hydrate 즉시 + GPS partial 중에도 geocode(캐시 우선). 빈 결과로 기존 칩을 지우지 않음. visit place 중복은 시+구+동 단위 | `!isFetching` 대기만 / 매 partial마다 wipe | 콜드스타트 "사진 n장"만 · 칩 소실 | 2026-08-02 |
 | GPS 핫패스: 로컬 모듈 `asset-locations`가 **배치로 PHAsset.location / Android EXIF latlng** 읽음. `getAssetInfoAsync`(원본·EXIF 전체)는 모듈 없거나 iCloud deep recheck일 때만 | 장마다 getAssetInfoAsync | expo가 파일까지 열어 발열·저속. 발자취식 메타만 읽기와 정렬 | 2026-08-05 |
 | 홈 헤더: 월 `‹ ›` **좌우 끝** 스텝 + 타이틀 탭→월 선택. 스와이프 없음 | 타이틀 옆 화살표 / 제스처 | 피드백·미니멀 C안 | 2026-08-16 |
+| 홈 `!` 안내 제거. 위치 없는 사진·집 제외 설명은 설정 `이번 달 지도` | 헤더 토글 칩 | 사용자 2026-08-20 | 2026-08-20 |
+| 사진 빼기: `hiddenPhotos:{month}` assetId 집합. `useMonthlyPhotos.photos`에서 걸러 지도·회고·몰아보기 공유. 설정 → `HiddenPhotosScreen`에서 장별 unhide | 화면별 숨김 / 앨범 삭제 | 사용자 2026-08-20 | 2026-08-20 |
 
 ## 경계
 

@@ -4,11 +4,13 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from 'react-native';
 import * as Location from 'expo-location';
 import * as Updates from 'expo-updates';
+import { useRouter, type Href } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -17,6 +19,8 @@ import { ScreenHeader } from '@/shared/components/ScreenHeader';
 import { strings } from '@/shared/constants/strings';
 import { formatProPriceKrw, IS_MONETIZATION_LIVE } from '@/shared/constants/pricing';
 import { theme } from '@/shared/constants/theme';
+import { useShellBackground, useShellInk } from '@/shared/hooks/useShellBackground';
+import { useDarkMode, useTheme } from '@/shared/theme/ThemeProvider';
 import {
   isStampLibrarySyncing,
   startStampLibrarySync,
@@ -30,8 +34,11 @@ import { useStampLibraryProgress } from '@/features/stamps/hooks/useStampLibrary
 import { ProPaywallModal } from '@/features/insights/components/ProPaywallModal';
 import { useIsPro } from '@/features/insights/hooks/useIsPro';
 
-import { useHomeLocation } from '../hooks/useHomeLocation';
+import { useCurrentMonth } from '../hooks/useCurrentMonth';
+import { useMonthlyPhotos } from '../hooks/useMonthlyPhotos';
 import { useDevDummyPhotos } from '../hooks/useDevDummyPhotos';
+import { useHiddenPhotos } from '../hooks/useHiddenPhotos';
+import { useHomeLocation } from '../hooks/useHomeLocation';
 import { photosQueryKeys } from '../hooks/photosQueryKeys';
 import { geocodeQueueDebug } from '../services/geocodeQueue';
 import { getVisitResolveDebug } from '../services/placeResolve';
@@ -138,9 +145,17 @@ function runningBundleLabel(): string {
 }
 
 export function SettingsScreen() {
+  const router = useRouter();
+  const shellBg = useShellBackground();
+  const shell = useShellInk();
+  const { colors } = useTheme();
+  const { enabled: darkMode, setEnabled: setDarkMode } = useDarkMode();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { home, setHome, clearHome } = useHomeLocation();
+  const { month } = useCurrentMonth();
+  const { hidden } = useHiddenPhotos(month);
+  const monthQuery = useMonthlyPhotos(month);
   const { isPro, isBusy, error: proError, purchase, restore } = useIsPro();
   const { enabled: dummyEnabled, setEnabled: setDummyEnabled } = useDevDummyPhotos();
   const indexing = useStampLibraryProgress();
@@ -208,7 +223,7 @@ export function SettingsScreen() {
   const fill = progressRatio(indexing);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
       <ScreenHeader title={strings.settings.title} />
 
       <ScrollView
@@ -220,7 +235,64 @@ export function SettingsScreen() {
       >
         {/* A: section labels + spacing only — no list rules */}
         <View style={styles.group}>
-          <Text style={styles.sectionLabel}>{strings.settings.albumSection}</Text>
+          <Text style={[styles.sectionLabel, shell.subtle]}>
+            {strings.settings.displaySection}
+          </Text>
+          <View style={styles.row}>
+            <Text style={[styles.rowTitle, shell.ink]}>
+              {strings.settings.darkMode}
+            </Text>
+            <Switch
+              value={darkMode}
+              onValueChange={setDarkMode}
+              trackColor={{
+                false: colors.line,
+                true: colors.shellInk,
+              }}
+              thumbColor={theme.colors.surface}
+              accessibilityLabel={strings.settings.darkMode}
+            />
+          </View>
+        </View>
+
+        <View style={styles.group}>
+          <Text style={[styles.sectionLabel, shell.subtle]}>
+            {strings.settings.mapNoticeSection}
+          </Text>
+          <View style={styles.noticeBlock}>
+            <View style={styles.row}>
+              <Text style={[styles.rowTitle, shell.ink]}>
+                {strings.settings.noLocationTitle}
+              </Text>
+              <Text style={[styles.rowValue, shell.soft]}>
+                {strings.settings.noLocationCount(
+                  monthQuery.data?.noLocationCount ?? 0,
+                )}
+              </Text>
+            </View>
+            <Text style={[styles.noticeExplain, shell.subtle]}>
+              {strings.settings.noLocationExplain}
+            </Text>
+          </View>
+          <View style={styles.noticeBlock}>
+            <View style={styles.row}>
+              <Text style={[styles.rowTitle, shell.ink]}>
+                {strings.settings.homeExcludedTitle}
+              </Text>
+              <Text style={[styles.rowValue, shell.soft]}>
+                {strings.settings.homeExcludedCount(
+                  monthQuery.data?.homeExcludedCount ?? 0,
+                )}
+              </Text>
+            </View>
+            <Text style={[styles.noticeExplain, shell.subtle]}>
+              {strings.settings.homeExcludedExplain}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.group}>
+          <Text style={[styles.sectionLabel, shell.subtle]}>{strings.settings.albumSection}</Text>
           <Pressable
             onPress={() => setAlbumSyncOpen(true)}
             disabled={albumSyncing}
@@ -231,17 +303,30 @@ export function SettingsScreen() {
               albumSyncing && styles.rowDisabled,
             ]}
           >
-            <Text style={styles.rowTitle}>
+            <Text style={[styles.rowTitle, shell.ink]}>
               {albumSyncing
                 ? strings.settings.albumSyncing
                 : strings.settings.albumSync}
             </Text>
-            <Text style={styles.chevron}>›</Text>
+            <Text style={[styles.chevron, shell.subtle]}>›</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => router.push('/hidden-photos' as Href)}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+          >
+            <Text style={[styles.rowTitle, shell.ink]}>{strings.settings.hiddenPhotos}</Text>
+            <View style={styles.rowTrailing}>
+              <Text style={[styles.rowValue, shell.soft]}>
+                {strings.settings.hiddenPhotosCount(hidden.size)}
+              </Text>
+              <Text style={[styles.chevron, shell.subtle]}>›</Text>
+            </View>
           </Pressable>
         </View>
 
         <View style={styles.group}>
-          <Text style={styles.sectionLabel}>{strings.settings.homeSection}</Text>
+          <Text style={[styles.sectionLabel, shell.subtle]}>{strings.settings.homeSection}</Text>
           <Pressable
             onPress={() => void captureCurrentLocation()}
             disabled={isLocating}
@@ -251,18 +336,18 @@ export function SettingsScreen() {
               pressed && !isLocating && styles.pressed,
             ]}
           >
-            <Text style={styles.rowTitle}>
+            <Text style={[styles.rowTitle, shell.ink]}>
               {isLocating
                 ? strings.settings.locating
                 : strings.settings.useCurrentLocation}
             </Text>
             <View style={styles.rowTrailing}>
-              <Text style={styles.rowValue}>
+              <Text style={[styles.rowValue, shell.soft]}>
                 {home
                   ? strings.settings.homeSet(home.radiusM)
                   : strings.settings.homeUnset}
               </Text>
-              <Text style={styles.chevron}>›</Text>
+              <Text style={[styles.chevron, shell.subtle]}>›</Text>
             </View>
           </Pressable>
           {home ? (
@@ -276,9 +361,22 @@ export function SettingsScreen() {
                       onPress={() => setHome({ ...home, radiusM: choice })}
                       accessibilityRole="button"
                       accessibilityState={{ selected: active }}
-                      style={[styles.chip, active && styles.chipOn]}
+                      style={[
+                        styles.chip,
+                        { borderColor: shell.hairline },
+                        active && {
+                          borderColor: shell.fill,
+                          backgroundColor: theme.tint.faint,
+                        },
+                      ]}
                     >
-                      <Text style={[styles.chipText, active && styles.chipTextOn]}>
+                      <Text
+                        style={[
+                          styles.chipText,
+                          shell.soft,
+                          active && [shell.ink, styles.chipTextOn],
+                        ]}
+                      >
                         {radiusLabel(choice)}
                       </Text>
                     </Pressable>
@@ -290,19 +388,19 @@ export function SettingsScreen() {
                 accessibilityRole="button"
                 style={({ pressed }) => [styles.row, pressed && styles.pressed]}
               >
-                <Text style={styles.rowMuted}>{strings.settings.clearHome}</Text>
+                <Text style={[styles.rowMuted, shell.subtle]}>{strings.settings.clearHome}</Text>
               </Pressable>
             </>
           ) : null}
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {error ? <Text style={[styles.error, shell.ink]}>{error}</Text> : null}
         </View>
 
         {IS_MONETIZATION_LIVE ? (
           <View style={styles.group}>
-            <Text style={styles.sectionLabel}>{strings.settings.proSection}</Text>
+            <Text style={[styles.sectionLabel, shell.subtle]}>{strings.settings.proSection}</Text>
             <View style={styles.row}>
-              <Text style={styles.rowTitle}>{strings.settings.proSection}</Text>
-              <Text style={styles.rowValue}>
+              <Text style={[styles.rowTitle, shell.ink]}>{strings.settings.proSection}</Text>
+              <Text style={[styles.rowValue, shell.soft]}>
                 {isPro ? strings.settings.proOn : strings.settings.proOff}
               </Text>
             </View>
@@ -312,10 +410,10 @@ export function SettingsScreen() {
                 accessibilityRole="button"
                 style={({ pressed }) => [styles.row, pressed && styles.pressed]}
               >
-                <Text style={styles.rowTitle}>
+                <Text style={[styles.rowTitle, shell.ink]}>
                   {strings.settings.proPurchase}
                 </Text>
-                <Text style={styles.chevron}>›</Text>
+                <Text style={[styles.chevron, shell.subtle]}>›</Text>
               </Pressable>
             )}
             <Pressable
@@ -324,15 +422,15 @@ export function SettingsScreen() {
               accessibilityRole="button"
               style={({ pressed }) => [styles.row, pressed && styles.pressed]}
             >
-              <Text style={styles.rowMuted}>{strings.settings.proRestore}</Text>
+              <Text style={[styles.rowMuted, shell.subtle]}>{strings.settings.proRestore}</Text>
             </Pressable>
             {!paywallOpen && proError ? (
-              <Text style={styles.error}>{proError}</Text>
+              <Text style={[styles.error, shell.ink]}>{proError}</Text>
             ) : null}
           </View>
         ) : null}
 
-        <Text style={styles.footer}>{runningBundleLabel()}</Text>
+        <Text style={[styles.footer, shell.subtle]}>{runningBundleLabel()}</Text>
 
         {__DEV__ ? (
           <>
@@ -341,14 +439,14 @@ export function SettingsScreen() {
               accessibilityRole="button"
               style={({ pressed }) => [styles.devToggle, pressed && styles.pressed]}
             >
-              <Text style={styles.rowMuted}>
+              <Text style={[styles.rowMuted, shell.subtle]}>
                 {strings.settings.devToggle}
                 {devOpen ? ' ▾' : ' ▸'}
               </Text>
             </Pressable>
             {devOpen ? (
               <View style={styles.devBox}>
-                <Text style={styles.devMono} numberOfLines={3}>
+                <Text style={[styles.devMono, shell.subtle]} numberOfLines={3}>
                   {diag}
                 </Text>
                 <Button
@@ -408,6 +506,7 @@ export function SettingsScreen() {
               title={strings.settings.albumSyncModalConfirm}
               variant="primary"
               size="md"
+              surface="paper"
               onPress={confirmAlbumSync}
             />
             <Pressable
@@ -439,7 +538,6 @@ export function SettingsScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: theme.colors.background,
   },
   content: {
     paddingHorizontal: theme.spacing.lg,
@@ -448,6 +546,15 @@ const styles = StyleSheet.create({
   },
   group: {
     marginBottom: theme.spacing.xl,
+  },
+  noticeBlock: {
+    gap: 4,
+    marginBottom: theme.spacing.md,
+  },
+  noticeExplain: {
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
+    lineHeight: 16,
   },
   sectionLabel: {
     ...theme.type.micro,

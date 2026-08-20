@@ -306,3 +306,29 @@ export function getPlaceAliasesRaw(): string | null {
 export function setPlaceAliasesRaw(json: string): void {
   storage.set(PLACE_ALIASES_KEY, json);
 }
+
+/** JSON string[] of assetIds hidden from map + recap for one month. */
+const HIDDEN_PHOTOS_PREFIX = 'hiddenPhotos:';
+
+export function getHiddenPhotosRaw(month: string): string | null {
+  return storage.getString(`${HIDDEN_PHOTOS_PREFIX}${month}`) ?? null;
+}
+
+export function setHiddenPhotosRaw(month: string, json: string): void {
+  storage.set(`${HIDDEN_PHOTOS_PREFIX}${month}`, json);
+}
+
+/** In-app dark mode. Absent / not "1" = light. Does not follow the system. */
+const DARK_MODE_KEY = 'darkMode';
+
+export function getDarkModeEnabled(): boolean {
+  return storage.getString(DARK_MODE_KEY) === '1';
+}
+
+export function setDarkModeEnabled(enabled: boolean): void {
+  if (enabled) {
+    storage.set(DARK_MODE_KEY, '1');
+  } else {
+    storage.set(DARK_MODE_KEY, '0');
+  }
+}

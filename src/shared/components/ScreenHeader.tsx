@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
+import { useTheme } from '@/shared/theme/ThemeProvider';
 
 export interface ScreenHeaderProps {
   title: string;
@@ -24,10 +25,19 @@ export function ScreenHeader({
   hideBack = false,
 }: ScreenHeaderProps) {
   const router = useRouter();
+  const { colors } = useTheme();
   const showBack = !hideBack;
 
   return (
-    <View style={styles.header}>
+    <View
+      style={[
+        styles.header,
+        {
+          backgroundColor: colors.background,
+          borderBottomColor: colors.hairline,
+        },
+      ]}
+    >
       <View style={styles.side}>
         {showBack ? (
           <Pressable
@@ -40,13 +50,19 @@ export function ScreenHeader({
               pressed && styles.backPressed,
             ]}
           >
-            <Text style={styles.chevron}>‹</Text>
-            <Text style={styles.backLabel}>{strings.common.back}</Text>
+            <Text style={[styles.chevron, { color: colors.shellInk }]}>‹</Text>
+            <Text style={[styles.backLabel, { color: colors.shellInk }]}>
+              {strings.common.back}
+            </Text>
           </Pressable>
         ) : null}
       </View>
 
-      <Text style={styles.title} numberOfLines={1} pointerEvents="none">
+      <Text
+        style={[styles.title, { color: colors.shellInk }]}
+        numberOfLines={1}
+        pointerEvents="none"
+      >
         {title}
       </Text>
 
@@ -67,8 +83,6 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing.sm,
     paddingBottom: theme.spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.hairline,
-    backgroundColor: theme.colors.background,
     position: 'relative',
   },
   side: {
@@ -84,15 +98,11 @@ const styles = StyleSheet.create({
   backBtn: {
     minWidth: HIT,
     height: HIT,
-    paddingHorizontal: 10,
-    borderRadius: theme.radius.sm,
+    paddingHorizontal: 4,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     gap: 2,
-    backgroundColor: theme.colors.surfaceAlt,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.hairline,
     alignSelf: 'flex-start',
   },
   backPressed: {
@@ -100,7 +110,6 @@ const styles = StyleSheet.create({
   },
   chevron: {
     fontFamily: theme.fonts.sans,
-    color: theme.colors.ink,
     fontSize: 22,
     lineHeight: 24,
     marginTop: -1,
@@ -108,7 +117,6 @@ const styles = StyleSheet.create({
   backLabel: {
     ...theme.type.label,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.inkSoft,
     fontWeight: '600',
   },
   title: {
@@ -119,7 +127,6 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: SIDE_MIN + theme.spacing.md,
     textAlign: 'center',
-    color: theme.colors.ink,
     fontWeight: '700',
     zIndex: 0,
   },

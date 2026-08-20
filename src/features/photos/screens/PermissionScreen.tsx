@@ -7,10 +7,13 @@ import { Button } from '@/shared/components/Button';
 import { PaperGrain } from '@/shared/components/PaperGrain';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
+import { useShellBackground, useShellInk } from '@/shared/hooks/useShellBackground';
 
 import { usePhotoPermission } from '../hooks/usePhotoPermission';
 
 export function PermissionScreen() {
+  const shellBg = useShellBackground();
+  const shell = useShellInk();
   const router = useRouter();
   const { status, isReady, request } = usePhotoPermission();
 
@@ -31,15 +34,15 @@ export function PermissionScreen() {
   const isDenied = status === 'denied';
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
+    <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'bottom', 'left', 'right']}>
       <PaperGrain style={styles.grain} />
       <View style={styles.body}>
         <View style={styles.hero}>
           <View style={styles.iconCircle}>
             <Text style={styles.icon}>🗺️</Text>
           </View>
-          <Text style={styles.title}>{strings.permission.title}</Text>
-          <Text style={styles.bodyText}>
+          <Text style={[styles.title, shell.ink]}>{strings.permission.title}</Text>
+          <Text style={[styles.bodyText, shell.soft]}>
             {isDenied ? strings.permission.denied : strings.permission.description}
           </Text>
         </View>
@@ -63,7 +66,6 @@ export function PermissionScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: theme.colors.background,
   },
   grain: {
     opacity: 0.3,

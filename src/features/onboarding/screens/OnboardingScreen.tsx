@@ -22,10 +22,13 @@ import { usePhotoPermission } from '@/features/photos/hooks/usePhotoPermission';
 import { Button } from '@/shared/components/Button';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
+import { useShellBackground, useShellInk } from '@/shared/hooks/useShellBackground';
+import { useTheme } from '@/shared/theme/ThemeProvider';
 
 import { useOnboarding } from '../hooks/useOnboarding';
 
 function KoreaSilhouette() {
+  const { colors } = useTheme();
   const [size, setSize] = useState({ width: 0, height: 0 });
   const southKorea = koreaGeo.korea as unknown as PackedGeometry;
 
@@ -56,7 +59,7 @@ function KoreaSilhouette() {
         <Svg width={size.width} height={size.height}>
           <Path
             d={path}
-            fill={theme.colors.ink}
+            fill={colors.shellInk}
             fillOpacity={0.92}
           />
         </Svg>
@@ -67,6 +70,9 @@ function KoreaSilhouette() {
 
 /** Minimal first-run — brand, line, peninsula, photo toggle, start. */
 export function OnboardingScreen() {
+  const shellBg = useShellBackground();
+  const shell = useShellInk();
+  const { colors } = useTheme();
   const router = useRouter();
   const params = useLocalSearchParams<{ replay?: string }>();
   const isReplay = params.replay === '1';
@@ -100,7 +106,7 @@ export function OnboardingScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
+    <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'bottom', 'left', 'right']}>
       {isReplay ? (
         <View style={styles.topRow}>
           <Pressable
@@ -109,7 +115,9 @@ export function OnboardingScreen() {
             accessibilityRole="button"
             style={({ pressed }) => pressed && styles.pressed}
           >
-            <Text style={styles.skipText}>{strings.onboarding.close}</Text>
+            <Text style={[styles.skipText, shell.soft]}>
+              {strings.onboarding.close}
+            </Text>
           </Pressable>
         </View>
       ) : (
@@ -117,29 +125,33 @@ export function OnboardingScreen() {
       )}
 
       <View style={styles.body}>
-        <Text style={styles.brand}>{strings.brand}</Text>
-        <Text style={styles.headline}>{strings.onboarding.headline}</Text>
-        <Text style={styles.subhead}>{strings.onboarding.subhead}</Text>
+        <Text style={[styles.brand, shell.subtle]}>{strings.brand}</Text>
+        <Text style={[styles.headline, shell.ink]}>
+          {strings.onboarding.headline}
+        </Text>
+        <Text style={[styles.subhead, shell.soft]}>
+          {strings.onboarding.subhead}
+        </Text>
 
         <KoreaSilhouette />
 
         {!isReplay ? (
           <>
             <View style={styles.toggleRow}>
-              <Text style={styles.toggleLabel}>
+              <Text style={[styles.toggleLabel, shell.ink]}>
                 {strings.onboarding.photoToggle}
               </Text>
               <Switch
                 value={importPhotos}
                 onValueChange={setImportPhotos}
                 trackColor={{
-                  false: theme.colors.line,
-                  true: theme.colors.ink,
+                  false: colors.line,
+                  true: colors.shellInk,
                 }}
                 thumbColor={theme.colors.surface}
               />
             </View>
-            <Text style={styles.toggleHint}>
+            <Text style={[styles.toggleHint, shell.subtle]}>
               {strings.onboarding.photoToggleHint}
             </Text>
           </>
@@ -164,7 +176,6 @@ export function OnboardingScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: theme.colors.background,
   },
   topRow: {
     height: 40,

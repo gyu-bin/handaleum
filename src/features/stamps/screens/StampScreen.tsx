@@ -15,6 +15,7 @@ import { ScreenHeader } from '@/shared/components/ScreenHeader';
 import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
+import { useShellBackground, useShellInk } from '@/shared/hooks/useShellBackground';
 import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 
 import { currentMonthKey } from '@/features/photos/utils/month';
@@ -146,6 +147,8 @@ function MapIcon({ color }: { color: string }) {
  * 발도장 — 시·도 → L1(구·시·군) → L2(동 / 읍·면).
  */
 export function StampScreen() {
+  const shellBg = useShellBackground();
+  const shell = useShellInk();
   const navigation = useNavigation();
   const router = useRouter();
   const { isReady, status: permissionStatus } = usePhotoPermission();
@@ -451,7 +454,7 @@ export function StampScreen() {
 
   if (showBootLoading) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
         <LoadingView message={strings.stamps.loading} />
       </SafeAreaView>
     );
@@ -460,7 +463,7 @@ export function StampScreen() {
   const empty = collectedCount === 0;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
       <PaperGrain style={styles.grain} />
       <StampScanIntroModal
         visible={showScanIntro}
@@ -514,7 +517,7 @@ export function StampScreen() {
           ) : null}
 
           <View style={styles.progressBlock}>
-            <Text style={styles.progressLabel}>
+            <Text style={[styles.progressLabel, shell.soft]}>
               {selectedL1
                 ? strings.stamps.cityProgressLabel(selectedL1.label)
                 : strings.stamps.progressLabel(sido)}
@@ -525,11 +528,12 @@ export function StampScreen() {
                   )
                 : strings.stamps.progress(sidoCollected, sidoTotal)}
             </Text>
-            <View style={styles.track}>
+            <View style={[styles.track, { backgroundColor: shell.line }]}>
               <View
                 style={[
                   styles.fill,
                   {
+                    backgroundColor: shell.fill,
                     width: `${
                       selectedL1 && leafSection
                         ? leafSection.total === 0
@@ -588,7 +592,6 @@ export function StampScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: theme.colors.background,
   },
   grain: {
     opacity: 0.3,

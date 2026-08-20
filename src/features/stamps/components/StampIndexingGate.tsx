@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { StampShoeIcon } from '@/shared/components/StampShoeIcon';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
+import { useShellInk } from '@/shared/hooks/useShellBackground';
 
 import type { StampLibraryProgress } from '../services/stampBackfill';
 
@@ -74,6 +75,7 @@ export interface StampIndexingGateProps {
  * Back to home stays available (header outside this gate).
  */
 export function StampIndexingGate({ progress }: StampIndexingGateProps) {
+  const shell = useShellInk();
   const [shownDone, setShownDone] = useState(targetDone(progress));
   const shownRef = useRef(shownDone);
   const phaseRef = useRef(progress.phase);
@@ -131,17 +133,25 @@ export function StampIndexingGate({ progress }: StampIndexingGateProps) {
       accessibilityLabel={line}
       accessibilityLiveRegion="polite"
     >
-      <StampShoeIcon size={48} active />
-      <Text style={styles.title}>{strings.stamps.indexingGateTitle}</Text>
-      <Text style={styles.body}>{strings.stamps.indexingGateBody}</Text>
-      <Text style={styles.hint}>{strings.stamps.indexingGateHint}</Text>
+      <StampShoeIcon size={48} active color={shell.fill} />
+      <Text style={[styles.title, shell.ink]}>{strings.stamps.indexingGateTitle}</Text>
+      <Text style={[styles.body, shell.soft]}>{strings.stamps.indexingGateBody}</Text>
+      <Text style={[styles.hint, shell.subtle]}>{strings.stamps.indexingGateHint}</Text>
 
       <View style={styles.progressBlock}>
-        <Text style={styles.line} numberOfLines={2}>
+        <Text style={[styles.line, shell.soft]} numberOfLines={2}>
           {line}
         </Text>
-        <View style={styles.track}>
-          <View style={[styles.fill, { width: `${Math.round(fill * 100)}%` }]} />
+        <View style={[styles.track, { backgroundColor: shell.line }]}>
+          <View
+            style={[
+              styles.fill,
+              {
+                width: `${Math.round(fill * 100)}%`,
+                backgroundColor: shell.fill,
+              },
+            ]}
+          />
         </View>
       </View>
     </View>
@@ -159,7 +169,6 @@ const styles = StyleSheet.create({
   title: {
     ...theme.type.title,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.ink,
     fontWeight: '600',
     textAlign: 'center',
     marginTop: theme.spacing.md,
@@ -167,14 +176,12 @@ const styles = StyleSheet.create({
   body: {
     ...theme.type.body,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.inkSoft,
     textAlign: 'center',
     lineHeight: 22,
   },
   hint: {
     ...theme.type.micro,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.subtle,
     textAlign: 'center',
     marginBottom: theme.spacing.md,
   },
@@ -186,18 +193,15 @@ const styles = StyleSheet.create({
   line: {
     ...theme.type.micro,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.inkSoft,
     fontWeight: '500',
     textAlign: 'center',
   },
   track: {
     height: 2,
-    backgroundColor: theme.colors.line,
     overflow: 'hidden',
     borderRadius: 1,
   },
   fill: {
     height: '100%',
-    backgroundColor: theme.colors.ink,
   },
 });

@@ -6,6 +6,7 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { useStamps } from '@/features/stamps/hooks/useStamps';
 import { StampSneakerIcon } from '@/shared/components/StampSneakerIcon';
 import { theme } from '@/shared/constants/theme';
+import { useTheme } from '@/shared/theme/ThemeProvider';
 
 export interface HomeNavItem {
   href: Href;
@@ -34,7 +35,8 @@ function NavIcon({
   name: HomeNavItem['icon'];
   active: boolean;
 }) {
-  const color = active ? theme.colors.ink : theme.colors.inkSoft;
+  const { colors } = useTheme();
+  const color = active ? colors.shellInk : colors.shellInkSoft;
   const stroke = 2.2;
   const size = 20;
   if (name === 'calendar') {
@@ -115,22 +117,30 @@ function NavIcon({
  */
 function StampBadge() {
   const { unseenCount } = useStamps();
+  const { colors } = useTheme();
   if (unseenCount <= 0) {
     return null;
   }
-  return <View style={styles.badge} />;
+  return (
+    <View style={[styles.badge, { borderColor: colors.background }]} />
+  );
 }
 
 export function HomeNavBar({ items }: HomeNavBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
 
   return (
     <View
       style={[
         styles.wrap,
-        { paddingBottom: Math.max(insets.bottom, 4) },
+        {
+          paddingBottom: Math.max(insets.bottom, 4),
+          backgroundColor: colors.background,
+          borderTopColor: colors.hairline,
+        },
       ]}
     >
       <View style={styles.bar}>
@@ -154,16 +164,33 @@ export function HomeNavBar({ items }: HomeNavBarProps) {
                   {item.icon === 'stamp' ? (
                     <StampBadge />
                   ) : item.badge ? (
-                    <View style={styles.badge} />
+                    <View
+                      style={[
+                        styles.badge,
+                        { borderColor: colors.background },
+                      ]}
+                    />
                   ) : null}
                 </View>
                 <Text
-                  style={[styles.label, active && styles.labelActive]}
+                  style={[
+                    styles.label,
+                    { color: colors.shellInkSoft },
+                    active && styles.labelActive,
+                    active && { color: colors.shellInk },
+                  ]}
                   numberOfLines={1}
                 >
                   {item.label}
                 </Text>
-                {active ? <View style={styles.activeTick} /> : null}
+                {active ? (
+                  <View
+                    style={[
+                      styles.activeTick,
+                      { backgroundColor: colors.shellInk },
+                    ]}
+                  />
+                ) : null}
               </View>
             </Pressable>
           );
@@ -178,8 +205,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     paddingTop: theme.spacing.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.hairline,
-    backgroundColor: theme.colors.background,
   },
   bar: {
     flexDirection: 'row',
@@ -218,25 +243,22 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: theme.colors.notify,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.background,
+    borderColor: theme.colors.surface,
   },
   label: {
     fontFamily: theme.fonts.sans,
     fontSize: 10,
     lineHeight: 13,
     letterSpacing: -0.15,
-    color: theme.colors.inkSoft,
     fontWeight: '600',
   },
   labelActive: {
-    color: theme.colors.ink,
     fontWeight: '700',
   },
   activeTick: {
     width: 14,
     height: 2,
     borderRadius: 1,
-    backgroundColor: theme.colors.ink,
     marginTop: 1,
   },
 });

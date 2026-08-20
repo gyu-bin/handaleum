@@ -27,11 +27,13 @@ import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 import { useCollapseOnScroll } from '@/shared/hooks/useCollapseOnScroll';
 import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
+import { useShellBackground, useShellInk } from '@/shared/hooks/useShellBackground';
 
 import { AssetThumbImage } from '../components/AssetThumbImage';
 import { useCurrentMonth } from '../hooks/useCurrentMonth';
 import { useMonthlyPhotos } from '../hooks/useMonthlyPhotos';
 import { usePauseGridThumbWarmOnScroll } from '../hooks/usePauseGridThumbWarmOnScroll';
+import { useHiddenPhotos } from '../hooks/useHiddenPhotos';
 import { usePinCovers } from '../hooks/usePinCovers';
 import { clusterPhotos } from '../services/cluster';
 import {
@@ -144,12 +146,15 @@ const ClusterSlide = memo(function ClusterSlide({
   width,
   coverAssetId,
   onSetCover,
+  onHidePhoto,
 }: {
   cluster: PlaceCluster;
   width: number;
   coverAssetId?: string | null;
   onSetCover: (placeKey: string, assetId: string) => void;
+  onHidePhoto: (assetId: string) => void;
 }) {
+  const shell = useShellInk();
   const placeKey = placeBucketKey(cluster.centerLat, cluster.centerLng);
   const [activeId, setActiveId] = useState(
     () => coverAssetId ?? cluster.photos[0]?.assetId ?? '',
@@ -343,16 +348,16 @@ const ClusterSlide = memo(function ClusterSlide({
       {/* Title stays put — only the square hero scales on scroll. */}
       <View style={styles.chapterHead}>
         <View style={styles.titleRow}>
-          <Text style={styles.place} numberOfLines={2}>
+          <Text style={[styles.place, shell.ink]} numberOfLines={2}>
             {placeText}
           </Text>
           <View style={styles.metaCol}>
             {chapterDay ? (
-              <Text style={styles.meta} numberOfLines={1}>
+              <Text style={[styles.meta, shell.soft]} numberOfLines={1}>
                 {chapterDay}
               </Text>
             ) : null}
-            <Text style={styles.meta} numberOfLines={1}>
+            <Text style={[styles.meta, shell.soft]} numberOfLines={1}>
               {strings.map.clusterCount(cluster.photos.length)}
             </Text>
           </View>
@@ -391,7 +396,22 @@ const ClusterSlide = memo(function ClusterSlide({
       </Animated.View>
 
       {cluster.photos.length > 1 ? (
-        <Text style={styles.gridHint}>{strings.playback.gridHint}</Text>
+        <Text style={[styles.gridHint, shell.subtle]}>
+          {strings.playback.gridHint}
+        </Text>
+      ) : null}
+      {activeId ? (
+        <Pressable
+          onPress={() => onHidePhoto(activeId)}
+          accessibilityRole="button"
+          accessibilityLabel={strings.map.hidePhoto}
+          hitSlop={8}
+          style={styles.hideBtn}
+        >
+          <Text style={[styles.hideBtnText, shell.soft]}>
+            {strings.map.hidePhoto}
+          </Text>
+        </Pressable>
       ) : null}
 
       <Animated.FlatList
@@ -433,11 +453,14 @@ const ClusterSlide = memo(function ClusterSlide({
  * Vertical list is never nested in a horizontal pager.
  */
 export function PlaybackScreen() {
+  const shellBg = useShellBackground();
+  const shell = useShellInk();
   const { width } = useWindowDimensions();
   const { month } = useCurrentMonth();
   const { data, isPending, isError, refetch } = useMonthlyPhotos(month);
   const showLoading = useHeldBusy(isPending);
   const { covers, setCover } = usePinCovers(month);
+  const { hide: hidePhoto } = useHiddenPhotos(month);
   const [index, setIndex] = useState(0);
 
   const clusters = useMemo(() => {
@@ -454,6 +477,12 @@ export function PlaybackScreen() {
   useEffect(() => {
     setIndex(0);
   }, [month]);
+
+  useEffect(() => {
+    if (index >= clusters.length) {
+      setIndex(Math.max(0, clusters.length - 1));
+    }
+  }, [clusters.length, index]);
 
   // Same middle-path prewarm if user opens playback without visiting the map first.
   // Wait until the bike leaves — bake during LoadingView hitchs the spin.
@@ -486,7 +515,7 @@ export function PlaybackScreen() {
 
   if (isError || !data) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
         <ScreenHeader title={strings.playback.title} />
         <StateView
           icon="⚠️"
@@ -500,7 +529,7 @@ export function PlaybackScreen() {
 
   if (clusters.length === 0) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
         <ScreenHeader title={strings.playback.title} />
         <StateView icon="🎞️" title={strings.playback.empty} />
       </SafeAreaView>
@@ -513,7 +542,7 @@ export function PlaybackScreen() {
   const canNext = index < clusters.length - 1;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
       <ScreenHeader title={strings.playback.title} />
       <View style={styles.list}>
         <ClusterSlide
@@ -522,6 +551,7 @@ export function PlaybackScreen() {
           width={width}
           coverAssetId={covers[placeKey] ?? null}
           onSetCover={setCover}
+          onHidePhoto={hidePhoto}
         />
       </View>
       {clusters.length > 1 ? (
@@ -538,9 +568,9 @@ export function PlaybackScreen() {
               pressed && canPrev && styles.arrowBtnPressed,
             ]}
           >
-            <Text style={styles.arrowGlyph}>‹</Text>
+            <Text style={[styles.arrowGlyph, shell.ink]}>‹</Text>
           </Pressable>
-          <Text style={styles.pagerCount}>
+          <Text style={[styles.pagerCount, shell.soft]}>
             {index + 1} / {clusters.length}
           </Text>
           <Pressable
@@ -555,7 +585,7 @@ export function PlaybackScreen() {
               pressed && canNext && styles.arrowBtnPressed,
             ]}
           >
-            <Text style={styles.arrowGlyph}>›</Text>
+            <Text style={[styles.arrowGlyph, shell.ink]}>›</Text>
           </Pressable>
         </View>
       ) : null}
@@ -566,7 +596,6 @@ export function PlaybackScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: theme.colors.background,
   },
   list: {
     flex: 1,
@@ -672,6 +701,18 @@ const styles = StyleSheet.create({
     marginHorizontal: theme.spacing.lg,
     flexShrink: 0,
     color: theme.colors.subtle,
+  },
+  hideBtn: {
+    alignSelf: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: theme.spacing.md,
+    flexShrink: 0,
+  },
+  hideBtnText: {
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.inkSoft,
+    fontWeight: '600',
   },
   gridRowWrap: {
     flexDirection: 'row',

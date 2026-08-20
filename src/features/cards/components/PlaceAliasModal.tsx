@@ -76,6 +76,7 @@ export function PlaceAliasModal({
             <Button
               title={strings.cards.save}
               size="md"
+              surface="paper"
               onPress={() => onSave(isCustom ? trimmed : null)}
             />
             {isCustom ? (

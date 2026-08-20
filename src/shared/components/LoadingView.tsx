@@ -3,6 +3,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
+import { useShellBackground } from '@/shared/hooks/useShellBackground';
+import { useTheme } from '@/shared/theme/ThemeProvider';
 
 import { BikeLoader } from './BikeLoader';
 import { LoadProgressBanner } from './LoadProgressBanner';
@@ -22,11 +24,17 @@ export function LoadingView({
   message = strings.common.loading,
   progress,
 }: LoadingViewProps) {
+  const shellBg = useShellBackground();
+  const { colors } = useTheme();
+
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
       <View style={styles.center} collapsable={false}>
         <BikeLoader width={132} />
-        <Text style={styles.brand} accessibilityRole="header">
+        <Text
+          style={[styles.brand, { color: colors.splashMark }]}
+          accessibilityRole="header"
+        >
           {strings.brand}
         </Text>
         {progress ? (
@@ -38,7 +46,9 @@ export function LoadingView({
             />
           </View>
         ) : (
-          <Text style={styles.message}>{message}</Text>
+          <Text style={[styles.message, { color: colors.shellSubtle }]}>
+            {message}
+          </Text>
         )}
       </View>
     </SafeAreaView>
@@ -48,7 +58,6 @@ export function LoadingView({
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: theme.colors.background,
   },
   center: {
     flex: 1,
@@ -64,12 +73,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     letterSpacing: 4,
-    color: theme.colors.splashMark,
   },
   message: {
     ...theme.type.micro,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.subtle,
     textAlign: 'center',
     letterSpacing: 0.3,
   },

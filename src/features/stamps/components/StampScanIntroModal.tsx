@@ -32,6 +32,7 @@ export function StampScanIntroModal({
           <Button
             title={strings.stamps.scanIntroConfirm}
             variant="accent"
+            surface="paper"
             onPress={onConfirm}
           />
         </Pressable>

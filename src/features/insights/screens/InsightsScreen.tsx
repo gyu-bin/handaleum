@@ -9,6 +9,7 @@ import { formatProPriceKrw, IS_MONETIZATION_LIVE } from '@/shared/constants/pric
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
+import { useShellBackground, useShellInk } from '@/shared/hooks/useShellBackground';
 import { useCurrentMonth } from '@/features/photos/hooks/useCurrentMonth';
 
 import { InsightHero } from '../components/InsightHero';
@@ -27,6 +28,8 @@ function formatBusiestDay(date: string, count: number): string {
 }
 
 export function InsightsScreen() {
+  const shellBg = useShellBackground();
+  const shell = useShellInk();
   const { month } = useCurrentMonth();
   const { isPro, isBusy, error: proError, purchase, restore } = useIsPro();
   const [paywallOpen, setPaywallOpen] = useState(false);
@@ -53,7 +56,7 @@ export function InsightsScreen() {
 
   if (isError) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
         <ScreenHeader title={strings.insights.title} />
         <StateView
           icon="⚠️"
@@ -67,7 +70,7 @@ export function InsightsScreen() {
 
   if (isEmpty || !insights) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
         <ScreenHeader title={strings.insights.title} />
         <StateView icon="🗺️" title={strings.insights.empty} />
       </SafeAreaView>
@@ -101,15 +104,17 @@ export function InsightsScreen() {
       : formatBusiestDay(insights.busiestDay.date, insights.busiestDay.count);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
       <ScreenHeader title={strings.insights.title} />
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.monthHint}>{month}</Text>
+        <Text style={[styles.monthHint, shell.subtle]}>{month}</Text>
         {isResolvingLabels ? (
-          <Text style={styles.resolving}>{strings.common.loading}</Text>
+          <Text style={[styles.resolving, shell.soft]}>
+            {strings.common.loading}
+          </Text>
         ) : null}
 
         <InsightHero
@@ -153,7 +158,7 @@ export function InsightsScreen() {
             onPress={() => setPaywallOpen(true)}
             accessibilityRole="button"
           >
-            <Text style={styles.proHint}>{strings.insights.proHint}</Text>
+            <Text style={[styles.proHint, shell.soft]}>{strings.insights.proHint}</Text>
           </Pressable>
         ) : null}
       </ScrollView>
@@ -174,7 +179,6 @@ export function InsightsScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: theme.colors.background,
   },
   scroll: {
     paddingHorizontal: theme.spacing.lg,

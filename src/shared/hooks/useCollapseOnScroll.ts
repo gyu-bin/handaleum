@@ -15,6 +15,8 @@ export type UseCollapseOnScrollOptions = {
   minRatio?: number;
   /** scrollY distance (px) to reach full collapse (default 160). */
   range?: number;
+  /** Ignore down-scroll until past this offset (px). Default 0. */
+  deadzone?: number;
 };
 
 /**
@@ -28,6 +30,7 @@ export type UseCollapseOnScrollOptions = {
 export function useCollapseOnScroll(options: UseCollapseOnScrollOptions = {}) {
   const minRatio = options.minRatio ?? 0.55;
   const range = options.range ?? 160;
+  const deadzone = options.deadzone ?? 0;
   const scrollY = useSharedValue(0);
   const collapseY = useSharedValue(0);
   const expandedH = useSharedValue(0);
@@ -41,7 +44,14 @@ export function useCollapseOnScroll(options: UseCollapseOnScrollOptions = {}) {
         viewH > 0 ? Math.max(0, contentH - viewH) : Number.MAX_SAFE_INTEGER;
       const dy = y - scrollY.value;
       scrollY.value = y;
-      collapseY.value = collapseTravel(collapseY.value, y, dy, range, maxScroll);
+      collapseY.value = collapseTravel(
+        collapseY.value,
+        y,
+        dy,
+        range,
+        maxScroll,
+        deadzone,
+      );
     },
   });
 

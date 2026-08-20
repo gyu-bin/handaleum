@@ -8,6 +8,7 @@ import {
 } from '@/shared/constants/pricing';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
+import { useShellInk } from '@/shared/hooks/useShellBackground';
 
 import { prefetchMonthlyPhotos } from '../hooks/useMonthlyPhotos';
 import type { MonthKey, MonthSummary } from '../types';
@@ -45,6 +46,7 @@ export function MonthPickerList({
   canOpenMonth,
 }: MonthPickerListProps) {
   const router = useRouter();
+  const shell = useShellInk();
 
   const countByMonth = useMemo(() => {
     const map = new Map<MonthKey, number>();
@@ -121,6 +123,7 @@ export function MonthPickerList({
         disabled={disabled}
         style={({ pressed }) => [
           styles.monthRow,
+          { borderBottomColor: shell.hairline },
           pressed && !disabled && styles.monthRowPressed,
         ]}
         accessibilityRole="button"
@@ -132,15 +135,20 @@ export function MonthPickerList({
         }
       >
         <Text
-          style={[styles.monthName, empty && styles.muted, locked && styles.muted]}
+          style={[
+            styles.monthName,
+            shell.ink,
+            empty && shell.subtle,
+            locked && shell.subtle,
+          ]}
         >
           {strings.months.monthOnly(cell.monthNum)}
         </Text>
-        <Text style={[styles.sepDot, empty && styles.muted]}> · </Text>
+        <Text style={[styles.sepDot, empty ? shell.subtle : shell.soft]}> · </Text>
         {locked ? (
           <Text style={styles.proInline}>{strings.months.proOnly}</Text>
         ) : (
-          <Text style={[styles.count, empty && styles.muted]}>
+          <Text style={[styles.count, empty && shell.subtle]}>
             {strings.months.photoCount(cell.count)}
           </Text>
         )}
@@ -156,14 +164,16 @@ export function MonthPickerList({
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.hero}>
-        <Text style={styles.heroTitle}>{strings.months.journalTitle}</Text>
-        <Text style={styles.heroSubtitle}>
+        <Text style={[styles.heroTitle, shell.ink]}>
+          {strings.months.journalTitle}
+        </Text>
+        <Text style={[styles.heroSubtitle, shell.soft]}>
           {strings.months.journalSubtitle}
         </Text>
       </View>
 
       {IS_MONETIZATION_LIVE ? (
-        <Text style={styles.hint}>
+        <Text style={[styles.hint, shell.soft]}>
           {strings.months.freeWindowHint(formatProPriceKrw())}
         </Text>
       ) : null}
@@ -180,9 +190,11 @@ export function MonthPickerList({
           accessibilityRole="button"
           accessibilityLabel={strings.months.prevYear}
         >
-          <Text style={styles.yearChevron}>‹</Text>
+          <Text style={[styles.yearChevron, shell.ink]}>‹</Text>
         </Pressable>
-        <Text style={styles.yearLabel}>{strings.months.yearLabel(year)}</Text>
+        <Text style={[styles.yearLabel, shell.ink]}>
+          {strings.months.yearLabel(year)}
+        </Text>
         <Pressable
           onPress={() => goYear(1)}
           disabled={!canNext}
@@ -194,7 +206,7 @@ export function MonthPickerList({
           accessibilityRole="button"
           accessibilityLabel={strings.months.nextYear}
         >
-          <Text style={styles.yearChevron}>›</Text>
+          <Text style={[styles.yearChevron, shell.ink]}>›</Text>
         </Pressable>
       </View>
 

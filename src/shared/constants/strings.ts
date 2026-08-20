@@ -148,11 +148,14 @@ export const strings = {
     setAsCoverShort: '대표',
     coverSelected: '대표 사진',
     coverBadge: '대표',
+    hidePhoto: '이 사진 빼기',
   },
   settings: {
     title: '설정',
     /** Section labels (reference: grey header above a ruled list). */
     albumSection: '앨범',
+    displaySection: '화면',
+    darkMode: '다크모드',
     homeSection: '집',
     albumSync: '사진 다시 담기',
     albumSyncing: '불러오는 중…',
@@ -161,6 +164,23 @@ export const strings = {
       '방금 찍은 하루부터, 아직 지도에 없는 장면까지.\n앨범을 다시 훑어 올려요.',
     albumSyncModalConfirm: '담기',
     albumSyncModalCancel: '나중에',
+    hiddenPhotos: '숨긴 사진',
+    hiddenPhotosTitle: '숨긴 사진',
+    hiddenPhotosCount: (count: number) => `${count}장`,
+    hiddenPhotosSubtitle: (monthLabel: string) =>
+      `${monthLabel} · 지도·회고·몰아보기에서만 숨김`,
+    hiddenPhotosEmpty: '숨긴 사진이 없습니다',
+    hiddenPhotoRestore: '되돌리기',
+    hiddenPhotoOrphan: '앨범에서 찾을 수 없음',
+    mapNoticeSection: '이번 달 지도',
+    noLocationTitle: '위치 없는 사진',
+    noLocationCount: (count: number) => `${count}장`,
+    noLocationExplain:
+      'GPS가 없는 사진은 지도에 안 뜹니다. 카드 만들기에는 넣을 수 있어요.',
+    homeExcludedTitle: '집에서 찍은 사진',
+    homeExcludedCount: (count: number) => `${count}장`,
+    homeExcludedExplain:
+      '집 반경 안 사진은 지도 핀에서만 빼 둡니다. 카드에는 그대로 쓸 수 있어요.',
     homeUnset: '미설정',
     homeSet: (radiusM: number) =>
       radiusM >= 1000
@@ -307,6 +327,7 @@ export const strings = {
     boardPhotosClose: '닫기',
     boardSetCover: '대표로 쓰기',
     boardCoverOn: '대표 사진',
+    boardHidePhoto: '이 사진 빼기',
     boardRenameReset: '위치 이름으로 되돌리기',
     arrangeLabel: '배치',
     arrangeHint: '카드 사진 탭으로 해제 · 길게 눌러 위치 변경 · 실수는 되돌리기',

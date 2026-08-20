@@ -20,6 +20,8 @@ import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 import { useCollapseOnScroll } from '@/shared/hooks/useCollapseOnScroll';
+import { useShellBackground } from '@/shared/hooks/useShellBackground';
+import { useTheme } from '@/shared/theme/ThemeProvider';
 
 import { useCurrentMonth } from '../../photos/hooks/useCurrentMonth';
 import { useMonthlyPhotos } from '../../photos/hooks/useMonthlyPhotos';
@@ -209,6 +211,7 @@ function CreateCardPreview({
   placeLabelsById: Record<string, string>;
 }) {
   const [heroH, setHeroH] = useState<number | null>(null);
+  const { colors } = useTheme();
   const cardInner = cardW - CARD_CHROME;
   const cardH = cardW * CARD_ASPECT;
   const monthNumber = Number(month.split('-')[1]);
@@ -352,7 +355,7 @@ function CreateCardPreview({
               >
                 <AlignGlyph
                   align={align}
-                  color={selected ? theme.colors.ink : theme.colors.inkSoft}
+                  color={selected ? colors.shellInk : colors.shellInkSoft}
                 />
               </Pressable>
             );
@@ -366,13 +369,15 @@ function CreateCardPreview({
             style={[styles.alignDot, placeOverlay && styles.alignDotOn]}
           >
             <PlaceChipGlyph
-              color={placeOverlay ? theme.colors.ink : theme.colors.inkSoft}
+              color={placeOverlay ? colors.shellInk : colors.shellInkSoft}
             />
           </Pressable>
         </View>
       </View>
 
-      <Text style={styles.hint}>{strings.cards.arrangeHint}</Text>
+      <Text style={[styles.hint, { color: colors.shellSubtle }]}>
+        {strings.cards.arrangeHint}
+      </Text>
     </View>
   );
 }
@@ -383,6 +388,8 @@ function CreateCardPreview({
  */
 export function CardCreateScreen() {
   const router = useRouter();
+  const shellBg = useShellBackground();
+  const { colors } = useTheme();
   const { month } = useCurrentMonth();
   const { data, isPending, isFetching, isError, isStaleMonth, refetch } =
     useMonthlyPhotos(month);
@@ -414,7 +421,7 @@ export function CardCreateScreen() {
     mediaScaleStyle,
     setExpandedHeight,
     resetScroll,
-  } = useCollapseOnScroll();
+  } = useCollapseOnScroll({ range: 320, minRatio: 0.42, deadzone: 48 });
 
   useLayoutEffect(() => {
     setExpandedHeight(previewMaxH);
@@ -639,15 +646,25 @@ export function CardCreateScreen() {
   // Sticky sheet chrome (count + sort) — stays put while photos scroll under it.
   const sheetChrome = useMemo(
     () => (
-      <View style={styles.sheetChrome}>
+      <View
+        style={[
+          styles.sheetChrome,
+          shellBg,
+          { borderBottomColor: colors.hairline },
+        ]}
+      >
         <View style={styles.sheetHandle} />
         <View style={styles.headerBox}>
           <View style={styles.meterBlock}>
             <View style={styles.labelRow}>
-              <Text style={styles.label}>{strings.cards.photoLabel}</Text>
+              <Text style={[styles.label, { color: colors.shellInkSoft }]}>
+                {strings.cards.photoLabel}
+              </Text>
               <View style={styles.meterCount}>
                 <Text style={styles.meterNum}>{selectedCount}</Text>
-                <Text style={styles.meterDen}>/ {MAX_PHOTOS}장</Text>
+                <Text style={[styles.meterDen, { color: colors.shellSubtle }]}>
+                  / {MAX_PHOTOS}장
+                </Text>
               </View>
             </View>
             <View style={styles.meterTrack}>
@@ -673,7 +690,12 @@ export function CardCreateScreen() {
                   (!canUndo || pressed) && styles.selectionActionDim,
                 ]}
               >
-                <Text style={styles.selectionActionText}>
+                <Text
+                  style={[
+                    styles.selectionActionText,
+                    { color: colors.shellInkSoft },
+                  ]}
+                >
                   {strings.cards.selectionUndo}
                 </Text>
               </Pressable>
@@ -688,7 +710,12 @@ export function CardCreateScreen() {
                   (!canReset || pressed) && styles.selectionActionDim,
                 ]}
               >
-                <Text style={styles.selectionActionText}>
+                <Text
+                  style={[
+                    styles.selectionActionText,
+                    { color: colors.shellInkSoft },
+                  ]}
+                >
                   {strings.cards.selectionReset}
                 </Text>
               </Pressable>
@@ -710,6 +737,7 @@ export function CardCreateScreen() {
               <Text
                 style={[
                   styles.sortChipText,
+                  { color: colors.shellInkSoft },
                   sortMode === 'newest' && styles.sortChipTextOn,
                 ]}
               >
@@ -728,6 +756,7 @@ export function CardCreateScreen() {
               <Text
                 style={[
                   styles.sortChipText,
+                  { color: colors.shellInkSoft },
                   sortMode === 'oldest' && styles.sortChipTextOn,
                 ]}
               >
@@ -746,6 +775,7 @@ export function CardCreateScreen() {
               <Text
                 style={[
                   styles.sortChipText,
+                  { color: colors.shellInkSoft },
                   sortMode === 'place' && styles.sortChipTextOn,
                 ]}
               >
@@ -764,6 +794,10 @@ export function CardCreateScreen() {
       selectionHint,
       onSelectionUndo,
       onSelectionReset,
+      shellBg,
+      colors.hairline,
+      colors.shellInkSoft,
+      colors.shellSubtle,
     ],
   );
 
@@ -789,7 +823,7 @@ export function CardCreateScreen() {
 
   if (isError || !data) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
         <ScreenHeader title={strings.cards.createTitle} />
         <StateView
           icon="⚠️"
@@ -803,7 +837,7 @@ export function CardCreateScreen() {
 
   if (data.allPhotos.length === 0) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
         <ScreenHeader title={strings.cards.createTitle} />
         <StateView icon="🖼️" title={strings.map.emptyMonth} />
       </SafeAreaView>
@@ -811,7 +845,7 @@ export function CardCreateScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
       <ScreenHeader
         title={strings.cards.createTitle}
         trailing={
@@ -834,7 +868,13 @@ export function CardCreateScreen() {
       <View style={styles.body}>
         {/* Preview height shrinks in normal flow — do not translate the sheet (clips bottom). */}
         {selectedCount > 0 ? (
-          <Animated.View style={[styles.stickyPreview, collapseStyle]}>
+          <Animated.View
+            style={[
+              styles.stickyPreview,
+              shellBg,
+              collapseStyle,
+            ]}
+          >
             <Animated.View
               style={[
                 styles.previewScaleInner,
@@ -863,7 +903,13 @@ export function CardCreateScreen() {
             </Animated.View>
           </Animated.View>
         ) : null}
-        <View style={styles.gridSheet}>
+        <View
+          style={[
+            styles.gridSheet,
+            shellBg,
+            { borderTopColor: colors.hairline },
+          ]}
+        >
           {sheetChrome}
           {isFetching ? (
             <LoadProgressBanner
@@ -908,11 +954,9 @@ export function CardCreateScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: theme.colors.background,
   },
   stickyPreview: {
     paddingHorizontal: theme.spacing.lg,
-    backgroundColor: theme.colors.background,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'flex-start',
@@ -927,18 +971,14 @@ const styles = StyleSheet.create({
   },
   gridSheet: {
     flex: 1,
-    backgroundColor: theme.colors.background,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.hairline,
     overflow: 'hidden',
   },
   sheetChrome: {
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.sm,
     paddingBottom: theme.spacing.sm,
-    backgroundColor: theme.colors.background,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.hairline,
     gap: theme.spacing.sm,
   },
   sheetHandle: {

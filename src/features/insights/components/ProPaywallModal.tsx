@@ -82,10 +82,11 @@ export function ProPaywallModal({
 
           <Text style={styles.oneTime}>{strings.settings.proPaywall.oneTime}</Text>
 
-          <Button
+            <Button
             title={strings.settings.proPaywall.cta(priceLabel)}
             variant="accent"
             size="lg"
+            surface="paper"
             loading={isBusy}
             disabled={isBusy}
             onPress={onPurchase}
@@ -96,6 +97,7 @@ export function ProPaywallModal({
               title={strings.settings.proRestore}
               variant="ghost"
               size="md"
+              surface="paper"
               loading={isBusy}
               disabled={isBusy}
               onPress={onRestore}

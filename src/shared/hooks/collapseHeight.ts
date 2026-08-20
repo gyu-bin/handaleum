@@ -8,6 +8,7 @@ export function collapseTravel(
   dy: number,
   range: number,
   maxScroll: number,
+  deadzone = 0,
 ): number {
   'worklet';
   if (y <= 0 || range <= 0) {
@@ -18,6 +19,9 @@ export function collapseTravel(
   }
   // At the content end, bounce and header-height clamp produce negative dy.
   if (y >= maxScroll - END_SLACK && dy < 0) {
+    return collapseY;
+  }
+  if (y < deadzone && dy > 0) {
     return collapseY;
   }
   return Math.min(range, Math.max(0, collapseY + dy));

@@ -90,6 +90,7 @@ export interface RecapPhotosModalProps {
   photos: PhotoRef[] | null;
   coverAssetId?: string | null;
   onSetCover?: (assetId: string) => void;
+  onHide?: (assetId: string) => void;
   onClose: () => void;
 }
 
@@ -97,6 +98,7 @@ export function RecapPhotosModal({
   photos,
   coverAssetId,
   onSetCover,
+  onHide,
   onClose,
 }: RecapPhotosModalProps) {
   const insets = useSafeAreaInsets();
@@ -210,7 +212,11 @@ export function RecapPhotosModal({
             }
             style={[
               styles.coverBtn,
-              { bottom: Math.max(insets.bottom, theme.spacing.md) },
+              {
+                bottom:
+                  Math.max(insets.bottom, theme.spacing.md) +
+                  (onHide ? 44 : 0),
+              },
               currentIsCover && styles.coverBtnOn,
             ]}
           >
@@ -224,6 +230,19 @@ export function RecapPhotosModal({
                 ? strings.cards.boardCoverOn
                 : strings.cards.boardSetCover}
             </Text>
+          </Pressable>
+        ) : null}
+        {onHide && current ? (
+          <Pressable
+            onPress={() => onHide(current.assetId)}
+            accessibilityRole="button"
+            accessibilityLabel={strings.cards.boardHidePhoto}
+            style={[
+              styles.hideBtn,
+              { bottom: Math.max(insets.bottom, theme.spacing.md) },
+            ]}
+          >
+            <Text style={styles.hideBtnText}>{strings.cards.boardHidePhoto}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -268,5 +287,19 @@ const styles = StyleSheet.create({
   },
   coverBtnTextOn: {
     color: theme.colors.surface,
+  },
+  hideBtn: {
+    position: 'absolute',
+    alignSelf: 'center',
+    left: theme.spacing.lg,
+    right: theme.spacing.lg,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  hideBtnText: {
+    ...theme.type.label,
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.surface,
+    fontWeight: '600',
   },
 });

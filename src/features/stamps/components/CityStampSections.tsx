@@ -1,6 +1,7 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { theme } from '@/shared/constants/theme';
+import { useShellInk } from '@/shared/hooks/useShellBackground';
 
 import { StampBadge } from './StampBadge';
 
@@ -52,6 +53,7 @@ export function CityStampSections({
   replayNonce = {},
   onSelectCollected,
 }: CityStampSectionsProps) {
+  const shell = useShellInk();
   return (
     <ScrollView
       style={styles.list}
@@ -65,8 +67,8 @@ export function CityStampSections({
           <View key={section.city} style={styles.section}>
             {section.showHeader ? (
               <View style={styles.header}>
-                <Text style={styles.headerTitle}>{section.city}</Text>
-                <Text style={styles.headerCount}>
+                <Text style={[styles.headerTitle, shell.ink]}>{section.city}</Text>
+                <Text style={[styles.headerCount, shell.subtle]}>
                   {section.collected}/{section.total}
                 </Text>
               </View>

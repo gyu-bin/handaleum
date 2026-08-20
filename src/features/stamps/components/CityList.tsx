@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { theme } from '@/shared/constants/theme';
+import { useShellInk } from '@/shared/hooks/useShellBackground';
 
 export type CityRow = {
   key: string;
@@ -16,6 +17,7 @@ export interface CityListProps {
 
 /** Minimal L1 list (구·시·군) — hairline rows, no cards. */
 export function CityList({ cities, onSelect }: CityListProps) {
+  const shell = useShellInk();
   return (
     <View style={styles.list}>
       {cities.map((row) => (
@@ -24,10 +26,14 @@ export function CityList({ cities, onSelect }: CityListProps) {
           onPress={() => onSelect(row.key)}
           accessibilityRole="button"
           accessibilityLabel={`${row.label} ${row.collected}/${row.total}`}
-          style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+          style={({ pressed }) => [
+            styles.row,
+            { borderBottomColor: shell.hairline },
+            pressed && styles.rowPressed,
+          ]}
         >
-          <Text style={styles.title}>{row.label}</Text>
-          <Text style={styles.count}>
+          <Text style={[styles.title, shell.ink]}>{row.label}</Text>
+          <Text style={[styles.count, shell.subtle]}>
             {row.collected}/{row.total}
           </Text>
         </Pressable>

@@ -9,6 +9,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { theme } from '@/shared/constants/theme';
+import { useTheme } from '@/shared/theme/ThemeProvider';
 
 export interface OtaToastProps {
   visible: boolean;
@@ -28,6 +29,7 @@ export function OtaToast({
   durationMs = 2200,
 }: OtaToastProps) {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(8);
 
@@ -79,8 +81,17 @@ export function OtaToast({
       pointerEvents="none"
       style={[styles.wrap, { bottom: Math.max(insets.bottom, 12) + 16 }]}
     >
-      <Animated.View style={[styles.pill, animStyle]}>
-        <Text style={styles.text}>{message}</Text>
+      <Animated.View
+        style={[
+          styles.pill,
+          {
+            backgroundColor: colors.shellInk,
+            borderColor: colors.hairline,
+          },
+          animStyle,
+        ]}
+      >
+        <Text style={[styles.text, { color: colors.canvas }]}>{message}</Text>
       </Animated.View>
     </View>
   );

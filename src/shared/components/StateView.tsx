@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { theme } from '@/shared/constants/theme';
+import { useTheme } from '@/shared/theme/ThemeProvider';
 
 import { Button } from './Button';
 
@@ -27,11 +28,17 @@ export function StateView({
   actionLabel,
   onAction,
 }: StateViewProps) {
+  const { colors } = useTheme();
+
   return (
     <View style={styles.container}>
       {icon ? <Text style={styles.icon}>{icon}</Text> : null}
-      <Text style={styles.title}>{title}</Text>
-      {description ? <Text style={styles.description}>{description}</Text> : null}
+      <Text style={[styles.title, { color: colors.shellInk }]}>{title}</Text>
+      {description ? (
+        <Text style={[styles.description, { color: colors.shellInkSoft }]}>
+          {description}
+        </Text>
+      ) : null}
       {actionLabel && onAction ? (
         <Button
           title={actionLabel}
@@ -60,14 +67,12 @@ const styles = StyleSheet.create({
   title: {
     ...theme.type.title,
     fontFamily: theme.fonts.serif,
-    color: theme.colors.ink,
     fontWeight: '700',
     textAlign: 'center',
   },
   description: {
     ...theme.type.body,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.inkSoft,
     textAlign: 'center',
   },
   action: {

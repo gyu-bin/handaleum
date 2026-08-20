@@ -18,6 +18,8 @@ import { ScreenHeader } from '@/shared/components/ScreenHeader';
 import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
+import { useShellBackground } from '@/shared/hooks/useShellBackground';
+import { useTheme } from '@/shared/theme/ThemeProvider';
 import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 
 import { CardTemplateStory } from '../components/CardTemplateStory';
@@ -47,6 +49,8 @@ function waitMs(ms: number): Promise<void> {
  * the tall story card.
  */
 export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
+  const shellBg = useShellBackground();
+  const { colors } = useTheme();
   const router = useRouter();
   const { from } = useLocalSearchParams<{ from?: string | string[] }>();
   const fromCreate = (Array.isArray(from) ? from[0] : from) === 'create';
@@ -190,7 +194,7 @@ export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
 
   if (isError) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
         <ScreenHeader title={strings.cards.previewTitle} onBack={goBack} />
         <StateView
           icon="⚠️"
@@ -204,7 +208,7 @@ export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
 
   if (data === null || data === undefined) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
         <ScreenHeader title={strings.cards.previewTitle} onBack={goBack} />
         <StateView icon="🔍" title={strings.cards.notFound} />
       </SafeAreaView>
@@ -232,7 +236,7 @@ export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
   */
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
       <ScreenHeader
         title={strings.cards.previewTitle}
         onBack={goBack}
@@ -255,7 +259,13 @@ export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
         </View>
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View
+        style={[
+          styles.footer,
+          shellBg,
+          { borderTopColor: colors.hairline },
+        ]}
+      >
         {actionError ? <Text style={styles.error}>{actionError}</Text> : null}
         <Button
           title={strings.cards.share}
@@ -300,7 +310,6 @@ export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: theme.colors.background,
   },
   scroll: {
     flex: 1,
@@ -323,8 +332,6 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing.md,
     gap: theme.spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.hairline,
-    backgroundColor: theme.colors.background,
   },
   error: {
     ...theme.type.label,

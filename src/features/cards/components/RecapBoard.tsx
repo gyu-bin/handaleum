@@ -15,7 +15,9 @@ import Svg, { Path } from 'react-native-svg';
 
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
+import { useTheme } from '@/shared/theme/ThemeProvider';
 
+import { useHiddenPhotos } from '../../photos/hooks/useHiddenPhotos';
 import { usePinCovers } from '../../photos/hooks/usePinCovers';
 import { placeBucketKey } from '../../photos/services/placeCache';
 import { AssetThumbImage } from '../../photos/components/AssetThumbImage';
@@ -88,6 +90,7 @@ const NodeCell = memo(function NodeCell({
   onOpen: (id: string) => void;
   onRename: (id: string) => void;
 }) {
+  const { colors } = useTheme();
   const empty = node.assetId == null;
   const inner = Math.max(12, size - inset);
 
@@ -120,21 +123,33 @@ const NodeCell = memo(function NodeCell({
       <View
         style={[
           styles.circle,
-          { width: inner, height: inner, borderRadius: inner / 2 },
+          {
+            width: inner,
+            height: inner,
+            borderRadius: inner / 2,
+            backgroundColor: empty ? colors.background : theme.colors.surfaceAlt,
+            borderColor: colors.hairline,
+          },
           empty && styles.circleEmpty,
           !empty && !selected && styles.circleOff,
-          !empty && selected && styles.circleOn,
+          !empty && selected && {
+            borderWidth: 2,
+            borderColor: colors.shellInk,
+          },
         ]}
       >
         {node.assetId ? (
           <AssetThumbImage
             assetId={node.assetId}
             size={inner}
-            style={{ width: inner, height: inner, borderRadius: inner / 2 }}
+            style={styles.circlePhoto}
           />
         ) : null}
       </View>
-      <Text style={styles.caption} numberOfLines={1}>
+      <Text
+        style={[styles.caption, { color: colors.shellInkSoft }]}
+        numberOfLines={1}
+      >
         {node.label}
       </Text>
     </Pressable>
@@ -170,6 +185,7 @@ function BoardPage({
   onRename: (id: string) => void;
   onBindRef: (el: View | null) => void;
 }) {
+  const { colors } = useTheme();
   const rows =
     mode === 'day' ? chunkRows(pageNodes, cols) : snakeRows(pageNodes, cols);
   const gridH = rows.length * rowH;
@@ -187,7 +203,10 @@ function BoardPage({
       {mode === 'day' ? (
         <View style={[styles.weekdayRow, { gap: gapX }]}>
           {strings.cards.boardWeekdays.map((label) => (
-            <Text key={label} style={[styles.weekday, { width: size }]}>
+            <Text
+              key={label}
+              style={[styles.weekday, { width: size, color: colors.shellSubtle }]}
+            >
               {label}
             </Text>
           ))}
@@ -204,7 +223,7 @@ function BoardPage({
             <Path
               d={rail}
               fill="none"
-              stroke={theme.colors.inkSoft}
+              stroke={colors.shellInkSoft}
               strokeWidth={1.6}
               strokeLinejoin="round"
               strokeLinecap="round"
@@ -248,11 +267,13 @@ export function RecapBoard({
   visitPlaces,
   onShareState,
 }: RecapBoardProps) {
+  const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const boardRef = useRef<View>(null);
   const { aliases, setAlias } = usePlaceAliases();
   const { covers: recapCovers, setCover: setRecapCover } = useRecapCovers(month);
   const { covers: pinCovers, setCover: setPinCover } = usePinCovers(month);
+  const { hide: hidePhoto } = useHiddenPhotos(month);
   const [mode, setMode] = useState<RecapBoardMode>('place');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sharing, setSharing] = useState(false);
@@ -419,7 +440,9 @@ export function RecapBoard({
   if (photos.length === 0) {
     return (
       <View style={styles.empty}>
-        <Text style={styles.emptyText}>{strings.cards.boardEmpty}</Text>
+        <Text style={[styles.emptyText, { color: colors.shellInkSoft }]}>
+          {strings.cards.boardEmpty}
+        </Text>
       </View>
     );
   }
@@ -427,7 +450,9 @@ export function RecapBoard({
   return (
     <View style={styles.wrap}>
       <View style={styles.toolbar}>
-        <Text style={styles.month}>{formatMonthDot(month)}</Text>
+        <Text style={[styles.month, { color: colors.shellInk }]}>
+          {formatMonthDot(month)}
+        </Text>
         <View style={styles.modes}>
           {(['place', 'day'] as const).map((value) => {
             const on = mode === value;
@@ -435,11 +460,24 @@ export function RecapBoard({
               <Pressable
                 key={value}
                 onPress={() => setMode(value)}
-                style={[styles.modeChip, on && styles.modeChipOn]}
+                style={[
+                  styles.modeChip,
+                  { borderColor: colors.hairline },
+                  on && {
+                    backgroundColor: colors.shellInk,
+                    borderColor: colors.shellInk,
+                  },
+                ]}
                 accessibilityRole="button"
                 accessibilityState={{ selected: on }}
               >
-                <Text style={[styles.modeText, on && styles.modeTextOn]}>
+                <Text
+                  style={[
+                    styles.modeText,
+                    { color: colors.shellInkSoft },
+                    on && { color: colors.canvas },
+                  ]}
+                >
                   {value === 'place'
                     ? strings.cards.boardPlace
                     : strings.cards.boardDay}
@@ -449,13 +487,13 @@ export function RecapBoard({
           })}
         </View>
       </View>
-      <Text style={styles.hint}>
+      <Text style={[styles.hint, { color: colors.shellSubtle }]}>
         {mode === 'place'
           ? strings.cards.boardRenameHint
           : strings.cards.boardDayHint}
       </Text>
 
-      <View style={styles.board}>
+      <View style={[styles.board, { backgroundColor: colors.background }]}>
         <BoardPage
           pageNodes={nodes}
           mode={mode}
@@ -478,6 +516,7 @@ export function RecapBoard({
         photos={viewerPhotos && viewerPhotos.length > 0 ? viewerPhotos : null}
         coverAssetId={viewerCover}
         onSetCover={onSetViewerCover}
+        onHide={hidePhoto}
         onClose={() => setViewerNodeId(null)}
       />
       <PlaceAliasModal
@@ -546,7 +585,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   board: {
-    backgroundColor: theme.colors.background,
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: theme.spacing.sm,
   },
@@ -586,6 +624,10 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.colors.border,
+  },
+  circlePhoto: {
+    width: '100%',
+    height: '100%',
   },
   circleEmpty: {
     backgroundColor: theme.colors.background,

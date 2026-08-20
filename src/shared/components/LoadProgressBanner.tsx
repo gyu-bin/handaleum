@@ -10,6 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { theme } from '@/shared/constants/theme';
+import { useTheme } from '@/shared/theme/ThemeProvider';
 
 export interface LoadProgressBannerProps {
   label: string;
@@ -25,6 +26,7 @@ export function LoadProgressBanner({
   done,
   total,
 }: LoadProgressBannerProps) {
+  const { colors } = useTheme();
   const indeterminate = total <= 0;
   const pulse = useSharedValue(0);
   const fill = useSharedValue(0);
@@ -76,11 +78,13 @@ export function LoadProgressBanner({
           : { min: 0, max: total, now: Math.min(done, total) }
       }
     >
-      <Text style={styles.line} numberOfLines={1}>
+      <Text style={[styles.line, { color: colors.shellInkSoft }]} numberOfLines={1}>
         {label}
       </Text>
-      <View style={styles.track}>
-        <Animated.View style={[styles.fill, fillStyle]} />
+      <View style={[styles.track, { backgroundColor: colors.line }]}>
+        <Animated.View
+          style={[styles.fill, { backgroundColor: colors.shellInk }, fillStyle]}
+        />
       </View>
     </View>
   );
@@ -95,18 +99,15 @@ const styles = StyleSheet.create({
   line: {
     ...theme.type.micro,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.inkSoft,
     fontWeight: '500',
     textAlign: 'center',
   },
   track: {
     height: 2,
-    backgroundColor: theme.colors.line,
     overflow: 'hidden',
     borderRadius: 1,
   },
   fill: {
     height: '100%',
-    backgroundColor: theme.colors.ink,
   },
 });

@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
+import { useShellInk } from '@/shared/hooks/useShellBackground';
 
 import type { StampLibraryProgress } from '../services/stampBackfill';
 
@@ -80,6 +81,7 @@ export interface IndexingBannerProps {
 
 /** Minimal home indexing strip — one line + hairline bar. */
 export function IndexingBanner({ progress }: IndexingBannerProps) {
+  const shell = useShellInk();
   const [shownDone, setShownDone] = useState(targetDone(progress));
   const shownRef = useRef(shownDone);
   const phaseRef = useRef(progress.phase);
@@ -142,11 +144,16 @@ export function IndexingBanner({ progress }: IndexingBannerProps) {
       accessibilityRole="progressbar"
       accessibilityLabel={line}
     >
-      <Text style={styles.line} numberOfLines={1}>
+      <Text style={[styles.line, shell.soft]} numberOfLines={1}>
         {line}
       </Text>
-      <View style={styles.track}>
-        <View style={[styles.fill, { width: `${Math.round(fill * 100)}%` }]} />
+      <View style={[styles.track, { backgroundColor: shell.line }]}>
+        <View
+          style={[
+            styles.fill,
+            { width: `${Math.round(fill * 100)}%`, backgroundColor: shell.fill },
+          ]}
+        />
       </View>
     </View>
   );
@@ -161,16 +168,13 @@ const styles = StyleSheet.create({
   line: {
     ...theme.type.micro,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.inkSoft,
     fontWeight: '500',
   },
   track: {
     height: 1,
-    backgroundColor: theme.colors.line,
     overflow: 'hidden',
   },
   fill: {
     height: '100%',
-    backgroundColor: theme.colors.ink,
   },
 });

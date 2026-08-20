@@ -18,8 +18,10 @@ import {
 } from '../services/mediaLibrary';
 import { startMonthWarmup } from '../services/monthWarmup';
 import type { MonthKey, MonthlyPhotos, PhotoRef } from '../types';
+import { withoutHiddenPhotos } from '../utils/withoutHiddenPhotos';
 import { excludeHomePhotos } from '../utils/homeFilter';
 import { isKoreaLatLng } from '../utils/koreaBounds';
+import { useHiddenPhotos } from './useHiddenPhotos';
 import { useHomeLocation } from './useHomeLocation';
 import { photosQueryKeys } from './photosQueryKeys';
 
@@ -68,6 +70,7 @@ export function prefetchMonthlyPhotos(month: MonthKey): void {
  */
 export function useMonthlyPhotos(month: MonthKey, options?: { enabled?: boolean }) {
   const { home } = useHomeLocation();
+  const { hidden } = useHiddenPhotos(month);
   const client = useQueryClient();
   const enabled = options?.enabled ?? true;
   const query = useQuery({
@@ -108,14 +111,17 @@ export function useMonthlyPhotos(month: MonthKey, options?: { enabled?: boolean 
       home,
     );
     // Map pins are domestic-only; cards still use allPhotos (incl. overseas).
-    const photos = notHome.filter((p) => isKoreaLatLng(p.lat, p.lng));
+    const photos = withoutHiddenPhotos(
+      notHome.filter((p) => isKoreaLatLng(p.lat, p.lng)),
+      hidden,
+    );
     return {
       ...query.data,
       photos,
       allPhotos: query.data.photos,
       homeExcludedCount,
     };
-  }, [query.data, home]);
+  }, [hidden, query.data, home]);
 
   return {
     ...query,

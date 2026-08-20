@@ -11,7 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, G, Path, Polyline } from 'react-native-svg';
 
-import { theme } from '@/shared/constants/theme';
+import { useTheme } from '@/shared/theme/ThemeProvider';
 
 /**
  * Uiverse.io bike loader by fanishah — wheels spin on the UI thread forever.
@@ -97,7 +97,8 @@ export const BikeLoader = memo(function BikeLoader({
   width = 132,
 }: BikeLoaderProps) {
   const spin = useSharedValue(0);
-  const color = theme.colors.splashMark;
+  const { colors } = useTheme();
+  const color = colors.splashMark;
   const height = (width * VB_H) / VB_W;
   const sx = width / VB_W;
   const wheelPx = WHEEL_VB * sx;

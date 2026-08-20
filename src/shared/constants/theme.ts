@@ -2,6 +2,7 @@
  * Design tokens — dual system:
  * - UI chrome: Dawn Survey (cream paper + single slate ink). Plan A 2026-08-05.
  * - Map canvas / pins: dawn-blue paper map (land / water / accent) — do not retint for UI.
+ * - Dark mode: settings switch (not system). Shell only; surface + map stay light.
  * All colors in the app must come from this file. No hardcoded colors elsewhere.
  */
 export const theme = {
@@ -16,6 +17,13 @@ export const theme = {
     ink: '#2C3E50',
     inkSoft: '#5A6B7A',
     subtle: '#93A1AD',
+
+    /** Text/icons on the shell background (light = ink; dark mode flips via resolveTheme). */
+    shellInk: '#2C3E50',
+    shellInkSoft: '#5A6B7A',
+    shellSubtle: '#93A1AD',
+    /** Chips/buttons that sit on the shell (back control). */
+    shellChip: '#EFE6DA',
 
     /**
      * Splash / loading brand mark — slate navy from the stamp splash reference.
@@ -148,4 +156,7 @@ export const theme = {
   },
 } as const;
 
-export type Theme = typeof theme;
+/** Runtime theme — shell tokens may resolve to dark literals at runtime. */
+export type Theme = Omit<typeof theme, 'colors'> & {
+  colors: { [K in keyof typeof theme.colors]: string };
+};

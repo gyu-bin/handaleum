@@ -8,6 +8,8 @@ import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
+import { useShellBackground } from '@/shared/hooks/useShellBackground';
+import { useTheme } from '@/shared/theme/ThemeProvider';
 
 import { useOnboarding } from '@/features/onboarding/hooks/useOnboarding';
 import { IndexingBanner } from '@/features/stamps/components/IndexingBanner';
@@ -60,6 +62,8 @@ const MAP_NAV_ITEMS = [
 export function MonthlyMapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const shellBg = useShellBackground();
+  const { colors } = useTheme();
   // Pull chrome closer to the status bar — full inset leaves too much empty top.
   const headerPadTop = Math.max(0, insets.top - 10);
   const { seen: onboardingSeen } = useOnboarding();
@@ -82,9 +86,6 @@ export function MonthlyMapScreen() {
   });
   const [zoom, setZoom] = useState(DEFAULT_MAP_ZOOM);
   const [selected, setSelected] = useState<PlaceCluster | null>(null);
-  // The "위치 없는 사진 / 집 제외" notices are collapsed behind a "!" so the
-  // header stays quiet; they're reference info, not something to read every time.
-  const [showNotices, setShowNotices] = useState(false);
 
   const monthPhotos = data?.photos ?? [];
 
@@ -255,7 +256,7 @@ export function MonthlyMapScreen() {
 
   if (isError && !data) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
         <StateView
           icon="⚠️"
           title={strings.common.error}
@@ -276,11 +277,13 @@ export function MonthlyMapScreen() {
   // low-frequency config, so it sits as a quiet link in the header instead.
 
   return (
-    <SafeAreaView style={styles.safe} edges={['left', 'right']}>
+    <SafeAreaView style={[styles.safe, shellBg]} edges={['left', 'right']}>
       <View style={[styles.body, { paddingTop: headerPadTop }]}>
         <View style={styles.header}>
           <View style={styles.headerTop}>
-            <Text style={styles.brandEyebrow}>{strings.brand}</Text>
+            <Text style={[styles.brandEyebrow, { color: colors.shellInk }]}>
+              {strings.brand}
+            </Text>
             <View style={styles.headerActions}>
               <Pressable
                 onPress={() => router.push('/settings')}
@@ -292,35 +295,10 @@ export function MonthlyMapScreen() {
                   pressed && styles.actionBtnPressed,
                 ]}
               >
-                <Text style={styles.actionLabel}>{strings.map.settings}</Text>
+                <Text style={[styles.actionLabel, { color: colors.shellInkSoft }]}>
+                  {strings.map.settings}
+                </Text>
               </Pressable>
-
-              {data.noLocationCount > 0 || data.homeExcludedCount > 0 ? (
-                <Pressable
-                  onPress={() => setShowNotices((v) => !v)}
-                  hitSlop={10}
-                  accessibilityRole="button"
-                  accessibilityState={{ expanded: showNotices }}
-                  accessibilityLabel={strings.map.infoToggle}
-                  style={({ pressed }) => [
-                    styles.actionBtn,
-                    pressed && styles.actionBtnPressed,
-                  ]}
-                >
-                  <View
-                    style={[styles.infoDot, showNotices && styles.infoDotActive]}
-                  >
-                    <Text
-                      style={[
-                        styles.infoDotText,
-                        showNotices && styles.infoDotTextActive,
-                      ]}
-                    >
-                      !
-                    </Text>
-                  </View>
-                </Pressable>
-              ) : null}
             </View>
           </View>
 
@@ -339,6 +317,7 @@ export function MonthlyMapScreen() {
               <Text
                 style={[
                   styles.monthEdgeChevron,
+                  { color: colors.shellInk },
                   prevMonth == null && styles.monthEdgeChevronOff,
                 ]}
               >
@@ -354,11 +333,11 @@ export function MonthlyMapScreen() {
                 hitSlop={4}
                 style={styles.heroTitleHit}
               >
-                <Text style={styles.wordmark} numberOfLines={1}>
+                <Text style={[styles.wordmark, { color: colors.shellInk }]} numberOfLines={1}>
                   {strings.map.monthTitle(monthNumber)}
                 </Text>
               </Pressable>
-              <Text style={styles.monthMeta} numberOfLines={1}>
+              <Text style={[styles.monthMeta, { color: colors.shellSubtle }]} numberOfLines={1}>
                 {(isFetching || isStaleMonth) && data
                   ? strings.map.resolvingLocations
                   : strings.map.monthMeta(monthLabel, placeCount)}
@@ -379,6 +358,7 @@ export function MonthlyMapScreen() {
               <Text
                 style={[
                   styles.monthEdgeChevron,
+                  { color: colors.shellInk },
                   nextMonth == null && styles.monthEdgeChevronOff,
                 ]}
               >
@@ -389,32 +369,6 @@ export function MonthlyMapScreen() {
         </View>
 
         <HomeIndexingBanner />
-
-        {showNotices && (data.noLocationCount > 0 || data.homeExcludedCount > 0) ? (
-          <View style={styles.noticeRow}>
-            {data.noLocationCount > 0 ? (
-              <View style={styles.noticeChip}>
-                <Text style={styles.notice}>
-                  {strings.map.noLocationNotice(data.noLocationCount)}
-                </Text>
-              </View>
-            ) : null}
-            {data.homeExcludedCount > 0 ? (
-              <Pressable
-                onPress={() => router.push('/settings')}
-                hitSlop={6}
-                style={({ pressed }) => [
-                  styles.noticeChip,
-                  pressed && styles.noticeChipPressed,
-                ]}
-              >
-                <Text style={styles.notice}>
-                  {strings.map.homeExcludedNotice(data.homeExcludedCount)}
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
-        ) : null}
 
         <View style={[styles.mapBlock, isStaleMonth && styles.mapBlockStale]}>
           <MapCanvas
@@ -470,7 +424,6 @@ export function MonthlyMapScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: theme.colors.background,
   },
   body: {
     flex: 1,
@@ -563,52 +516,6 @@ const styles = StyleSheet.create({
     color: theme.colors.subtle,
     marginTop: 1,
     textAlign: 'center',
-  },
-  infoDot: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.surfaceAlt,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.hairline,
-  },
-  infoDotActive: {
-    backgroundColor: theme.colors.ink,
-    borderColor: theme.colors.ink,
-  },
-  infoDotText: {
-    ...theme.type.micro,
-    fontWeight: '700',
-    color: theme.colors.subtle,
-    lineHeight: 14,
-  },
-  infoDotTextActive: {
-    color: theme.colors.surface,
-  },
-
-  noticeRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    justifyContent: 'flex-start',
-    paddingHorizontal: theme.spacing.md,
-    paddingBottom: theme.spacing.xs,
-  },
-  noticeChipPressed: {
-    backgroundColor: theme.colors.terracottaSoft,
-  },
-  noticeChip: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.surfaceAlt,
-  },
-  notice: {
-    ...theme.type.micro,
-    color: theme.colors.subtle,
   },
   mapBlock: {
     flex: 1,

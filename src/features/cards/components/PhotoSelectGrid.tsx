@@ -16,6 +16,7 @@ import Animated from 'react-native-reanimated';
 import { LoadProgressBanner } from '@/shared/components/LoadProgressBanner';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
+import { useShellInk } from '@/shared/hooks/useShellBackground';
 
 import { AssetThumbImage } from '../../photos/components/AssetThumbImage';
 import { usePauseGridThumbWarmOnScroll } from '../../photos/hooks/usePauseGridThumbWarmOnScroll';
@@ -151,6 +152,7 @@ export function PhotoSelectGrid({
   onScroll,
   scrollEventThrottle = 16,
 }: PhotoSelectGridProps) {
+  const shell = useShellInk();
   const { width } = useWindowDimensions();
   const size = (width - theme.spacing.lg * 2) / COLS;
   const thumbWarmScroll = usePauseGridThumbWarmOnScroll();
@@ -198,9 +200,13 @@ export function PhotoSelectGrid({
         return (
           <View style={styles.sectionHeader}>
             <View style={styles.sectionHead}>
-              <Text style={styles.sectionPlace}>{item.title}</Text>
-              <View style={styles.sectionRule} />
-              <Text style={styles.sectionCount}>{item.count}장</Text>
+              <Text style={[styles.sectionPlace, shell.ink]}>{item.title}</Text>
+              <View
+                style={[styles.sectionRule, { backgroundColor: shell.hairline }]}
+              />
+              <Text style={[styles.sectionCount, shell.subtle]}>
+                {item.count}장
+              </Text>
             </View>
           </View>
         );
@@ -219,7 +225,7 @@ export function PhotoSelectGrid({
         </View>
       );
     },
-    [onToggle, selected, size],
+    [onToggle, selected, size, shell],
   );
 
   return (
