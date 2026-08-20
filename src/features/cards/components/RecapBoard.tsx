@@ -91,7 +91,6 @@ const NodeCell = memo(function NodeCell({
   onOpen: (id: string) => void;
   onRename: (id: string) => void;
 }) {
-  const { colors } = useTheme();
   const empty = node.assetId == null;
   const inner = Math.max(12, size - inset);
 
@@ -128,15 +127,10 @@ const NodeCell = memo(function NodeCell({
             width: inner,
             height: inner,
             borderRadius: inner / 2,
-            backgroundColor: empty ? colors.background : theme.colors.surfaceAlt,
-            borderColor: colors.hairline,
           },
           empty && styles.circleEmpty,
           !empty && !selected && styles.circleOff,
-          !empty && selected && {
-            borderWidth: 2,
-            borderColor: colors.shellInk,
-          },
+          !empty && selected && styles.circleOn,
         ]}
       >
         {node.assetId ? (
@@ -147,10 +141,7 @@ const NodeCell = memo(function NodeCell({
           />
         ) : null}
       </View>
-      <Text
-        style={[styles.caption, { color: colors.shellInkSoft }]}
-        numberOfLines={1}
-      >
+      <Text style={styles.caption} numberOfLines={1}>
         {node.label}
       </Text>
     </Pressable>
@@ -170,7 +161,6 @@ function BoardPage({
   selectedIds,
   onOpen,
   onRename,
-  onBindRef,
 }: {
   pageNodes: RecapBoardNode[];
   mode: RecapBoardMode;
@@ -184,9 +174,7 @@ function BoardPage({
   selectedIds: Set<string>;
   onOpen: (id: string) => void;
   onRename: (id: string) => void;
-  onBindRef: (el: View | null) => void;
 }) {
-  const { colors } = useTheme();
   const rows =
     mode === 'day' ? chunkRows(pageNodes, cols) : snakeRows(pageNodes, cols);
   const gridH = rows.length * rowH;
@@ -196,17 +184,13 @@ function BoardPage({
       : '';
 
   return (
-    <View
-      ref={onBindRef}
-      collapsable={false}
-      style={[styles.grid, { width: gridW }]}
-    >
+    <View collapsable={false} style={[styles.grid, { width: gridW }]}>
       {mode === 'day' ? (
         <View style={[styles.weekdayRow, { gap: gapX }]}>
           {strings.cards.boardWeekdays.map((label) => (
             <Text
               key={label}
-              style={[styles.weekday, { width: size, color: colors.shellSubtle }]}
+              style={[styles.weekday, { width: size }]}
             >
               {label}
             </Text>
@@ -224,7 +208,7 @@ function BoardPage({
             <Path
               d={rail}
               fill="none"
-              stroke={colors.shellInkSoft}
+              stroke={theme.colors.inkSoft}
               strokeWidth={1.6}
               strokeLinejoin="round"
               strokeLinecap="round"
@@ -494,7 +478,7 @@ export function RecapBoard({
           : strings.cards.boardDayHint}
       </Text>
 
-      <View style={[styles.board, { backgroundColor: colors.background }]}>
+      <View ref={boardRef} collapsable={false} style={styles.board}>
         <BoardPage
           pageNodes={nodes}
           mode={mode}
@@ -508,9 +492,6 @@ export function RecapBoard({
           selectedIds={selectedIds}
           onOpen={onOpen}
           onRename={onRename}
-          onBindRef={(el) => {
-            boardRef.current = el;
-          }}
         />
       </View>
       <RecapPhotosModal
@@ -588,10 +569,12 @@ const styles = StyleSheet.create({
   board: {
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: theme.spacing.sm,
+    backgroundColor: theme.colors.background,
   },
   grid: {
     alignSelf: 'center',
     position: 'relative',
+    backgroundColor: theme.colors.background,
   },
   rail: {
     position: 'absolute',
