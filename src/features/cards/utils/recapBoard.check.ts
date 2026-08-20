@@ -8,6 +8,7 @@ import type { PhotoRef } from '../../photos/types';
 import {
   applyPlaceAliases,
   daysInMonth,
+  groupPhotosByPlaceDay,
   localDayKey,
   recapDayCalendarNodes,
   recapDayNodes,
@@ -16,6 +17,8 @@ import {
   resolveRecapCoverAssetId,
   monthStartWeekday,
   chunkRows,
+  placeIdentityFromVisitNodeId,
+  placeVisitNodeId,
   snakeCell,
   snakeRailPath,
   snakeRows,
@@ -95,13 +98,15 @@ assert.deepEqual(recapBoardPages([], 4, 3), []);
 
 const aliased = applyPlaceAliases(
   [
-    { id: '전주|풍남동', label: '전주 풍남동', assetId: 'a', photoCount: 2 },
+    { id: '전주|풍남동@2026-08-06', label: '전주 풍남동', assetId: 'a', photoCount: 2 },
+    { id: '전주|풍남동@2026-08-16', label: '전주 풍남동', assetId: 'c', photoCount: 1 },
     { id: 'pending:1', label: '', assetId: 'b', photoCount: 1 },
   ],
   { '전주|풍남동': '한옥마을', leftover: 'x' },
 );
 assert.equal(aliased[0]?.label, '한옥마을');
-assert.equal(aliased[1]?.label, '');
+assert.equal(aliased[1]?.label, '한옥마을');
+assert.equal(aliased[2]?.label, '');
 
 assert.deepEqual(
   recapDayPhotos('2026-08-06', photos).map((p) => p.assetId),
@@ -122,5 +127,36 @@ assert.equal(
   'a',
 );
 assert.equal(resolveRecapCoverAssetId('x', [], {}, null), null);
+
+assert.equal(
+  placeIdentityFromVisitNodeId(placeVisitNodeId('전주|풍남동', '2026-08-06')),
+  '전주|풍남동',
+);
+assert.equal(placeIdentityFromVisitNodeId('전주|풍남동'), '전주|풍남동');
+
+const sameSpot = (day: number, hour: number, id: string): PhotoRef => ({
+  assetId: id,
+  takenAt: new Date(2026, 7, day, hour, 0, 0).toISOString(),
+  lat: 35.8,
+  lng: 127.1,
+});
+const byPlace = groupPhotosByPlaceDay(
+  [sameSpot(6, 10, 'a'), sameSpot(6, 15, 'b'), sameSpot(16, 9, 'c')],
+  () => '전주|풍남동',
+);
+assert.equal(byPlace.length, 2);
+assert.deepEqual(
+  byPlace[0]?.photos.map((photo) => photo.assetId),
+  ['a', 'b'],
+);
+assert.deepEqual(
+  byPlace[1]?.photos.map((photo) => photo.assetId),
+  ['c'],
+);
+assert.equal(
+  placeIdentityFromVisitNodeId(byPlace[0]!.id),
+  placeIdentityFromVisitNodeId(byPlace[1]!.id),
+);
+assert.notEqual(byPlace[0]?.id, byPlace[1]?.id);
 
 console.log('ok recapBoard');

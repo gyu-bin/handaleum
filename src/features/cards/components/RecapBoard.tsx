@@ -30,6 +30,7 @@ import {
   recapDayCalendarNodes,
   resolveRecapCoverAssetId,
   chunkRows,
+  placeIdentityFromVisitNodeId,
   snakeRailPath,
   snakeRows,
   type RecapBoardMode,
@@ -526,7 +527,7 @@ export function RecapBoard({
         onClose={() => setEditingId(null)}
         onSave={(alias) => {
           if (editingId) {
-            setAlias(editingId, alias);
+            setAlias(placeIdentityFromVisitNodeId(editingId), alias);
           }
           setEditingId(null);
         }}

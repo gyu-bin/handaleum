@@ -168,7 +168,8 @@ export function resolveRecapCoverAssetId(
     return null;
   }
   const ids = new Set(assetIds);
-  const recap = recapCovers[nodeId];
+  const recap =
+    recapCovers[nodeId] ?? recapCovers[placeIdentityFromVisitNodeId(nodeId)];
   if (recap && ids.has(recap)) {
     return recap;
   }
@@ -223,12 +224,48 @@ export function placeIdentity(place: {
   );
 }
 
+const VISIT_DAY_SUFFIX = /@(\d{4}-\d{2}-\d{2})$/;
+
+/** Place-view cell: same admin identity on another calendar day is a new stop. */
+export function placeVisitNodeId(identity: string, dayKey: string): string {
+  return `${identity}@${dayKey}`;
+}
+
+export function placeIdentityFromVisitNodeId(nodeId: string): string {
+  return nodeId.replace(VISIT_DAY_SUFFIX, '');
+}
+
+/** Group photos by admin identity × local day, earliest-first. */
+export function groupPhotosByPlaceDay(
+  photos: PhotoRef[],
+  identityOf: (photo: PhotoRef) => string,
+): { id: string; photos: PhotoRef[] }[] {
+  const photosById = new Map<string, PhotoRef[]>();
+  for (const photo of photos) {
+    const id = placeVisitNodeId(identityOf(photo), localDayKey(photo.takenAt));
+    const list = photosById.get(id);
+    if (list) {
+      list.push(photo);
+    } else {
+      photosById.set(id, [photo]);
+    }
+  }
+  return [...photosById.entries()]
+    .map(([id, list]) => ({
+      id,
+      photos: [...list].sort((a, b) => a.takenAt.localeCompare(b.takenAt)),
+    }))
+    .sort((a, b) =>
+      (a.photos[0]?.takenAt ?? '').localeCompare(b.photos[0]?.takenAt ?? ''),
+    );
+}
+
 export function applyPlaceAliases(
   nodes: RecapBoardNode[],
   aliases: Record<string, string>,
 ): RecapBoardNode[] {
   return nodes.map((node) => {
-    const alias = aliases[node.id]?.trim();
+    const alias = aliases[placeIdentityFromVisitNodeId(node.id)]?.trim();
     if (!alias) {
       return node;
     }
