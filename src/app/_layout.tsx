@@ -6,7 +6,10 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { startOtaAutoApply } from '@/lib/applyOtaUpdate';
+import {
+  applyOtaUpdateIfAvailable,
+  startOtaAutoApply,
+} from '@/lib/applyOtaUpdate';
 import { configurePurchases } from '@/lib/purchases';
 import { consumeOtaJustApplied } from '@/lib/otaUpdateFlag';
 import { queryClient } from '@/lib/queryClient';
@@ -85,33 +88,59 @@ function OtaToasts({
 }
 
 export default function RootLayout() {
+  const [ready, setReady] = useState(false);
   const [otaToastMessage, setOtaToastMessage] = useState<string | null>(null);
   const [otaToastPersistent, setOtaToastPersistent] = useState(false);
   const [otaDoneToast, setOtaDoneToast] = useState(false);
 
   useEffect(() => {
-    // No animated pin/map splash — drop native splash as soon as the tree mounts.
-    void SplashScreen.hideAsync().catch(() => {});
+    let cancelled = false;
+    let stopPoll: (() => void) | undefined;
 
-    if (consumeOtaJustApplied()) {
-      setOtaDoneToast(true);
-    }
+    void (async () => {
+      // Cold start: stay on native splash, apply OTA silently (no toast / old UI).
+      const cold = await applyOtaUpdateIfAvailable();
+      if (cancelled) {
+        return;
+      }
+      if (cold.kind === 'reloading') {
+        // Process restarts — keep splash up until then.
+        return;
+      }
 
-    return startOtaAutoApply({
-      onProgress: (phase) => {
-        setOtaToastPersistent(true);
-        setOtaToastMessage(
-          phase === 'updating' ? strings.ota.updating : strings.ota.checking,
-        );
-      },
-      onSettled: (result) => {
-        if (result.kind === 'reloading') {
-          return;
-        }
-        setOtaToastMessage(null);
-        setOtaToastPersistent(false);
-      },
-    });
+      await SplashScreen.hideAsync().catch(() => {});
+      if (cancelled) {
+        return;
+      }
+
+      if (consumeOtaJustApplied()) {
+        setOtaDoneToast(true);
+      }
+      setReady(true);
+
+      // Later checks (foreground / poll) may show the toast.
+      stopPoll = startOtaAutoApply({
+        skipInitial: true,
+        onProgress: (phase) => {
+          setOtaToastPersistent(true);
+          setOtaToastMessage(
+            phase === 'updating' ? strings.ota.updating : strings.ota.checking,
+          );
+        },
+        onSettled: (result) => {
+          if (result.kind === 'reloading') {
+            return;
+          }
+          setOtaToastMessage(null);
+          setOtaToastPersistent(false);
+        },
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+      stopPoll?.();
+    };
   }, []);
 
   const hideOtaDoneToast = useCallback(() => setOtaDoneToast(false), []);
@@ -122,13 +151,17 @@ export default function RootLayout() {
         <RootShell>
           <ErrorBoundary>
             <QueryClientProvider client={queryClient}>
-              <AppNavigation />
-              <OtaToasts
-                progressMessage={otaToastMessage}
-                progressPersistent={otaToastPersistent}
-                doneVisible={otaDoneToast}
-                onDoneHidden={hideOtaDoneToast}
-              />
+              {ready ? (
+                <>
+                  <AppNavigation />
+                  <OtaToasts
+                    progressMessage={otaToastMessage}
+                    progressPersistent={otaToastPersistent}
+                    doneVisible={otaDoneToast}
+                    onDoneHidden={hideOtaDoneToast}
+                  />
+                </>
+              ) : null}
             </QueryClientProvider>
           </ErrorBoundary>
         </RootShell>

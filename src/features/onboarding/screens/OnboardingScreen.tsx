@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react';
 import {
   Pressable,
-  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -21,7 +20,7 @@ import { PaperPanelArt } from '../components/PaperPanelArt';
 import { useOnboarding } from '../hooks/useOnboarding';
 
 /**
- * First-run B — headline + paper map panel (photo pins) + album toggle + start.
+ * First-run B — headline + full paper map panel + album toggle + start.
  */
 export function OnboardingScreen() {
   const shellBg = useShellBackground();
@@ -81,12 +80,7 @@ export function OnboardingScreen() {
         <View style={styles.topPad} />
       )}
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.body}
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-      >
+      <View style={styles.body}>
         <Text style={[styles.brand, shell.subtle]}>{strings.brand}</Text>
         <Text style={[styles.headline, shell.ink]}>
           {strings.onboarding.headline}
@@ -101,10 +95,7 @@ export function OnboardingScreen() {
 
         {!isReplay ? (
           <View
-            style={[
-              styles.toggleBlock,
-              { borderTopColor: colors.hairline },
-            ]}
+            style={[styles.toggleBlock, { borderTopColor: colors.hairline }]}
           >
             <View style={styles.toggleRow}>
               <Text style={[styles.toggleLabel, shell.ink]}>
@@ -125,7 +116,7 @@ export function OnboardingScreen() {
             </Text>
           </View>
         ) : null}
-      </ScrollView>
+      </View>
 
       <View style={styles.footer}>
         <Button
@@ -154,7 +145,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
   },
   topPad: {
-    height: theme.spacing.md,
+    height: theme.spacing.sm,
   },
   pressed: {
     opacity: 0.5,
@@ -164,29 +155,25 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.sans,
     fontWeight: '500',
   },
-  scroll: {
-    flex: 1,
-  },
   body: {
-    flexGrow: 1,
+    flex: 1,
     paddingHorizontal: theme.spacing.lg,
     alignItems: 'center',
-    paddingBottom: theme.spacing.md,
   },
   brand: {
     ...theme.type.micro,
     fontFamily: theme.fonts.sans,
     fontWeight: '500',
     letterSpacing: 1,
-    marginBottom: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
   },
   headline: {
-    fontSize: 26,
-    lineHeight: 36,
+    fontSize: 24,
+    lineHeight: 34,
     fontFamily: theme.fonts.sans,
     fontWeight: '700',
     textAlign: 'center',
-    letterSpacing: -0.7,
+    letterSpacing: -0.6,
   },
   subhead: {
     fontSize: 14,
@@ -196,13 +183,14 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.sm,
   },
   panelSlot: {
+    flex: 1,
     width: '100%',
-    marginTop: theme.spacing.lg,
-    marginBottom: theme.spacing.lg,
+    marginTop: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+    minHeight: 260,
   },
   toggleBlock: {
     width: '100%',
-    marginTop: 'auto',
     paddingTop: theme.spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
   },

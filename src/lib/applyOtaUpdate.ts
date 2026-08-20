@@ -89,6 +89,8 @@ export async function applyOtaUpdateIfAvailable(
 export type StartOtaAutoApplyOptions = {
   onProgress?: (phase: OtaProgressPhase) => void;
   onSettled?: (result: OtaApplyResult) => void;
+  /** When true, skip the immediate cold-start check (caller already ran it). */
+  skipInitial?: boolean;
 };
 
 /**
@@ -96,7 +98,7 @@ export type StartOtaAutoApplyOptions = {
  * Applies (reload) as soon as a new update is on the server.
  */
 export function startOtaAutoApply(options: StartOtaAutoApplyOptions = {}): () => void {
-  const { onProgress, onSettled } = options;
+  const { onProgress, onSettled, skipInitial = false } = options;
   let cancelled = false;
   let pollTimer: ReturnType<typeof setInterval> | null = null;
   let appState: AppStateStatus = AppState.currentState;
@@ -129,8 +131,9 @@ export function startOtaAutoApply(options: StartOtaAutoApplyOptions = {}): () =>
     }, FOREGROUND_POLL_MS);
   };
 
-  // Cold start
-  run(true);
+  if (!skipInitial) {
+    run(true);
+  }
   if (appState === 'active') {
     startPoll();
   }
