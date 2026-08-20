@@ -1,71 +1,71 @@
 import { useMemo, useState } from 'react';
-import {
-  LayoutChangeEvent,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
-import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 
-import { catmullRomPath } from '@/features/photos/utils/geo';
 import { getMapPalette } from '@/shared/constants/mapThemes';
 import { KOREA_SILHOUETTE } from '@/shared/constants/brandMark';
 import { theme } from '@/shared/constants/theme';
 
-const PIN_R = 26;
-const LABEL_H = 14;
-const CARET = 6;
-const PAD = 20;
+import { PaperMapSvg } from './PaperMapSvg';
 
-/** Same multi-pass coast as MapSvg — readable ink silhouette. */
-const COAST_PASSES: { dx: number; dy: number; opacity: number; width: number }[] =
-  [
-    { dx: 0.9, dy: 0.75, opacity: 0.1, width: 1.6 },
-    { dx: -0.5, dy: 0.4, opacity: 0.14, width: 1.15 },
-    { dx: 0.25, dy: -0.2, opacity: 0.22, width: 0.85 },
-    { dx: 0, dy: 0, opacity: 0.55, width: 0.7 },
-  ];
+/** Inset between the sheet edge and the map. */
+const PAD = 16;
+
+/** Card geometry as fractions of the card's own width (from the design plate). */
+const CARD_PAD_RATIO = 0.068;
+const CARD_CAP_RATIO = 0.243;
+const CARD_W_RATIO = 0.212;
+const CARD_W_MIN = 54;
+const CARD_W_MAX = 86;
 
 /**
- * Soft sea washes in viewBox space — cream paper shows through;
- * dawn water (#BFD7E8) like the home map, not flat UI `water`.
+ * Photo places. `pin` indexes `KOREA_SILHOUETTE.pins`
+ * ([서울, 강릉, 부산, 광주, 제주]); `card` is the print's top-left corner as a
+ * fraction of the panel, laid out so no two prints and no print and the
+ * landmass collide. Add 대전 here once its pin photo exists.
  */
-const SEA_WASHES: { cx: number; cy: number; r: number; o: number }[] = [
-  { cx: 8, cy: 16, r: 28, o: 0.42 },
-  { cx: 44, cy: 12, r: 26, o: 0.38 },
-  { cx: 50, cy: 42, r: 24, o: 0.4 },
-  { cx: 46, cy: 72, r: 22, o: 0.36 },
-  { cx: 22, cy: 90, r: 30, o: 0.4 },
-  { cx: 4, cy: 58, r: 24, o: 0.34 },
-  { cx: 26, cy: 48, r: 34, o: 0.18 },
-  { cx: 14, cy: 30, r: 18, o: 0.28 },
-];
-
-const ROUTE_PINS = [
+const PLACES = [
   {
     name: '서울',
-    fx: KOREA_SILHOUETTE.pins[0].fx,
-    fy: KOREA_SILHOUETTE.pins[0].fy,
+    pin: 0,
+    rotate: '-4deg',
+    card: { x: 0.012, y: 0.086 },
     source: require('@/assets/splash/pins/seoul.png'),
   },
   {
+    name: '강릉',
+    pin: 1,
+    rotate: '2.2deg',
+    card: { x: 0.74, y: 0.072 },
+    source: require('@/assets/splash/pins/gangneung.png'),
+  },
+  {
+    name: '광주',
+    pin: 3,
+    rotate: '-2.6deg',
+    card: { x: 0.012, y: 0.54 },
+    source: require('@/assets/splash/pins/gwangju.png'),
+  },
+  {
     name: '부산',
-    fx: KOREA_SILHOUETTE.pins[2].fx,
-    fy: KOREA_SILHOUETTE.pins[2].fy,
+    pin: 2,
+    rotate: '3.4deg',
+    card: { x: 0.775, y: 0.47 },
     source: require('@/assets/splash/pins/busan.png'),
   },
   {
     name: '제주',
-    fx: KOREA_SILHOUETTE.pins[4].fx,
-    fy: KOREA_SILHOUETTE.pins[4].fy,
+    pin: 4,
+    rotate: '-2deg',
+    card: { x: 0.47, y: 0.78 },
     source: require('@/assets/splash/pins/jeju.png'),
   },
 ] as const;
 
 /**
- * Onboarding map panel — cream paper card + dawn map palette (home map tone)
- * + photo pins / dashed route.
+ * Onboarding map sheet — one sheet of paper map, with the photos that made it
+ * pinned around the edge and tied to their coordinates by a hairline.
  */
 export function PaperPanelArt() {
   const palette = getMapPalette('dawn');
@@ -80,146 +80,167 @@ export function PaperPanelArt() {
   };
 
   const layout = useMemo(() => {
-    const labelReserve = LABEL_H + CARET + 12;
     const maxW = Math.max(0, box.w - PAD * 2);
-    const maxH = Math.max(0, box.h - PAD * 2 - labelReserve);
+    const maxH = Math.max(0, box.h - PAD * 2);
     if (maxW <= 0 || maxH <= 0) {
-      return { mapW: 0, mapH: 0, labelReserve };
+      return null;
     }
-    // Contain: full Korea + Jeju visible, as large as the card allows.
-    const byH = maxH;
-    const byW = maxW / KOREA_SILHOUETTE.aspect;
-    const mapH = Math.min(byH, byW);
+    // Contain: the whole peninsula plus Jeju, as large as the sheet allows.
+    const mapH = Math.min(maxH, maxW / KOREA_SILHOUETTE.aspect);
     const mapW = mapH * KOREA_SILHOUETTE.aspect;
-    return { mapW, mapH, labelReserve };
+    const mapX = (box.w - mapW) / 2;
+    const mapY = (box.h - mapH) / 2;
+    const cardW = Math.min(
+      CARD_W_MAX,
+      Math.max(CARD_W_MIN, box.w * CARD_W_RATIO),
+    );
+    const cardPad = Math.round(cardW * CARD_PAD_RATIO);
+    const photo = cardW - cardPad * 2;
+    const capH = Math.round(cardW * CARD_CAP_RATIO);
+    return {
+      mapW,
+      mapH,
+      mapX,
+      mapY,
+      /** px per viewBox unit — hairlines are divided by this. */
+      scale: mapW / 51.9,
+      cardW,
+      cardPad,
+      photo,
+      cardH: cardPad + photo + capH,
+    };
   }, [box.h, box.w]);
 
-  const { mapW, mapH, labelReserve } = layout;
-  const d = KOREA_SILHOUETTE.path;
-
-  const points =
-    mapW > 0
-      ? ROUTE_PINS.map((p) => ({
-          x: p.fx * mapW,
-          y: p.fy * mapH,
-          name: p.name,
-          source: p.source,
-        }))
-      : [];
-
-  const routeD =
-    points.length >= 2
-      ? catmullRomPath(points.map((p) => [p.x, p.y] as [number, number]))
-      : '';
+  const places = useMemo(() => {
+    if (!layout) {
+      return [];
+    }
+    return PLACES.map((place) => {
+      const pin = KOREA_SILHOUETTE.pins[place.pin];
+      const dot = {
+        x: layout.mapX + pin.fx * layout.mapW,
+        y: layout.mapY + pin.fy * layout.mapH,
+      };
+      const card = {
+        x: place.card.x * box.w,
+        y: place.card.y * box.h,
+      };
+      // Leader starts on whichever card edge faces the dot.
+      const fromRight = dot.x > card.x + layout.cardW / 2;
+      return {
+        ...place,
+        dot,
+        card,
+        leader: {
+          x: card.x + (fromRight ? layout.cardW : 0),
+          y: card.y + layout.cardH * 0.55,
+        },
+      };
+    });
+  }, [box.h, box.w, layout]);
 
   return (
-    <View style={styles.panel} onLayout={onLayout}>
-      {mapW > 0 ? (
-        <View
-          style={[styles.mapStage, { width: mapW, height: mapH + labelReserve }]}
-        >
-          <Svg width={mapW} height={mapH} viewBox={KOREA_SILHOUETTE.viewBox}>
-            {/* Base wash — soft sky-sea on cream, not a solid blue slab */}
-            <Rect
-              x={-4}
-              y={-4}
-              width={60}
-              height={108}
-              fill={palette.water}
-              opacity={0.22}
+    <View
+      style={[
+        styles.panel,
+        { backgroundColor: palette.water, borderColor: palette.frameBorder },
+      ]}
+      onLayout={onLayout}
+    >
+      {layout ? (
+        <>
+          <View
+            style={[
+              styles.mapStage,
+              {
+                left: layout.mapX,
+                top: layout.mapY,
+                width: layout.mapW,
+                height: layout.mapH,
+              },
+            ]}
+          >
+            <PaperMapSvg
+              width={layout.mapW}
+              height={layout.mapH}
+              scale={layout.scale}
             />
-            {SEA_WASHES.map((wash, i) => (
-              <Circle
-                key={i}
-                cx={wash.cx}
-                cy={wash.cy}
-                r={wash.r}
-                fill={palette.water}
-                opacity={wash.o}
+          </View>
+
+          <Svg
+            width={box.w}
+            height={box.h}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          >
+            {places.map((place) => (
+              <Path
+                key={place.name}
+                d={`M${place.leader.x},${place.leader.y} L${place.dot.x},${place.dot.y}`}
+                stroke={theme.colors.ink}
+                strokeOpacity={0.38}
+                strokeWidth={0.9}
               />
             ))}
-
-            <G>
-              <Path
-                d={d}
-                fill={palette.landShadow}
-                transform="translate(0.7, 0.9)"
-              />
-              <Path d={d} fill={palette.landDeep} />
-              <Path d={d} fill={palette.land} />
-              {COAST_PASSES.map((pass) => (
-                <Path
-                  key={`${pass.dx}-${pass.dy}-${pass.width}`}
-                  d={d}
-                  fill="none"
-                  stroke={palette.provinceStroke}
-                  strokeOpacity={pass.opacity}
-                  strokeWidth={pass.width}
-                  strokeLinejoin="round"
-                  strokeLinecap="round"
-                  transform={
-                    pass.dx === 0 && pass.dy === 0
-                      ? undefined
-                      : `translate(${pass.dx}, ${pass.dy})`
-                  }
-                />
-              ))}
-            </G>
           </Svg>
 
-          {routeD ? (
-            <Svg
-              width={mapW}
-              height={mapH}
-              style={StyleSheet.absoluteFill}
-              pointerEvents="none"
-            >
-              <Path
-                d={routeD}
-                fill="none"
-                stroke={palette.provinceStroke}
-                strokeWidth={1.5}
-                strokeDasharray="3.5 5.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                opacity={0.35}
-              />
-            </Svg>
-          ) : null}
+          <Text
+            style={[
+              styles.sea,
+              { right: box.w * 0.063, top: box.h * 0.38 },
+            ]}
+          >
+            동해
+          </Text>
+          <Text
+            style={[
+              styles.sea,
+              { left: box.w * 0.785, bottom: box.h * 0.063 },
+            ]}
+          >
+            남해
+          </Text>
 
-          {points.map((p) => (
+          {places.map((place) => (
             <View
-              key={p.name}
+              key={`dot-${place.name}`}
               style={[
-                styles.pinWrap,
+                styles.dot,
                 {
-                  left: p.x - PIN_R,
-                  top: p.y - PIN_R - CARET * 0.25,
-                  width: PIN_R * 2,
+                  left: place.dot.x - 6.5,
+                  top: place.dot.y - 6.5,
+                  borderColor: palette.pinChipBg,
+                },
+              ]}
+            />
+          ))}
+
+          {places.map((place) => (
+            <View
+              key={`card-${place.name}`}
+              style={[
+                styles.card,
+                {
+                  left: place.card.x,
+                  top: place.card.y,
+                  width: layout.cardW,
+                  padding: layout.cardPad,
+                  paddingBottom: 0,
+                  transform: [{ rotate: place.rotate }],
                 },
               ]}
             >
-              <View
-                style={[
-                  styles.pinRing,
-                  { borderColor: palette.pinChipBg },
-                ]}
-              >
-                <Image
-                  source={p.source}
-                  style={styles.pinImage}
-                  contentFit="cover"
-                />
-              </View>
-              <View
-                style={[styles.caret, { borderTopColor: palette.pinChipBg }]}
+              <Image
+                source={place.source}
+                style={{ width: layout.photo, height: layout.photo }}
+                contentFit="cover"
               />
-              <Text style={styles.pinLabel} numberOfLines={1}>
-                {p.name}
+              <Text style={styles.cardLabel} numberOfLines={1}>
+                {place.name}
               </Text>
             </View>
           ))}
-        </View>
+        </>
       ) : null}
     </View>
   );
@@ -229,55 +250,49 @@ const styles = StyleSheet.create({
   panel: {
     flex: 1,
     width: '100%',
-    minHeight: 280,
-    borderRadius: theme.radius.card,
-    backgroundColor: theme.colors.surface,
+    minHeight: 260,
+    // Paper is cut, not rounded — the sheet reads as a sheet.
+    borderRadius: 2,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.hairline,
-    alignItems: 'center',
-    justifyContent: 'center',
     overflow: 'hidden',
     ...theme.shadows.raised,
   },
   mapStage: {
-    position: 'relative',
-  },
-  pinWrap: {
     position: 'absolute',
-    alignItems: 'center',
+  },
+  sea: {
+    position: 'absolute',
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
+    fontWeight: '500',
+    letterSpacing: 3,
+    color: theme.tint.mid,
+    zIndex: 1,
+  },
+  /** 8px ink core inside a cream ring — RN draws borders inward, so the box is core + ring. */
+  dot: {
+    position: 'absolute',
+    width: 13,
+    height: 13,
+    borderRadius: 6.5,
+    borderWidth: 2.5,
+    backgroundColor: theme.colors.ink,
     zIndex: 2,
   },
-  pinRing: {
-    width: PIN_R * 2,
-    height: PIN_R * 2,
-    borderRadius: PIN_R,
-    borderWidth: 3,
-    overflow: 'hidden',
-    backgroundColor: theme.colors.landDeep,
+  card: {
+    position: 'absolute',
+    backgroundColor: theme.colors.surface,
+    borderRadius: 2,
+    zIndex: 3,
     ...theme.shadows.card,
   },
-  pinImage: {
-    width: '100%',
-    height: '100%',
-  },
-  caret: {
-    width: 0,
-    height: 0,
-    marginTop: -1,
-    borderLeftWidth: CARET * 0.7,
-    borderRightWidth: CARET * 0.7,
-    borderTopWidth: CARET,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-  },
-  pinLabel: {
-    marginTop: 2,
-    fontSize: 12,
-    lineHeight: LABEL_H,
+  cardLabel: {
+    ...theme.type.micro,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.inkSoft,
     fontWeight: '600',
-    textAlign: 'center',
     letterSpacing: -0.2,
+    color: theme.colors.inkSoft,
+    paddingTop: 3,
+    paddingBottom: 4,
   },
 });

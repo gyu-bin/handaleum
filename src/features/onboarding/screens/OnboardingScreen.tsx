@@ -1,11 +1,5 @@
 import { useCallback, useState } from 'react';
-import {
-  Pressable,
-  StyleSheet,
-  Switch,
-  Text,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -14,25 +8,25 @@ import { Button } from '@/shared/components/Button';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 import { useShellBackground, useShellInk } from '@/shared/hooks/useShellBackground';
-import { useTheme } from '@/shared/theme/ThemeProvider';
 
 import { PaperPanelArt } from '../components/PaperPanelArt';
 import { useOnboarding } from '../hooks/useOnboarding';
 
 /**
- * First-run B — headline + full paper map panel + album toggle + start.
+ * First-run — headline + paper map sheet + one button.
+ *
+ * There is no import toggle: the system photo dialog already asks for full vs
+ * limited access, so asking first in our own UI only added a tap.
  */
 export function OnboardingScreen() {
   const shellBg = useShellBackground();
   const shell = useShellInk();
-  const { colors } = useTheme();
   const router = useRouter();
   const params = useLocalSearchParams<{ replay?: string }>();
   const isReplay = params.replay === '1';
   const { markSeen } = useOnboarding();
   const { request } = usePhotoPermission();
   const [busy, setBusy] = useState(false);
-  const [importPhotos, setImportPhotos] = useState(true);
 
   const leaveReplay = useCallback(() => {
     if (router.canGoBack()) {
@@ -49,10 +43,6 @@ export function OnboardingScreen() {
     }
     setBusy(true);
     markSeen();
-    if (!importPhotos) {
-      router.replace('/permission');
-      return;
-    }
     const next = await request();
     const granted = next === 'granted' || next === 'limited';
     router.replace(granted ? '/' : '/permission');
@@ -82,47 +72,33 @@ export function OnboardingScreen() {
 
       <View style={styles.body}>
         <Text style={[styles.brand, shell.subtle]}>{strings.brand}</Text>
-        <Text style={[styles.headline, shell.ink]}>
-          {strings.onboarding.headline}
-        </Text>
-        <Text style={[styles.subhead, shell.soft]}>
-          {strings.onboarding.subhead}
-        </Text>
 
         <View style={styles.panelSlot}>
           <PaperPanelArt />
         </View>
 
-        {!isReplay ? (
-          <View
-            style={[styles.toggleBlock, { borderTopColor: colors.hairline }]}
-          >
-            <View style={styles.toggleRow}>
-              <Text style={[styles.toggleLabel, shell.ink]}>
-                {strings.onboarding.photoToggle}
-              </Text>
-              <Switch
-                value={importPhotos}
-                onValueChange={setImportPhotos}
-                trackColor={{
-                  false: colors.line,
-                  true: colors.shellInk,
-                }}
-                thumbColor={theme.colors.surface}
-              />
-            </View>
-            <Text style={[styles.toggleHint, shell.subtle]}>
-              {strings.onboarding.photoToggleHint}
-            </Text>
-          </View>
-        ) : null}
+        <Text style={styles.headline}>
+          <Text style={[styles.headlineLead, shell.soft]}>
+            {strings.onboarding.headlineLead}
+          </Text>
+          {'\n'}
+          <Text style={[styles.headlineKey, shell.ink]}>
+            {strings.onboarding.headlineKey}
+          </Text>
+        </Text>
+        <Text style={[styles.subhead, shell.soft]}>
+          {strings.onboarding.subhead}
+        </Text>
       </View>
 
       <View style={styles.footer}>
+        {!isReplay ? (
+          <Text style={[styles.privacy, shell.subtle]}>
+            {strings.onboarding.privacy}
+          </Text>
+        ) : null}
         <Button
-          title={
-            isReplay ? strings.onboarding.close : strings.onboarding.start
-          }
+          title={isReplay ? strings.onboarding.close : strings.onboarding.start}
           variant="primary"
           loading={busy}
           onPress={() => void onStart()}
@@ -158,64 +134,51 @@ const styles = StyleSheet.create({
   body: {
     flex: 1,
     paddingHorizontal: theme.spacing.lg,
-    alignItems: 'center',
   },
   brand: {
-    ...theme.type.micro,
-    fontFamily: theme.fonts.sans,
-    fontWeight: '500',
-    letterSpacing: 1,
-    marginBottom: theme.spacing.sm,
-  },
-  headline: {
-    fontSize: 24,
-    lineHeight: 34,
+    ...theme.type.label,
     fontFamily: theme.fonts.sans,
     fontWeight: '700',
-    textAlign: 'center',
-    letterSpacing: -0.6,
-  },
-  subhead: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontFamily: theme.fonts.sans,
-    textAlign: 'center',
-    marginTop: theme.spacing.sm,
+    letterSpacing: 0.4,
+    marginBottom: theme.spacing.md,
   },
   panelSlot: {
     flex: 1,
     width: '100%',
-    marginTop: theme.spacing.md,
-    marginBottom: theme.spacing.md,
     minHeight: 260,
+    marginBottom: theme.spacing.lg,
   },
-  toggleBlock: {
-    width: '100%',
-    paddingTop: theme.spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: theme.spacing.md,
-  },
-  toggleLabel: {
-    ...theme.type.label,
-    flex: 1,
+  headline: {
+    ...theme.type.lede,
     fontFamily: theme.fonts.sans,
-    fontWeight: '600',
   },
-  toggleHint: {
-    ...theme.type.micro,
-    width: '100%',
+  /** Light lead line — the setup. */
+  headlineLead: {
+    ...theme.type.lede,
     fontFamily: theme.fonts.sans,
-    marginTop: 8,
+    fontWeight: '300',
+  },
+  /** Bold key line — the payoff. */
+  headlineKey: {
+    ...theme.type.lede,
+    fontFamily: theme.fonts.sans,
+    fontWeight: '700',
+  },
+  subhead: {
+    ...theme.type.body,
+    fontFamily: theme.fonts.sans,
+    marginTop: theme.spacing.sm,
   },
   footer: {
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: theme.spacing.md,
-    paddingTop: theme.spacing.sm,
+    paddingTop: theme.spacing.md,
+  },
+  privacy: {
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
+    letterSpacing: -0.1,
+    marginBottom: theme.spacing.md,
   },
   startBtn: {
     alignSelf: 'stretch',

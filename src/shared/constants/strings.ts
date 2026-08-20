@@ -64,20 +64,18 @@ export const strings = {
     openSettings: '설정에서 허용하기',
   },
   onboarding: {
-    /** First-run — monthly photo journal, not walk-tracking. */
-    headline: '한 달 동안 찍은 사진이\n지도 위 이야기로 모입니다.',
-    subhead: '카메라롤만으로 이번 달 지도를 그려요.',
-    photoToggle: '앨범에서 이번 달·지난 기록을 불러와요',
-    photoToggleHint: '사진은 기기에만 두고, 위치만 읽어 지도를 그립니다.',
-    start: '시작하기',
-    /** Kept for settings replay / legacy callers. */
-    slides: [
-      {
-        title: '한 달을 지도 위에',
-        body: '카메라롤 사진의 위치와 시간을 지도에 펼쳐,\n한 달을 사진으로 다시 봐요.',
-      },
-    ],
-    next: '다음',
+    /**
+     * First-run headline, set in two weights: the lead line stays light, the
+     * key line carries the payoff. Two keys, not one string with \n, because
+     * the weight break is part of the design.
+     */
+    headlineLead: '이번 달 사진이',
+    headlineKey: '찍은 자리에 놓입니다.',
+    subhead: '체크인도, 기록도 필요 없습니다.',
+    /** Sits directly above the button — read right before the system prompt. */
+    privacy: '사진은 기기 밖으로 나가지 않습니다. 위치만 읽습니다.',
+    /** Names what the tap produces, not a generic "start". */
+    start: '이번 달 지도 만들기',
     skip: '건너뛰기',
     grant: '사진 허용하고 시작',
     close: '닫기',

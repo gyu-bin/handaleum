@@ -115,6 +115,11 @@ export const theme = {
   type: {
     /** The single loud thing on a screen. */
     display: { fontSize: 34, lineHeight: 40, letterSpacing: -0.9 },
+    /**
+     * Two-line opening statement. `display` overflows to three lines at this
+     * length in Korean; this step keeps the break where the writing intends it.
+     */
+    lede: { fontSize: 27, lineHeight: 38, letterSpacing: -1.1 },
     /** Screen and section titles. */
     title: { fontSize: 20, lineHeight: 26, letterSpacing: -0.4 },
     /** Running text. */
