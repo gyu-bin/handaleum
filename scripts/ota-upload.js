@@ -5,7 +5,7 @@
  * 사용:
  *   npm run ota:upload
  *   npm run ota:upload -- --platform all --channel prod
- *   npm run ota:upload -- --platform all --channel prod --runtime-version 1.0.0 --apply-mode immediate
+ *   npm run ota:upload -- --platform all --channel prod --runtime-version 1.0.1 --apply-mode immediate
  *
  * 옵션 (모두 선택):
  *   --platform ios|android|all     기본 all
@@ -79,7 +79,7 @@ function printHelp() {
   console.log(`Usage:
   npm run ota:upload
   npm run ota:upload -- --platform all --channel prod
-  npm run ota:upload -- --platform all --channel prod --runtime-version 1.0.0 --apply-mode immediate
+  npm run ota:upload -- --platform all --channel prod --runtime-version 1.0.1 --apply-mode immediate
   npm run ota:upload -- --platform ios --channel preview -m "핫픽스"
 
 Flags:
