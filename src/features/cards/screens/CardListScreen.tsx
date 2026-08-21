@@ -10,9 +10,10 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/shared/components/Button';
+import { CreateCardFab } from '@/shared/components/CreateCardFab';
 import { LoadProgressBanner } from '@/shared/components/LoadProgressBanner';
 import { LoadingView } from '@/shared/components/LoadingView';
 import { PaperGrain } from '@/shared/components/PaperGrain';
@@ -24,7 +25,7 @@ import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 import { useShellBackground, useShellInk } from '@/shared/hooks/useShellBackground';
 import { useDarkMode, useTheme } from '@/shared/theme/ThemeProvider';
 
-import { RecapBoard, type RecapBoardShareState } from '../components/RecapBoard';
+import { RecapBoard } from '../components/RecapBoard';
 import { useCards, useDeleteCards } from '../hooks/useCards';
 import type { RecapCard } from '../types';
 import { useCurrentMonth } from '../../photos/hooks/useCurrentMonth';
@@ -34,6 +35,7 @@ import { useMonthlyPhotos } from '../../photos/hooks/useMonthlyPhotos';
 
 export function CardListScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const shellBg = useShellBackground();
   const shell = useShellInk();
   const { colors } = useTheme();
@@ -52,9 +54,6 @@ export function CardListScreen() {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [boardShare, setBoardShare] = useState<RecapBoardShareState | null>(
-    null,
-  );
 
   /**
    * Pop back to home (native back animation). `replace('/')` slides home in
@@ -333,14 +332,13 @@ export function CardListScreen() {
               month={month}
               photos={monthPhotos}
               visitPlaces={visitPlaces}
-              onShareState={setBoardShare}
             />
           )}
         </ScrollView>
       )}
 
-      <View style={styles.footer}>
-        {editing ? (
+      {editing ? (
+        <View style={styles.footer}>
           <Button
             title={
               selectedCount > 0
@@ -351,34 +349,18 @@ export function CardListScreen() {
             disabled={selectedCount === 0 || deleteCards.isPending}
             onPress={() => confirmDelete([...selectedIds])}
           />
-        ) : archiveOpen ? (
-          <Button
-            title={strings.cards.createTitle}
-            variant="primary"
-            onPress={() => router.push('/cards/create')}
-          />
-        ) : (
-          <View style={styles.footerRow}>
-            <Button
-              title={strings.cards.share}
-              variant="secondary"
-              size="md"
-              loading={boardShare?.sharing ?? false}
-              disabled={!boardShare || boardShare.disabled}
-              onPress={() => boardShare?.run()}
-              accessibilityLabel={boardShare?.label ?? strings.cards.share}
-              style={styles.footerBtn}
-            />
-            <Button
-              title={strings.cards.createTitle}
-              variant="primary"
-              size="md"
-              onPress={() => router.push('/cards/create')}
-              style={styles.footerBtn}
-            />
-          </View>
-        )}
-      </View>
+        </View>
+      ) : (
+        <View
+          style={[
+            styles.fabWrap,
+            { paddingBottom: Math.max(insets.bottom, theme.spacing.md) },
+          ]}
+          pointerEvents="box-none"
+        >
+          <CreateCardFab onPress={() => router.push('/cards/create')} />
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -415,10 +397,10 @@ const styles = StyleSheet.create({
   list: {
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.sm,
-    paddingBottom: theme.spacing.xl,
+    paddingBottom: 88,
   },
   boardScroll: {
-    paddingBottom: theme.spacing.xl,
+    paddingBottom: 88,
   },
   card: {
     flexDirection: 'row',
@@ -494,12 +476,10 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing.sm,
     paddingBottom: theme.spacing.md,
   },
-  footerRow: {
-    flexDirection: 'row',
-    gap: theme.spacing.sm,
-  },
-  footerBtn: {
-    flex: 1,
-    paddingVertical: 10,
+  fabWrap: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
+    paddingRight: theme.spacing.md,
   },
 });

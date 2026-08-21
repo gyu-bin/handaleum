@@ -426,7 +426,7 @@ const styles = StyleSheet.create({
   zoomCtl: {
     position: 'absolute',
     right: 12,
-    // Sit above create FAB (56×56 + pad 16 + gap).
+    // Sit above create chip (~44 tall + pad).
     bottom: 84,
     gap: 8,
     zIndex: 2,

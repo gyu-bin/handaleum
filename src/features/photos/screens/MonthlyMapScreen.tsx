@@ -4,6 +4,7 @@ import { Redirect, useRouter, type Href } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LoadingView } from '@/shared/components/LoadingView';
+import { CreateCardFab } from '@/shared/components/CreateCardFab';
 import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
@@ -392,19 +393,7 @@ export function MonthlyMapScreen() {
             </View>
           ) : null}
           <View style={styles.fabWrap} pointerEvents="box-none">
-            <Pressable
-              onPress={() => router.push('/cards/create')}
-              accessibilityRole="button"
-              accessibilityLabel={strings.cards.createTitle}
-              style={({ pressed }) => [
-                styles.createFab,
-                pressed && styles.createFabPressed,
-              ]}
-            >
-              <Text style={styles.createFabPlus}>+</Text>
-              <Text style={styles.createFabLine}>카드</Text>
-              <Text style={styles.createFabLine}>만들기</Text>
-            </Pressable>
+            <CreateCardFab onPress={() => router.push('/cards/create')} />
           </View>
         </View>
       </View>
@@ -531,38 +520,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     paddingRight: theme.spacing.md,
     paddingBottom: theme.spacing.md,
-  },
-  createFab: {
-    width: 56,
-    height: 56,
-    paddingTop: 6,
-    paddingBottom: 7,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 1,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.ink,
-    ...theme.shadows.raised,
-  },
-  createFabPlus: {
-    fontFamily: theme.fonts.sans,
-    fontSize: 20,
-    lineHeight: 22,
-    fontWeight: '500',
-    color: theme.colors.surface,
-    marginBottom: 1,
-  },
-  createFabLine: {
-    fontFamily: theme.fonts.sans,
-    fontSize: 10,
-    lineHeight: 12,
-    fontWeight: '700',
-    letterSpacing: -0.4,
-    color: theme.colors.surface,
-  },
-  createFabPressed: {
-    opacity: 0.88,
-    transform: [{ scale: 0.98 }],
   },
   emptyOverlay: {
     ...StyleSheet.absoluteFillObject,

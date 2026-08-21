@@ -316,8 +316,6 @@ export const strings = {
     boardDay: '날',
     boardWeekdays: ['일', '월', '화', '수', '목', '금', '토'] as const,
     boardEmpty: '이번 달 위치 사진이 없습니다',
-    boardSharePlaces: (count: number) => `${count}개 위치 공유`,
-    boardShareDays: (count: number) => `${count}일 공유`,
     boardRenameTitle: '이 위치 이름',
     boardRenamePlaceholder: '예: 한옥마을',
     boardRenameHint: '탭하면 사진. 길게 누르면 이름 수정.',

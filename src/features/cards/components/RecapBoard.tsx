@@ -1,16 +1,12 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import {
-  Alert,
-  Platform,
   Pressable,
-  Share,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
-import { saveToLibraryAsync } from 'expo-media-library';
-import { captureRef } from 'react-native-view-shot';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Svg, { Path } from 'react-native-svg';
 
 import { strings } from '@/shared/constants/strings';
@@ -58,18 +54,10 @@ function canRenamePlace(id: string): boolean {
   return id.length > 0 && !id.startsWith('pending:');
 }
 
-export type RecapBoardShareState = {
-  run: () => void;
-  sharing: boolean;
-  disabled: boolean;
-  label: string;
-};
-
 export interface RecapBoardProps {
   month: MonthKey;
   photos: PhotoRef[];
   visitPlaces: VisitPlace[];
-  onShareState?: (state: RecapBoardShareState | null) => void;
 }
 
 const NodeCell = memo(function NodeCell({
@@ -77,7 +65,6 @@ const NodeCell = memo(function NodeCell({
   size,
   inset,
   rowH,
-  selected,
   renameable,
   onOpen,
   onRename,
@@ -86,7 +73,6 @@ const NodeCell = memo(function NodeCell({
   size: number;
   inset: number;
   rowH: number;
-  selected: boolean;
   renameable: boolean;
   onOpen: (id: string) => void;
   onRename: (id: string) => void;
@@ -129,8 +115,7 @@ const NodeCell = memo(function NodeCell({
             borderRadius: inner / 2,
           },
           empty && styles.circleEmpty,
-          !empty && !selected && styles.circleOff,
-          !empty && selected && styles.circleOn,
+          !empty && styles.circleOn,
         ]}
       >
         {node.assetId ? (
@@ -158,7 +143,6 @@ function BoardPage({
   rowH,
   gridW,
   gapX,
-  selectedIds,
   onOpen,
   onRename,
 }: {
@@ -171,7 +155,6 @@ function BoardPage({
   rowH: number;
   gridW: number;
   gapX: number;
-  selectedIds: Set<string>;
   onOpen: (id: string) => void;
   onRename: (id: string) => void;
 }) {
@@ -233,7 +216,6 @@ function BoardPage({
                 size={size}
                 inset={inset}
                 rowH={rowH}
-                selected={selectedIds.has(node.id)}
                 renameable={mode === 'place' && canRenamePlace(node.id)}
                 onOpen={onOpen}
                 onRename={onRename}
@@ -250,20 +232,32 @@ export function RecapBoard({
   month,
   photos,
   visitPlaces,
-  onShareState,
 }: RecapBoardProps) {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
-  const boardRef = useRef<View>(null);
   const { aliases, setAlias } = usePlaceAliases();
   const { covers: recapCovers, setCover: setRecapCover } = useRecapCovers(month);
   const { covers: pinCovers, setCover: setPinCover } = usePinCovers(month);
   const { hide: hidePhoto } = useHiddenPhotos(month);
   const [mode, setMode] = useState<RecapBoardMode>('place');
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [sharing, setSharing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [viewerNodeId, setViewerNodeId] = useState<string | null>(null);
+
+  const swipeMode = useMemo(
+    () =>
+      Gesture.Pan()
+        .runOnJS(true)
+        .activeOffsetX([-28, 28])
+        .failOffsetY([-24, 24])
+        .onEnd((e) => {
+          if (e.translationX < -48) {
+            setMode('day');
+          } else if (e.translationX > 48) {
+            setMode('place');
+          }
+        }),
+    [],
+  );
 
   const placeBase = useMemo(
     () => recapPlaceNodes(photos, visitPlaces),
@@ -304,18 +298,6 @@ export function RecapBoard({
     viewerNodeId == null
       ? null
       : nodes.find((node) => node.id === viewerNodeId)?.assetId ?? null;
-
-  const filledIds = useMemo(
-    () => nodes.filter((n) => n.assetId).map((n) => n.id),
-    [nodes],
-  );
-  const filledKey = filledIds.join('|');
-
-  useEffect(() => {
-    setSelectedIds(new Set(filledIds));
-    // Default-select every filled node when the month/mode set changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- filledKey is the identity
-  }, [mode, month, filledKey]);
 
   const cols = mode === 'day' ? DAY_COLS : PLACE_COLS;
   const gapX = mode === 'day' ? DAY_GAP_X : CELL_GAP_X;
@@ -359,69 +341,6 @@ export function RecapBoard({
   const editingAdmin = placeBase.find((node) => node.id === editingId);
   const editingShown = placeNodes.find((node) => node.id === editingId);
 
-  const selectedCount = selectedIds.size;
-  const shareLabel =
-    mode === 'day'
-      ? strings.cards.boardShareDays(selectedCount)
-      : strings.cards.boardSharePlaces(selectedCount);
-
-  const onShare = useCallback(async () => {
-    if (selectedCount === 0) {
-      return;
-    }
-    const target = boardRef.current;
-    if (!target) {
-      return;
-    }
-    setSharing(true);
-    try {
-      const uri = await captureRef(target, {
-        format: 'png',
-        quality: 1,
-        result: 'tmpfile',
-      });
-      if (Platform.OS === 'ios') {
-        await Share.share({ url: uri, message: formatMonthDot(month) });
-        return;
-      }
-      await saveToLibraryAsync(uri);
-      Alert.alert(strings.cards.saved, strings.cards.shareAndroidHint);
-    } catch (error) {
-      console.error('recap board share failed', error);
-      Alert.alert(strings.common.error);
-    } finally {
-      setSharing(false);
-    }
-  }, [month, selectedCount]);
-
-  useEffect(() => {
-    if (photos.length === 0) {
-      onShareState?.(null);
-      return;
-    }
-    onShareState?.({
-      run: () => {
-        void onShare();
-      },
-      sharing,
-      disabled: selectedCount === 0,
-      label: shareLabel,
-    });
-  }, [
-    photos.length,
-    sharing,
-    selectedCount,
-    shareLabel,
-    onShare,
-    onShareState,
-  ]);
-
-  useEffect(() => {
-    return () => {
-      onShareState?.(null);
-    };
-  }, [onShareState]);
-
   if (photos.length === 0) {
     return (
       <View style={styles.empty}>
@@ -435,9 +354,11 @@ export function RecapBoard({
   return (
     <View style={styles.wrap}>
       <View style={styles.toolbar}>
-        <Text style={[styles.month, { color: colors.shellInk }]}>
-          {formatMonthDot(month)}
-        </Text>
+        <View style={styles.monthSlot}>
+          <Text style={[styles.month, { color: colors.shellInk }]}>
+            {formatMonthDot(month)}
+          </Text>
+        </View>
         <View style={styles.modes}>
           {(['place', 'day'] as const).map((value) => {
             const on = mode === value;
@@ -471,6 +392,7 @@ export function RecapBoard({
             );
           })}
         </View>
+        <View style={styles.monthSlot} />
       </View>
       <Text style={[styles.hint, { color: colors.shellSubtle }]}>
         {mode === 'place'
@@ -478,22 +400,23 @@ export function RecapBoard({
           : strings.cards.boardDayHint}
       </Text>
 
-      <View ref={boardRef} collapsable={false} style={styles.board}>
-        <BoardPage
-          pageNodes={nodes}
-          mode={mode}
-          cols={cols}
-          size={size}
-          inset={inset}
-          inner={inner}
-          rowH={rowH}
-          gridW={gridW}
-          gapX={gapX}
-          selectedIds={selectedIds}
-          onOpen={onOpen}
-          onRename={onRename}
-        />
-      </View>
+      <GestureDetector gesture={swipeMode}>
+        <View style={styles.board}>
+          <BoardPage
+            pageNodes={nodes}
+            mode={mode}
+            cols={cols}
+            size={size}
+            inset={inset}
+            inner={inner}
+            rowH={rowH}
+            gridW={gridW}
+            gapX={gapX}
+            onOpen={onOpen}
+            onRename={onRename}
+          />
+        </View>
+      </GestureDetector>
       <RecapPhotosModal
         photos={viewerPhotos && viewerPhotos.length > 0 ? viewerPhotos : null}
         coverAssetId={viewerCover}
@@ -522,11 +445,14 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing.sm,
   },
   toolbar: {
+    flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.sm,
     paddingBottom: theme.spacing.sm,
-    gap: 8,
+  },
+  monthSlot: {
+    flex: 1,
   },
   month: {
     ...theme.type.label,
@@ -534,30 +460,25 @@ const styles = StyleSheet.create({
     color: theme.colors.ink,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
-    textAlign: 'center',
   },
   modes: {
     flexDirection: 'row',
-    gap: 6,
+    flexShrink: 0,
+    gap: 8,
   },
   modeChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+    minWidth: 52,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: theme.radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.colors.border,
-  },
-  modeChipOn: {
-    backgroundColor: theme.colors.ink,
-    borderColor: theme.colors.ink,
+    alignItems: 'center',
   },
   modeText: {
-    ...theme.type.micro,
+    ...theme.type.label,
     color: theme.colors.inkSoft,
     fontWeight: '700',
-  },
-  modeTextOn: {
-    color: theme.colors.surface,
   },
   hint: {
     ...theme.type.micro,
@@ -615,9 +536,6 @@ const styles = StyleSheet.create({
   },
   circleEmpty: {
     backgroundColor: theme.colors.background,
-  },
-  circleOff: {
-    opacity: 0.38,
   },
   circleOn: {
     borderWidth: 2,
