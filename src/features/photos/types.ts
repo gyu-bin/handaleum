@@ -6,6 +6,7 @@ import type {
   monthKeySchema,
   monthlyPhotosSchema,
   monthSummarySchema,
+  noLocationPhotoSchema,
   photoRefSchema,
   pinCoverSchema,
   placeClusterSchema,
@@ -16,6 +17,7 @@ import type {
 
 export type MonthKey = z.infer<typeof monthKeySchema>;
 export type PhotoRef = z.infer<typeof photoRefSchema>;
+export type NoLocationPhoto = z.infer<typeof noLocationPhotoSchema>;
 export type MonthlyPhotos = z.infer<typeof monthlyPhotosSchema>;
 export type MonthSummary = z.infer<typeof monthSummarySchema>;
 export type PlaceCluster = z.infer<typeof placeClusterSchema>;

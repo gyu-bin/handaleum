@@ -3,7 +3,7 @@
 ## 엔티티
 
 - 사진참조 PhotoRef: assetId, takenAt, lat, lng (전부 필수)
-- 월별사진 MonthlyPhotos: month, photos[], noLocationCount
+- 월별사진 MonthlyPhotos: month, photos[], noLocationCount, noLocationPhotos[]
 - 월요약 MonthSummary: month, totalCount
 - 장소클러스터 PlaceCluster: 파생 데이터. 조회 시 계산, 절대 저장하지 않음
 - 핀대표사진 PinCover: month + placeKey(~110m 버킷) + assetId — kv 저장
@@ -31,7 +31,7 @@
 |---|---|---|---|
 | **UI=Dawn Survey / Plan A** (크림 + 단일 ink·serif 히어로만) / **Map=dawn-blue** (land/water/accent·핀 유지). `terracotta` 토큰은 ink alias. 맵 팔레트 교체 금지 | 전면 저널 맵 리틴트 / UI terracotta 복귀 | 사용자 A안 2026-08-05. philosophy 정렬 | 2026-08-05 |
 | 월 선택 = **저널 UI: 연도 스테퍼 + 1–12월 2열** (0장 비활성) | 전체 월 스크롤 / 연도 칩 | 사용자 시안(옵션 C) | 2026-08-02 |
-| GPS 없는 사진 완전 제외, 카운트만 표시 | lat/lng optional로 카드 포함 허용 | 사용자 결정. "위치 있는 사진만 표시" 안내로 처리 | 2026-07-17 |
+| GPS 없는 사진은 지도에서 제외. 설정 그리드에서 보기만 | lat/lng optional / 사용자 위치 지정 | 사용자 2026-08-21: 목록만 | 2026-07-17 |
 | 몰아보기 = **장소 페이지** (히어로+그리드). 자동재생 없음. 순서=첫 사진 takenAt 오름차순(달 초→말). 지도 연동 비범위 | 지도 이동형 / ▶ 자동 스와이프 | 2026-08-07 A 정리 | 2026-08-07 |
 | 몰아보기 = 제목 고정 + **정사각 히어로**만 스크롤 시 비율 축소(scale). 스펙 `2026-08-09-playback-half-layout-design.md` | 직사각 fill / 제목까지 clip | 짤림·덮개 체감 제거 | 2026-08-10 |
 | 스크롤 축소 = **scale + translateY**(height 레이아웃 금지). 그리드 warm은 momentum 후 재개, batch≥3 | height 매프레임 / batch=1 | 몰아보기·카드·핀시트·동사진 끊김 | 2026-08-10 |

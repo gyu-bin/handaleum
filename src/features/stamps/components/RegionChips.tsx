@@ -56,6 +56,10 @@ export function RegionChips({ sidos, selected, onSelect }: RegionChipsProps) {
               accessibilityState={{ selected: active }}
               style={[
                 styles.chip,
+                {
+                  backgroundColor: colors.shellChip,
+                  borderColor: colors.hairline,
+                },
                 active && {
                   backgroundColor: colors.shellInk,
                   borderColor: colors.shellInk,

@@ -394,7 +394,7 @@ export function buildDummyMonthlyPhotos(month: MonthKey): MonthlyPhotos {
   }
 
   photos.sort((a, b) => a.takenAt.localeCompare(b.takenAt));
-  return { month, photos, noLocationCount: 0 };
+  return { month, photos, noLocationCount: 0, noLocationPhotos: [] };
 }
 
 export function buildDummyMonthSummaries(): MonthSummary[] {

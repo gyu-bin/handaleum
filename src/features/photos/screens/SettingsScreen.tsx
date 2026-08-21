@@ -9,7 +9,6 @@ import {
   View,
 } from 'react-native';
 import * as Location from 'expo-location';
-import * as Updates from 'expo-updates';
 import { useRouter, type Href } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -133,17 +132,6 @@ function diagLine(): string {
   ].join(' · ');
 }
 
-function runningBundleLabel(): string {
-  if (Updates.isEmbeddedLaunch || !Updates.updateId) {
-    return strings.settings.buildEmbedded;
-  }
-  const at = Updates.createdAt;
-  const publishedAt = at
-    ? `${at.getMonth() + 1}/${at.getDate()} ${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`
-    : '?';
-  return strings.settings.buildOta(publishedAt, Updates.updateId.slice(0, 8));
-}
-
 export function SettingsScreen() {
   const router = useRouter();
   const shellBg = useShellBackground();
@@ -259,21 +247,31 @@ export function SettingsScreen() {
           <Text style={[styles.sectionLabel, shell.subtle]}>
             {strings.settings.mapNoticeSection}
           </Text>
-          <View style={styles.noticeBlock}>
+          <Pressable
+            onPress={() => router.push('/no-location-photos' as Href)}
+            accessibilityRole="button"
+            style={({ pressed }) => [
+              styles.noticeBlock,
+              pressed && styles.pressed,
+            ]}
+          >
             <View style={styles.row}>
               <Text style={[styles.rowTitle, shell.ink]}>
                 {strings.settings.noLocationTitle}
               </Text>
-              <Text style={[styles.rowValue, shell.soft]}>
-                {strings.settings.noLocationCount(
-                  monthQuery.data?.noLocationCount ?? 0,
-                )}
-              </Text>
+              <View style={styles.rowTrailing}>
+                <Text style={[styles.rowValue, shell.soft]}>
+                  {strings.settings.noLocationCount(
+                    monthQuery.data?.noLocationCount ?? 0,
+                  )}
+                </Text>
+                <Text style={[styles.chevron, shell.subtle]}>›</Text>
+              </View>
             </View>
             <Text style={[styles.noticeExplain, shell.subtle]}>
               {strings.settings.noLocationExplain}
             </Text>
-          </View>
+          </Pressable>
           <View style={styles.noticeBlock}>
             <View style={styles.row}>
               <Text style={[styles.rowTitle, shell.ink]}>
@@ -429,8 +427,6 @@ export function SettingsScreen() {
             ) : null}
           </View>
         ) : null}
-
-        <Text style={[styles.footer, shell.subtle]}>{runningBundleLabel()}</Text>
 
         {__DEV__ ? (
           <>
@@ -634,12 +630,6 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.sans,
     color: theme.colors.ink,
     marginTop: theme.spacing.xs,
-  },
-  footer: {
-    ...theme.type.micro,
-    fontFamily: theme.fonts.sans,
-    color: theme.colors.subtle,
-    marginTop: theme.spacing.sm,
   },
   pressed: {
     opacity: 0.5,

@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { GestureDetector } from 'react-native-gesture-handler';
 import Animated from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -419,9 +420,15 @@ export function CardCreateScreen() {
     onScroll,
     collapseStyle,
     mediaScaleStyle,
+    previewPan,
     setExpandedHeight,
     resetScroll,
-  } = useCollapseOnScroll({ range: 320, minRatio: 0.42, deadzone: 48 });
+  } = useCollapseOnScroll({
+    range: 320,
+    minRatio: 0,
+    deadzone: 48,
+    latch: true,
+  });
 
   useLayoutEffect(() => {
     setExpandedHeight(previewMaxH);
@@ -910,7 +917,11 @@ export function CardCreateScreen() {
             { borderTopColor: colors.hairline },
           ]}
         >
-          {sheetChrome}
+          {selectedCount > 0 ? (
+            <GestureDetector gesture={previewPan}>{sheetChrome}</GestureDetector>
+          ) : (
+            sheetChrome
+          )}
           {isFetching ? (
             <LoadProgressBanner
               label={

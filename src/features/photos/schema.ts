@@ -5,8 +5,8 @@ export const monthKeySchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
 
 /**
  * Reference to a camera-roll asset. Originals are never copied (spec A-2).
- * lat/lng are required: photos without GPS are excluded entirely and only
- * surfaced as a count (discovery decision, 2026-07-17).
+ * lat/lng are required: photos without GPS are excluded from the map and
+ * listed separately as noLocationPhotos (settings).
  */
 export const photoRefSchema = z.object({
   assetId: z.string().min(1),
@@ -15,11 +15,18 @@ export const photoRefSchema = z.object({
   lng: z.number().min(-180).max(180),
 });
 
+/** GPS-less camera-roll row — shown in settings, never used as a map pin. */
+export const noLocationPhotoSchema = z.object({
+  assetId: z.string().min(1),
+  takenAt: z.iso.datetime(),
+});
+
 export const monthlyPhotosSchema = z.object({
   month: monthKeySchema,
   photos: z.array(photoRefSchema),
   /** Photos in this month that were excluded for having no GPS data */
   noLocationCount: z.number().int().min(0),
+  noLocationPhotos: z.array(noLocationPhotoSchema),
 });
 
 export const monthSummarySchema = z.object({

@@ -175,6 +175,9 @@ export const strings = {
     noLocationCount: (count: number) => `${count}장`,
     noLocationExplain:
       'GPS가 없는 사진은 지도에 안 뜹니다. 카드 만들기에는 넣을 수 있어요.',
+    noLocationSubtitle: (monthLabel: string) =>
+      `${monthLabel} · GPS가 없어 지도에 안 뜹니다`,
+    noLocationEmpty: '위치 없는 사진이 없습니다',
     homeExcludedTitle: '집에서 찍은 사진',
     homeExcludedCount: (count: number) => `${count}장`,
     homeExcludedExplain:

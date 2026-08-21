@@ -16,7 +16,7 @@ import {
   lruSet,
 } from '@/shared/utils/concurrency';
 
-import type { MonthKey, MonthlyPhotos, MonthSummary, PhotoRef } from '../types';
+import type { MonthKey, MonthlyPhotos, MonthSummary, NoLocationPhoto, PhotoRef } from '../types';
 import { monthBounds, monthKeyFromTimestamp } from '../utils/month';
 import {
   buildDummyMonthSummaries,
@@ -223,16 +223,28 @@ export type LoadMonthlyPhotosOptions = {
   shouldContinue?: () => boolean;
 };
 
+function noLocFromAsset(asset: Asset): NoLocationPhoto {
+  return {
+    assetId: asset.id,
+    takenAt: new Date(asset.creationTime).toISOString(),
+  };
+}
+
 function snapshot(
   month: MonthKey,
   photos: PhotoRef[],
-  noLocationCount: number,
+  noLocationPhotos: NoLocationPhoto[],
   sort: boolean,
 ): MonthlyPhotos {
   const list = sort
     ? [...photos].sort((a, b) => a.takenAt.localeCompare(b.takenAt))
     : [...photos];
-  return { month, photos: list, noLocationCount };
+  return {
+    month,
+    photos: list,
+    noLocationCount: noLocationPhotos.length,
+    noLocationPhotos,
+  };
 }
 
 /**
@@ -283,7 +295,7 @@ export async function loadMonthlyPhotos(
     });
 
     const photos: PhotoRef[] = [];
-    let noLocationCount = 0;
+    const noLocationPhotos: NoLocationPhoto[] = [];
     const uncached: Asset[] = [];
     let softBudget = SOFT_RECHECK_CAP;
 
@@ -298,7 +310,7 @@ export async function loadMonthlyPhotos(
           softRecheckedNoLoc.add(asset.id);
           uncached.push(asset);
         } else {
-          noLocationCount += 1;
+          noLocationPhotos.push(noLocFromAsset(asset));
         }
       } else {
         photos.push(hit);
@@ -306,7 +318,7 @@ export async function loadMonthlyPhotos(
     }
 
     const total = assets.length;
-    const settled = () => photos.length + noLocationCount;
+    const settled = () => photos.length + noLocationPhotos.length;
     setMonthLoadProgress({ month, phase: 'gps', done: settled(), total });
 
     let lastPartialAt = 0;
@@ -323,7 +335,7 @@ export async function loadMonthlyPhotos(
       }
       lastPartialAt = now;
       // Partial frames skip a full sort — final return is sorted.
-      onPartial(snapshot(month, photos, noLocationCount, force));
+      onPartial(snapshot(month, photos, noLocationPhotos, force));
     };
 
     // Emit early only when we already have pins, or when there is nothing left to resolve.
@@ -338,16 +350,18 @@ export async function loadMonthlyPhotos(
       yieldToPinExports: true,
       shouldContinue,
       locOpts: { networkFallback: false },
-      onBatch: async ({ located: batchLocated, noLocation }) => {
+      onBatch: async ({ located: batchLocated, noLocationAssets }) => {
         photos.push(...batchLocated);
-        noLocationCount += noLocation;
+        for (const asset of noLocationAssets) {
+          noLocationPhotos.push(noLocFromAsset(asset));
+        }
         setMonthLoadProgress({ month, phase: 'gps', done: settled(), total });
         emitPartial(false);
       },
     });
     emitPartial(true);
 
-    return snapshot(month, photos, noLocationCount, true);
+    return snapshot(month, photos, noLocationPhotos, true);
   } catch (error) {
     resetMonthLoadProgress();
     throw error;
@@ -497,6 +511,7 @@ async function resolveUncachedLocations(
       failed: Asset[];
       examined: number;
       noLocation: number;
+      noLocationAssets: Asset[];
     }) => void | Promise<void>;
   },
 ): Promise<{ located: PhotoRef[]; failed: Asset[] }> {
@@ -521,14 +536,14 @@ async function resolveUncachedLocations(
     const results = await resolveChunkLocations(chunk, locOpts);
     const batchLocated: PhotoRef[] = [];
     const batchFailed: Asset[] = [];
-    let noLocation = 0;
+    const noLocationAssets: Asset[] = [];
     for (let j = 0; j < results.length; j++) {
       const result = results[j];
       if (result != null && result !== 'no-location') {
         batchLocated.push(result);
         located.push(result);
       } else if (result === 'no-location') {
-        noLocation += 1;
+        noLocationAssets.push(chunk[j]!);
       } else if (result === null) {
         batchFailed.push(chunk[j]!);
         failed.push(chunk[j]!);
@@ -538,7 +553,8 @@ async function resolveUncachedLocations(
       located: batchLocated,
       failed: batchFailed,
       examined: chunk.length,
-      noLocation,
+      noLocation: noLocationAssets.length,
+      noLocationAssets,
     });
     const remaining = uncached.length - (i + chunk.length);
     if (remaining > 0 && yieldMs > 0) {

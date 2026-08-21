@@ -120,6 +120,9 @@ export function useMonthlyPhotos(month: MonthKey, options?: { enabled?: boolean 
       photos,
       allPhotos: query.data.photos,
       homeExcludedCount,
+      noLocationPhotos: query.data.noLocationPhotos ?? [],
+      noLocationCount:
+        query.data.noLocationPhotos?.length ?? query.data.noLocationCount ?? 0,
     };
   }, [hidden, query.data, home]);
 

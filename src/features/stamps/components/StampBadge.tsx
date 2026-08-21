@@ -14,6 +14,8 @@ import Animated, {
 
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
+import { useShellInk } from '@/shared/hooks/useShellBackground';
+import { useTheme } from '@/shared/theme/ThemeProvider';
 
 export interface StampBadgeProps {
   name: string;
@@ -47,6 +49,8 @@ export function StampBadge({
   onPress,
   size = 'grid',
 }: StampBadgeProps) {
+  const shell = useShellInk();
+  const { colors } = useTheme();
   const hero = size === 'hero';
   const ty = useSharedValue(animateIn && collected ? -DROP_FROM : 0);
   const scale = useSharedValue(animateIn && collected ? 1.2 : 1);
@@ -161,11 +165,18 @@ export function StampBadge({
     </View>
   ) : (
     <View
-      style={[styles.slot, styles.emptySlot]}
+      style={[
+        styles.slot,
+        styles.emptySlot,
+        {
+          borderColor: colors.line,
+          backgroundColor: colors.shellChip,
+        },
+      ]}
       accessibilityLabel={strings.stamps.uncollected}
     >
-      <Text style={styles.question}>{strings.stamps.slotUnknown}</Text>
-      <Text style={styles.emptyName} numberOfLines={1}>
+      <Text style={[styles.question, shell.subtle]}>{strings.stamps.slotUnknown}</Text>
+      <Text style={[styles.emptyName, shell.soft]} numberOfLines={1}>
         {name}
       </Text>
     </View>

@@ -17,6 +17,7 @@ import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 import { useShellBackground, useShellInk } from '@/shared/hooks/useShellBackground';
 import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
+import { useTheme } from '@/shared/theme/ThemeProvider';
 
 import { currentMonthKey } from '@/features/photos/utils/month';
 import { usePhotoPermission } from '@/features/photos/hooks/usePhotoPermission';
@@ -149,6 +150,7 @@ function MapIcon({ color }: { color: string }) {
 export function StampScreen() {
   const shellBg = useShellBackground();
   const shell = useShellInk();
+  const { colors } = useTheme();
   const navigation = useNavigation();
   const router = useRouter();
   const { isReady, status: permissionStatus } = usePhotoPermission();
@@ -488,10 +490,14 @@ export function StampScreen() {
               accessibilityLabel={strings.stamps.mapOpen}
               style={({ pressed }) => [
                 styles.mapBtn,
+                {
+                  borderColor: colors.shellInk,
+                  backgroundColor: colors.shellChip,
+                },
                 pressed && styles.mapBtnPressed,
               ]}
             >
-              <MapIcon color={theme.colors.ink} />
+              <MapIcon color={colors.shellInk} />
             </Pressable>
           )
         }
