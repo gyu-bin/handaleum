@@ -23,7 +23,6 @@ import { HomeNavBar } from '../components/HomeNavBar';
 import { PhotoPreviewSheet } from '../components/PhotoPreviewSheet';
 import { getSharedMonth, useCurrentMonth } from '../hooks/useCurrentMonth';
 import { useJourneyPathOrder } from '../hooks/useJourneyPathOrder';
-import { useMonthEndReminder } from '../hooks/useMonthEndReminder';
 import { useMonthlyPhotos } from '../hooks/useMonthlyPhotos';
 import { usePhotoPermission } from '../hooks/usePhotoPermission';
 import { usePinCovers } from '../hooks/usePinCovers';
@@ -69,7 +68,6 @@ export function MonthlyMapScreen() {
   // Pull chrome closer to the status bar — full inset leaves too much empty top.
   const headerPadTop = Math.max(0, insets.top - 10);
   const { seen: onboardingSeen } = useOnboarding();
-  useMonthEndReminder({ promptIfUndetermined: onboardingSeen });
   const { status, isReady } = usePhotoPermission();
   const hasLibraryAccess = status === 'granted' || status === 'limited';
   const hasAccess = hasLibraryAccess || isDevDummyPhotosEnabled();

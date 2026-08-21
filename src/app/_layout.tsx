@@ -11,8 +11,6 @@ import {
   startOtaAutoApply,
 } from '@/lib/applyOtaUpdate';
 import { configurePurchases } from '@/lib/purchases';
-import { configureMonthEndReminder } from '@/features/photos/services/monthEndReminder';
-import { useOpenHomeOnMonthEndReminder } from '@/features/photos/hooks/useMonthEndReminder';
 import { useStreakMilestonePopup } from '@/features/photos/hooks/useStreakMilestonePopup';
 import { StreakMilestoneOverlay } from '@/features/photos/components/StreakMilestoneOverlay';
 import { consumeOtaJustApplied } from '@/lib/otaUpdateFlag';
@@ -23,7 +21,6 @@ import { strings } from '@/shared/constants/strings';
 import { ThemeProvider, useDarkMode, useTheme } from '@/shared/theme/ThemeProvider';
 
 configurePurchases();
-configureMonthEndReminder();
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -40,7 +37,6 @@ function hidesOtaToast(pathname: string): boolean {
 function AppNavigation() {
   const { colors } = useTheme();
   const pathname = usePathname();
-  useOpenHomeOnMonthEndReminder();
   const { days: streakDays, dismiss: dismissStreak } = useStreakMilestonePopup();
   const quiet = hidesOtaToast(pathname);
   return (
