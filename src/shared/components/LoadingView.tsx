@@ -17,7 +17,7 @@ export interface LoadingViewProps {
 }
 
 /**
- * Brand loading — bike on cream paper (min hold is call-site via useHeldBusy).
+ * Brand loading — bike on cream paper (min/max hold is call-site via useHeldBusy).
  * No PaperGrain here: full-bleed grain decode fights the spin under album sync.
  */
 export function LoadingView({

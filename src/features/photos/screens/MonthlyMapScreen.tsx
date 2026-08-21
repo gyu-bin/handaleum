@@ -178,7 +178,8 @@ export function MonthlyMapScreen() {
   const bootBusy = !isReady;
   // Month ‹ › keeps placeholder data — don't force the 1.5s bike for that path.
   const dataBusy = isReady && hasAccess && isPending && !data;
-  const showLoading = useHeldBusy(bootBusy || dataBusy, 1500);
+  // Cap at 2s so a long GPS pass doesn't keep the bike up.
+  const showLoading = useHeldBusy(bootBusy || dataBusy, 1500, 2000);
 
   // Middle-path prewarm after month GPS settles (not on every zoom recluster).
   // Skip while the bike is up — pin bake steals frames from the spin.
@@ -270,10 +271,6 @@ export function MonthlyMapScreen() {
     );
   }
 
-  if (!data) {
-    return <LoadingView />;
-  }
-
   const monthLabel = formatMonthLabel(month);
   const monthNumber = Number(month.split('-')[1] ?? 0);
   // Content destinations live in the thumb-reachable bottom bar; settings is a
@@ -341,7 +338,7 @@ export function MonthlyMapScreen() {
                 </Text>
               </Pressable>
               <Text style={[styles.monthMeta, { color: colors.shellSubtle }]} numberOfLines={1}>
-                {(isFetching || isStaleMonth) && data
+                {(isFetching || isStaleMonth || !data)
                   ? strings.map.resolvingLocations
                   : strings.map.monthMeta(monthLabel, placeCount)}
               </Text>
@@ -385,7 +382,7 @@ export function MonthlyMapScreen() {
             showPathOrder={showPathOrder}
             onTogglePathOrder={togglePathOrder}
           />
-          {!isStaleMonth && data.photos.length === 0 ? (
+          {!isStaleMonth && data && data.photos.length === 0 ? (
             <View style={styles.emptyOverlay} pointerEvents="box-none">
               <Text style={styles.emptyOverlayText}>
                 {data.homeExcludedCount > 0

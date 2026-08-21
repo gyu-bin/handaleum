@@ -92,12 +92,7 @@ function PhotoStreakLine({
         <View style={[styles.streakFlame, { width: flamePx, height: flamePx }]}>
           <Image
             source={STREAK_FLAME}
-            style={{
-              width: flamePx * 1.28,
-              height: flamePx * 1.28,
-              marginLeft: flamePx * -0.14,
-              marginTop: flamePx * -0.14,
-            }}
+            style={styles.streakFlameImage}
             resizeMode="contain"
             accessibilityElementsHidden
           />
@@ -105,7 +100,6 @@ function PhotoStreakLine({
             style={[
               styles.streakFlameCount,
               {
-                top: flamePx * 0.3,
                 fontSize: Math.max(11, flamePx * 0.36),
                 color: theme.colors.surface,
                 textShadowColor: theme.colors.ink,
@@ -178,6 +172,7 @@ const NodeCell = memo(function NodeCell({
   onOpen: (id: string) => void;
   onRename: (id: string) => void;
 }) {
+  const { colors } = useTheme();
   const empty = node.assetId == null;
   const inner = Math.max(12, size - inset);
 
@@ -214,8 +209,10 @@ const NodeCell = memo(function NodeCell({
             width: inner,
             height: inner,
             borderRadius: inner / 2,
+            backgroundColor: colors.shellChip,
+            borderColor: empty ? colors.border : colors.shellInk,
           },
-          empty && styles.circleEmpty,
+          empty && { borderWidth: StyleSheet.hairlineWidth },
           !empty && styles.circleOn,
         ]}
       >
@@ -227,7 +224,10 @@ const NodeCell = memo(function NodeCell({
           />
         ) : null}
       </View>
-      <Text style={styles.caption} numberOfLines={1}>
+      <Text
+        style={[styles.caption, { color: colors.shellInkSoft }]}
+        numberOfLines={1}
+      >
         {node.label}
       </Text>
     </Pressable>
@@ -259,6 +259,7 @@ function BoardPage({
   onOpen: (id: string) => void;
   onRename: (id: string) => void;
 }) {
+  const { colors } = useTheme();
   const rows =
     mode === 'day' ? chunkRows(pageNodes, cols) : snakeRows(pageNodes, cols);
   const gridH = rows.length * rowH;
@@ -274,7 +275,7 @@ function BoardPage({
           {strings.cards.boardWeekdays.map((label) => (
             <Text
               key={label}
-              style={[styles.weekday, { width: size }]}
+              style={[styles.weekday, { width: size, color: colors.shellSubtle }]}
             >
               {label}
             </Text>
@@ -292,7 +293,7 @@ function BoardPage({
             <Path
               d={rail}
               fill="none"
-              stroke={theme.colors.inkSoft}
+              stroke={colors.shellInkSoft}
               strokeWidth={1.6}
               strokeLinejoin="round"
               strokeLinecap="round"
@@ -586,6 +587,7 @@ const styles = StyleSheet.create({
   },
   monthSlotEnd: {
     flex: 1,
+    flexShrink: 0,
     justifyContent: 'center',
     alignItems: 'flex-end',
   },
@@ -629,23 +631,16 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
   },
   streakFlame: {
-    overflow: 'hidden',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  streakLine: {
-    fontFamily: theme.fonts.sans,
-    textAlign: 'right',
-  },
-  streakNumber: {
-    ...theme.type.micro,
-    fontFamily: theme.fonts.sans,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
-    letterSpacing: -0.2,
+  streakFlameImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
   },
   streakFlameCount: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
     textAlign: 'center',
     fontFamily: theme.fonts.sans,
     fontWeight: '800',
@@ -653,6 +648,18 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
     textShadowOffset: { width: 0, height: 0.5 },
     textShadowRadius: 2,
+  },
+  streakLine: {
+    fontFamily: theme.fonts.sans,
+    textAlign: 'right',
+    flexShrink: 1,
+  },
+  streakNumber: {
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.2,
   },
   streakPhrase: {
     ...theme.type.micro,
@@ -663,12 +670,10 @@ const styles = StyleSheet.create({
   board: {
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: theme.spacing.sm,
-    backgroundColor: theme.colors.background,
   },
   grid: {
     alignSelf: 'center',
     position: 'relative',
-    backgroundColor: theme.colors.background,
   },
   rail: {
     position: 'absolute',
@@ -684,7 +689,6 @@ const styles = StyleSheet.create({
   },
   weekday: {
     ...theme.type.micro,
-    color: theme.colors.subtle,
     textAlign: 'center',
     fontWeight: '600',
   },
@@ -699,24 +703,17 @@ const styles = StyleSheet.create({
   },
   circle: {
     overflow: 'hidden',
-    backgroundColor: theme.colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.border,
   },
   circlePhoto: {
     width: '100%',
     height: '100%',
   },
-  circleEmpty: {
-    backgroundColor: theme.colors.background,
-  },
   circleOn: {
     borderWidth: 2,
-    borderColor: theme.colors.ink,
   },
   caption: {
     ...theme.type.micro,
-    color: theme.colors.inkSoft,
     marginTop: CAPTION_GAP,
     maxWidth: '100%',
     textAlign: 'center',

@@ -17,6 +17,7 @@ import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 import { useShellBackground, useShellInk } from '@/shared/hooks/useShellBackground';
+import { useTheme } from '@/shared/theme/ThemeProvider';
 
 import { AssetThumbImage } from '../components/AssetThumbImage';
 import { useCurrentMonth } from '../hooks/useCurrentMonth';
@@ -44,6 +45,7 @@ export function NoLocationPhotosScreen() {
   const { month } = useCurrentMonth();
   const shellBg = useShellBackground();
   const shell = useShellInk();
+  const { colors } = useTheme();
   const { width } = useWindowDimensions();
   const { data, isPending, isError, refetch } = useMonthlyPhotos(month);
   const showLoading = useHeldBusy(isPending);
@@ -75,7 +77,9 @@ export function NoLocationPhotosScreen() {
               key={photo.assetId}
               style={{ width: cellSize, height: cellSize, padding: 2 }}
             >
-              <View style={styles.tile}>
+              <View
+                style={[styles.tile, { backgroundColor: colors.shellChip }]}
+              >
                 <AssetThumbImage assetId={photo.assetId} size={inner} />
               </View>
             </View>
@@ -88,7 +92,7 @@ export function NoLocationPhotosScreen() {
           : null}
       </View>
     ),
-    [cellSize],
+    [cellSize, colors.shellChip],
   );
 
   if (showLoading) {
@@ -139,7 +143,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     ...theme.type.micro,
-    color: theme.colors.subtle,
+    fontFamily: theme.fonts.sans,
     textAlign: 'center',
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: theme.spacing.sm,
@@ -155,6 +159,5 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     borderRadius: theme.radius.sm,
     overflow: 'hidden',
-    backgroundColor: theme.colors.surfaceAlt,
   },
 });

@@ -16,6 +16,7 @@ import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 import { useShellBackground, useShellInk } from '@/shared/hooks/useShellBackground';
+import { useTheme } from '@/shared/theme/ThemeProvider';
 
 import { AssetThumbImage } from '../components/AssetThumbImage';
 import { useCurrentMonth } from '../hooks/useCurrentMonth';
@@ -44,6 +45,7 @@ function HiddenPhotoRow({
   onRestore: (assetId: string) => void;
 }) {
   const shell = useShellInk();
+  const { colors } = useTheme();
   const { photo, assetId } = row;
   const place = photo ? peekResolvedPlace(photo.lat, photo.lng)?.detailLabel : null;
   const meta = photo
@@ -53,7 +55,7 @@ function HiddenPhotoRow({
     : strings.settings.hiddenPhotoOrphan;
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, { borderBottomColor: colors.hairline }]}>
       <AssetThumbImage assetId={assetId} size={THUMB} style={styles.thumb} />
       <View style={styles.meta}>
         <Text style={[styles.metaText, shell.soft]} numberOfLines={2}>
@@ -64,7 +66,11 @@ function HiddenPhotoRow({
         onPress={() => onRestore(assetId)}
         accessibilityRole="button"
         accessibilityLabel={strings.settings.hiddenPhotoRestore}
-        style={({ pressed }) => [styles.restoreBtn, pressed && styles.pressed]}
+        style={({ pressed }) => [
+          styles.restoreBtn,
+          { backgroundColor: colors.shellChip, borderColor: colors.border },
+          pressed && styles.pressed,
+        ]}
       >
         <Text style={[styles.restoreText, shell.ink]}>
           {strings.settings.hiddenPhotoRestore}
@@ -153,7 +159,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     ...theme.type.micro,
-    color: theme.colors.subtle,
+    fontFamily: theme.fonts.sans,
     textAlign: 'center',
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: theme.spacing.sm,
@@ -169,7 +175,6 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
     paddingVertical: theme.spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.hairline,
   },
   thumb: {
     borderRadius: theme.radius.sm,
@@ -181,20 +186,16 @@ const styles = StyleSheet.create({
   metaText: {
     ...theme.type.label,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.inkSoft,
   },
   restoreBtn: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.surfaceAlt,
+    borderRadius: theme.radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.border,
   },
   restoreText: {
     ...theme.type.micro,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.ink,
     fontWeight: '700',
   },
   pressed: {

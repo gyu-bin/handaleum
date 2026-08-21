@@ -64,23 +64,25 @@ const SKIN_SIDE = SKIN_COL_W + SKIN_GAP;
 /** Story card aspect (matches export). */
 const CARD_ASPECT = 1920 / 1080;
 /** Always leave this much for the photo sheet under the card when expanded. */
-const SHEET_PEEK_MIN = 300;
+const SHEET_PEEK_MIN = 280;
 /** Approx. screen header under the safe-area top. */
 const CREATE_HEADER_H = 52;
 /** One-line caption length on the create card. */
 const COMMENT_MAX = 40;
+/** Hint + stage padding reserved above/below the paper. */
+const PREVIEW_CHROME_H = 48;
 
 function previewCardWidth(windowW: number, bodyH: number): number {
   // Room for sticky pad + skin column + balance — dots must stay on-screen.
-  const maxByWidth = windowW - theme.spacing.lg * 2 - SKIN_SIDE * 2 - 8;
+  const maxByWidth = windowW - theme.spacing.md * 2 - SKIN_SIDE * 2;
   const maxPreviewH = bodyH - SHEET_PEEK_MIN;
-  const maxByHeight = (maxPreviewH - 56) / CARD_ASPECT;
+  const maxByHeight = (maxPreviewH - PREVIEW_CHROME_H) / CARD_ASPECT;
   return Math.max(180, Math.min(maxByWidth, maxByHeight));
 }
 
 function previewExpandedMaxHeight(cardW: number): number {
   // Paper + stage pads + hint — keep chrome tight so the sheet peeks higher.
-  return Math.ceil(cardW * CARD_ASPECT) + 64;
+  return Math.ceil(cardW * CARD_ASPECT) + PREVIEW_CHROME_H;
 }
 
 function paperSkinLabel(id: PaperSkinId): string {
@@ -246,9 +248,14 @@ function CreateCardPreview({
                 hitSlop={6}
                 style={[
                   styles.skinDot,
-                  { backgroundColor: tone.paper },
-                  id === 'ink' && styles.skinDotInkEdge,
-                  selected && styles.skinDotOn,
+                  {
+                    backgroundColor: tone.paper,
+                    borderColor: colors.border,
+                  },
+                  selected && {
+                    borderWidth: 2,
+                    borderColor: colors.shellInk,
+                  },
                 ]}
               />
             );
@@ -263,6 +270,8 @@ function CreateCardPreview({
                 width: cardW,
                 height: cardH,
                 backgroundColor: skin.paper,
+                borderColor:
+                  paperSkin === 'ink' ? colors.shellSubtle : colors.border,
               },
             ]}
           >
@@ -352,7 +361,17 @@ function CreateCardPreview({
                   commentAlignLabel(align),
                 )}
                 hitSlop={6}
-                style={[styles.alignDot, selected && styles.alignDotOn]}
+                style={[
+                  styles.alignDot,
+                  {
+                    backgroundColor: colors.shellChip,
+                    borderColor: colors.border,
+                  },
+                  selected && {
+                    borderWidth: 2,
+                    borderColor: colors.shellInk,
+                  },
+                ]}
               >
                 <AlignGlyph
                   align={align}
@@ -367,7 +386,17 @@ function CreateCardPreview({
             accessibilityRole="switch"
             accessibilityState={{ checked: placeOverlay }}
             accessibilityLabel={strings.cards.placeOverlayA11y}
-            style={[styles.alignDot, placeOverlay && styles.alignDotOn]}
+            style={[
+              styles.alignDot,
+              {
+                backgroundColor: colors.shellChip,
+                borderColor: colors.border,
+              },
+              placeOverlay && {
+                borderWidth: 2,
+                borderColor: colors.shellInk,
+              },
+            ]}
           >
             <PlaceChipGlyph
               color={placeOverlay ? colors.shellInk : colors.shellInkSoft}
@@ -660,7 +689,7 @@ export function CardCreateScreen() {
           { borderBottomColor: colors.hairline },
         ]}
       >
-        <View style={styles.sheetHandle} />
+        <View style={[styles.sheetHandle, { backgroundColor: colors.line }]} />
         <View style={styles.headerBox}>
           <View style={styles.meterBlock}>
             <View style={styles.labelRow}>
@@ -668,7 +697,9 @@ export function CardCreateScreen() {
                 {strings.cards.photoLabel}
               </Text>
               <View style={styles.meterCount}>
-                <Text style={styles.meterNum}>{selectedCount}</Text>
+                <Text style={[styles.meterNum, { color: colors.shellInk }]}>
+                  {selectedCount}
+                </Text>
                 <Text style={[styles.meterDen, { color: colors.shellSubtle }]}>
                   / {MAX_PHOTOS}장
                 </Text>
@@ -680,7 +711,8 @@ export function CardCreateScreen() {
                   key={i}
                   style={[
                     styles.meterTick,
-                    i < selectedCount && styles.meterTickOn,
+                    { backgroundColor: colors.line },
+                    i < selectedCount && { backgroundColor: colors.shellInk },
                   ]}
                 />
               ))}
@@ -728,7 +760,9 @@ export function CardCreateScreen() {
               </Pressable>
             </View>
             {selectionHint ? (
-              <Text style={styles.selectionHint}>{selectionHint}</Text>
+              <Text style={[styles.selectionHint, { color: colors.shellInk }]}>
+                {selectionHint}
+              </Text>
             ) : null}
           </View>
           <View style={styles.sortRow}>
@@ -738,14 +772,24 @@ export function CardCreateScreen() {
               accessibilityState={{ selected: sortMode === 'newest' }}
               style={[
                 styles.sortChip,
-                sortMode === 'newest' && styles.sortChipOn,
+                {
+                  backgroundColor: colors.shellChip,
+                  borderColor: colors.hairline,
+                },
+                sortMode === 'newest' && {
+                  backgroundColor: colors.shellInk,
+                  borderColor: colors.shellInk,
+                },
               ]}
             >
               <Text
                 style={[
                   styles.sortChipText,
                   { color: colors.shellInkSoft },
-                  sortMode === 'newest' && styles.sortChipTextOn,
+                  sortMode === 'newest' && {
+                    color: colors.canvas,
+                    fontWeight: '700',
+                  },
                 ]}
               >
                 {strings.cards.sortNewest}
@@ -757,14 +801,24 @@ export function CardCreateScreen() {
               accessibilityState={{ selected: sortMode === 'oldest' }}
               style={[
                 styles.sortChip,
-                sortMode === 'oldest' && styles.sortChipOn,
+                {
+                  backgroundColor: colors.shellChip,
+                  borderColor: colors.hairline,
+                },
+                sortMode === 'oldest' && {
+                  backgroundColor: colors.shellInk,
+                  borderColor: colors.shellInk,
+                },
               ]}
             >
               <Text
                 style={[
                   styles.sortChipText,
                   { color: colors.shellInkSoft },
-                  sortMode === 'oldest' && styles.sortChipTextOn,
+                  sortMode === 'oldest' && {
+                    color: colors.canvas,
+                    fontWeight: '700',
+                  },
                 ]}
               >
                 {strings.cards.sortOldest}
@@ -776,14 +830,24 @@ export function CardCreateScreen() {
               accessibilityState={{ selected: sortMode === 'place' }}
               style={[
                 styles.sortChip,
-                sortMode === 'place' && styles.sortChipOn,
+                {
+                  backgroundColor: colors.shellChip,
+                  borderColor: colors.hairline,
+                },
+                sortMode === 'place' && {
+                  backgroundColor: colors.shellInk,
+                  borderColor: colors.shellInk,
+                },
               ]}
             >
               <Text
                 style={[
                   styles.sortChipText,
                   { color: colors.shellInkSoft },
-                  sortMode === 'place' && styles.sortChipTextOn,
+                  sortMode === 'place' && {
+                    color: colors.canvas,
+                    fontWeight: '700',
+                  },
                 ]}
               >
                 {strings.cards.sortByPlace}
@@ -803,8 +867,12 @@ export function CardCreateScreen() {
       onSelectionReset,
       shellBg,
       colors.hairline,
+      colors.line,
+      colors.shellChip,
+      colors.shellInk,
       colors.shellInkSoft,
       colors.shellSubtle,
+      colors.canvas,
     ],
   );
 
@@ -864,14 +932,19 @@ export function CardCreateScreen() {
             accessibilityLabel={strings.cards.create}
             style={({ pressed }) => [
               styles.saveAction,
+              { backgroundColor: colors.shellInk },
               (pressed || saveCard.isPending) && styles.saveActionDim,
             ]}
           >
-            <Text style={styles.saveActionText}>{strings.cards.create}</Text>
+            <Text style={[styles.saveActionText, { color: colors.canvas }]}>
+              {strings.cards.create}
+            </Text>
           </Pressable>
         }
       />
-      {formError ? <Text style={styles.error}>{formError}</Text> : null}
+      {formError ? (
+        <Text style={[styles.error, { color: colors.shellInk }]}>{formError}</Text>
+      ) : null}
       <View style={styles.body}>
         {/* Preview height shrinks in normal flow — do not translate the sheet (clips bottom). */}
         {selectedCount > 0 ? (
@@ -967,7 +1040,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   stickyPreview: {
-    paddingHorizontal: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.md,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'flex-start',
@@ -997,7 +1070,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: theme.colors.hairline,
     marginBottom: 2,
   },
   gridFlex: {
@@ -1017,7 +1089,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.terracotta,
   },
   saveActionDim: {
     opacity: 0.55,
@@ -1025,7 +1096,6 @@ const styles = StyleSheet.create({
   saveActionText: {
     ...theme.type.label,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.surface,
     fontWeight: '700',
   },
   section: {
@@ -1034,7 +1104,6 @@ const styles = StyleSheet.create({
   label: {
     ...theme.type.label,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.inkSoft,
     fontWeight: '700',
   },
   labelRow: {
@@ -1052,35 +1121,19 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: theme.radius.md,
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surface,
-  },
-  sortChipOn: {
-    backgroundColor: theme.colors.terracottaSoft,
-    borderColor: theme.colors.terracotta,
   },
   sortChipText: {
     ...theme.type.micro,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.inkSoft,
     fontWeight: '600',
-  },
-  sortChipTextOn: {
-    color: theme.colors.terracotta,
-    fontWeight: '700',
   },
   hint: {
     ...theme.type.micro,
-    color: theme.colors.subtle,
     textAlign: 'center',
     paddingHorizontal: theme.spacing.md,
   },
   previewStage: {
-    backgroundColor: theme.colors.surfaceAlt,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.hairline,
-    paddingVertical: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
     paddingHorizontal: theme.spacing.sm,
     alignItems: 'center',
     gap: 10,
@@ -1121,14 +1174,6 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 9,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(44,62,80,0.2)',
-  },
-  skinDotInkEdge: {
-    borderColor: 'rgba(44,62,80,0.35)',
-  },
-  skinDotOn: {
-    borderWidth: 2,
-    borderColor: theme.colors.ink,
   },
   alignDot: {
     width: 28,
@@ -1137,15 +1182,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.panelBorder,
-    backgroundColor: theme.colors.surface,
-  },
-  alignDotOn: {
-    borderWidth: 2,
-    borderColor: theme.colors.ink,
   },
   cardPaper: {
     padding: 6,
+    borderWidth: 1,
     ...theme.shadows.card,
   },
   cardFrame: {
@@ -1221,18 +1261,15 @@ const styles = StyleSheet.create({
   meterNum: {
     ...theme.type.title,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.terracotta,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
   meterDen: {
     ...theme.type.micro,
-    color: theme.colors.subtle,
     fontVariant: ['tabular-nums'],
   },
   meterTrack: { flexDirection: 'row', gap: 4, height: 3 },
-  meterTick: { flex: 1, backgroundColor: theme.tint.soft },
-  meterTickOn: { backgroundColor: theme.colors.terracotta },
+  meterTick: { flex: 1 },
   selectionActions: {
     flexDirection: 'row',
     gap: theme.spacing.md,
@@ -1247,13 +1284,11 @@ const styles = StyleSheet.create({
   selectionActionText: {
     ...theme.type.micro,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.inkSoft,
     fontWeight: '600',
   },
   selectionHint: {
     ...theme.type.micro,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.terracotta,
     fontWeight: '600',
   },
 
@@ -1261,7 +1296,6 @@ const styles = StyleSheet.create({
   error: {
     ...theme.type.label,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.terracotta,
     fontWeight: '600',
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.sm,

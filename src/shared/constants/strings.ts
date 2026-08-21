@@ -164,11 +164,13 @@ export const strings = {
     /** Section labels (reference: grey header above a ruled list). */
     albumSection: '앨범',
     displaySection: '화면',
+    notificationSection: '알림',
     darkMode: '다크모드',
     monthEndReminder: '월말 알림',
     monthEndReminderHint: '그달 마지막 날 저녁 9시',
     homeSection: '집',
     albumSync: '사진 다시 담기',
+    albumSyncExplain: '앨범을 다시 훑어 아직 지도에 없는 사진을 올립니다.',
     albumSyncing: '불러오는 중…',
     albumSyncModalTitle: '사진 다시 담기',
     albumSyncModalBody:
@@ -178,12 +180,15 @@ export const strings = {
     hiddenPhotos: '숨긴 사진',
     hiddenPhotosTitle: '숨긴 사진',
     hiddenPhotosCount: (count: number) => `${count}장`,
+    hiddenPhotosExplain:
+      '직접 숨긴 사진입니다. 지도·회고·몰아보기에서 빠집니다.',
     hiddenPhotosSubtitle: (monthLabel: string) =>
       `${monthLabel} · 지도·회고·몰아보기에서만 숨김`,
     hiddenPhotosEmpty: '숨긴 사진이 없습니다',
     hiddenPhotoRestore: '되돌리기',
     hiddenPhotoOrphan: '앨범에서 찾을 수 없음',
-    mapNoticeSection: '이번 달 지도',
+    /** Groups every reason a photo is missing from this month's map. */
+    mapNoticeSection: '이번 달 지도에 없는 사진',
     noLocationTitle: '위치 없는 사진',
     noLocationCount: (count: number) => `${count}장`,
     noLocationExplain:
@@ -191,8 +196,7 @@ export const strings = {
     noLocationSubtitle: (monthLabel: string) =>
       `${monthLabel} · GPS가 없어 지도에 안 뜹니다`,
     noLocationEmpty: '위치 없는 사진이 없습니다',
-    homeExcludedTitle: '집에서 찍은 사진',
-    homeExcludedCount: (count: number) => `${count}장`,
+    /** Sits under the home-location row — says what setting a home actually does. */
     homeExcludedExplain:
       '집 반경 안 사진은 지도 핀에서만 빼 둡니다. 카드에는 그대로 쓸 수 있어요.',
     homeUnset: '미설정',
@@ -202,6 +206,8 @@ export const strings = {
         : `${radiusM}m`,
     useCurrentLocation: '현재 위치로 설정',
     locating: '확인 중…',
+    /** Row label above the radius chips. */
+    homeRadius: '반경',
     clearHome: '해제',
     locationDenied: '위치 권한이 필요해요',
     locationFailed: '위치를 찾지 못했어요',
@@ -329,7 +335,7 @@ export const strings = {
     loadingPhotos: (done: number, total: number) =>
       `사진 ${done.toLocaleString('ko-KR')}/${total.toLocaleString('ko-KR')}`,
     boardPlace: '위치',
-    boardDay: '날',
+    boardDay: '월',
     boardWeekdays: ['일', '월', '화', '수', '목', '금', '토'] as const,
     boardEmpty: '이번 달 위치 사진이 없습니다',
     boardRenameTitle: '이 위치 이름',

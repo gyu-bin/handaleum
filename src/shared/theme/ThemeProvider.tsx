@@ -18,6 +18,9 @@ const DARK_SHELL_COLORS: Partial<Theme['colors']> = {
   shellSubtle: '#727A86',
   splashMark: '#D0D6DC',
   shellChip: '#2A3038',
+  shellSurface: '#22262C',
+  /** Lifted so the filled track reads as "on" against the dark card. */
+  shellSwitchOn: '#5B7A9C',
 };
 
 export function resolveTheme(scheme: ColorSchemeName | null | undefined): Theme {

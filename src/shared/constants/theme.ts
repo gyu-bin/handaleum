@@ -24,6 +24,14 @@ export const theme = {
     shellSubtle: '#93A1AD',
     /** Chips/buttons that sit on the shell (back control). */
     shellChip: '#EFE6DA',
+    /** Grouped-list card that sits on the shell (settings). Lifts off `background`. */
+    shellSurface: '#FFFBF5',
+    /**
+     * Switch "on" track. Cannot be `shellInk`: in dark mode that resolves to a
+     * near-white, which swallows the light thumb and leaves a blank pill.
+     * Stays a filled ink that reads against a light thumb in both themes.
+     */
+    shellSwitchOn: '#2C3E50',
 
     /**
      * Splash / loading brand mark — slate navy from the stamp splash reference.

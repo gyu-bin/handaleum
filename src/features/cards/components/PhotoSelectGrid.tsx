@@ -17,6 +17,7 @@ import { LoadProgressBanner } from '@/shared/components/LoadProgressBanner';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 import { useShellInk } from '@/shared/hooks/useShellBackground';
+import { useTheme } from '@/shared/theme/ThemeProvider';
 
 import { AssetThumbImage } from '../../photos/components/AssetThumbImage';
 import { usePauseGridThumbWarmOnScroll } from '../../photos/hooks/usePauseGridThumbWarmOnScroll';
@@ -100,6 +101,7 @@ const Cell = memo(function Cell({
   size: number;
   onToggle: (assetId: string) => void;
 }) {
+  const { colors } = useTheme();
   const onPress = useCallback(() => {
     onToggle(photo.assetId);
   }, [onToggle, photo.assetId]);
@@ -113,7 +115,7 @@ const Cell = memo(function Cell({
       accessibilityRole="checkbox"
       accessibilityState={{ checked: selected }}
     >
-      <View style={styles.tile}>
+      <View style={[styles.tile, { backgroundColor: colors.shellChip }]}>
         <AssetThumbImage assetId={photo.assetId} size={inner} />
         {selected ? (
           <>
@@ -265,7 +267,6 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     borderRadius: theme.radius.sm,
     overflow: 'hidden',
-    backgroundColor: theme.colors.surfaceAlt,
   },
   tileRing: {
     position: 'absolute',

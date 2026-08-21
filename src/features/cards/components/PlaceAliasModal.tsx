@@ -13,6 +13,7 @@ import {
 import { Button } from '@/shared/components/Button';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
+import { useTheme } from '@/shared/theme/ThemeProvider';
 
 import { PLACE_ALIAS_MAX } from '../schema';
 
@@ -32,6 +33,7 @@ export function PlaceAliasModal({
   onSave,
 }: PlaceAliasModalProps) {
   const [draft, setDraft] = useState(initialLabel);
+  const { colors } = useTheme();
 
   useEffect(() => {
     if (visible) {
@@ -50,28 +52,38 @@ export function PlaceAliasModal({
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView
-        style={styles.backdrop}
+        style={[styles.backdrop, { backgroundColor: colors.overlayDark }]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <Pressable style={styles.flex} onPress={onClose}>
           <Pressable
-            style={styles.card}
+            style={[styles.card, { backgroundColor: colors.shellSurface }]}
             onPress={(event) => event.stopPropagation()}
           >
-            <Text style={styles.title}>{strings.cards.boardRenameTitle}</Text>
+            <Text style={[styles.title, { color: colors.shellInk }]}>
+              {strings.cards.boardRenameTitle}
+            </Text>
             {adminLabel ? (
-              <Text style={styles.admin}>{adminLabel}</Text>
+              <Text style={[styles.admin, { color: colors.shellInkSoft }]}>
+                {adminLabel}
+              </Text>
             ) : null}
             <TextInput
               value={draft}
               onChangeText={(text) => setDraft(text.slice(0, PLACE_ALIAS_MAX))}
               placeholder={adminLabel || strings.cards.boardRenamePlaceholder}
-              placeholderTextColor={theme.colors.subtle}
+              placeholderTextColor={colors.shellSubtle}
               maxLength={PLACE_ALIAS_MAX}
               autoFocus
               returnKeyType="done"
               onSubmitEditing={() => onSave(isCustom ? trimmed : null)}
-              style={styles.input}
+              style={[
+                styles.input,
+                {
+                  color: colors.shellInk,
+                  borderBottomColor: colors.border,
+                },
+              ]}
             />
             <Button
               title={strings.cards.save}
@@ -85,11 +97,15 @@ export function PlaceAliasModal({
                 accessibilityRole="button"
                 accessibilityLabel={strings.cards.boardRenameReset}
               >
-                <Text style={styles.reset}>{strings.cards.boardRenameReset}</Text>
+                <Text style={[styles.reset, { color: colors.shellInkSoft }]}>
+                  {strings.cards.boardRenameReset}
+                </Text>
               </Pressable>
             ) : null}
             <Pressable onPress={onClose} accessibilityRole="button">
-              <Text style={styles.cancel}>{strings.common.cancel}</Text>
+              <Text style={[styles.cancel, { color: colors.shellSubtle }]}>
+                {strings.common.cancel}
+              </Text>
             </Pressable>
           </Pressable>
         </Pressable>
@@ -101,7 +117,6 @@ export function PlaceAliasModal({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: theme.colors.overlayDark,
     justifyContent: 'center',
   },
   flex: {
