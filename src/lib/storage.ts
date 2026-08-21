@@ -332,3 +332,52 @@ export function setDarkModeEnabled(enabled: boolean): void {
     storage.set(DARK_MODE_KEY, '0');
   }
 }
+
+/**
+ * Month-end recap local reminder. Absent = on (after OS permission).
+ * Explicit "0" cancels the scheduled notification.
+ */
+const MONTH_END_REMINDER_KEY = 'monthEndReminder';
+
+export function getMonthEndReminderEnabled(): boolean {
+  return storage.getString(MONTH_END_REMINDER_KEY) !== '0';
+}
+
+export function setMonthEndReminderEnabled(enabled: boolean): void {
+  storage.set(MONTH_END_REMINDER_KEY, enabled ? '1' : '0');
+}
+
+/** Local calendar day `YYYY-MM-DD` when this build first launched. */
+const PHOTO_STREAK_EPOCH_KEY = 'photoStreakEpoch';
+
+export function getPhotoStreakEpoch(): string | null {
+  return storage.getString(PHOTO_STREAK_EPOCH_KEY) ?? null;
+}
+
+export function setPhotoStreakEpoch(day: string): void {
+  storage.set(PHOTO_STREAK_EPOCH_KEY, day);
+}
+
+/** JSON `{ "YYYY-MM": ["YYYY-MM-DD", ...] }` — GPS recap days per month. */
+const PHOTO_STREAK_DAYS_KEY = 'photoStreakDays';
+
+export function getPhotoStreakDaysRaw(): string | null {
+  return storage.getString(PHOTO_STREAK_DAYS_KEY) ?? null;
+}
+
+export function setPhotoStreakDaysRaw(json: string): void {
+  storage.set(PHOTO_STREAK_DAYS_KEY, json);
+}
+
+/** Highest 10-day streak milestone already shown in-app (0 = none). */
+const PHOTO_STREAK_MILESTONE_SENT_KEY = 'photoStreakMilestoneSent';
+
+export function getPhotoStreakMilestoneSent(): number {
+  const raw = storage.getString(PHOTO_STREAK_MILESTONE_SENT_KEY);
+  const n = raw == null ? 0 : Number(raw);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+}
+
+export function setPhotoStreakMilestoneSent(days: number): void {
+  storage.set(PHOTO_STREAK_MILESTONE_SENT_KEY, String(Math.max(0, days)));
+}

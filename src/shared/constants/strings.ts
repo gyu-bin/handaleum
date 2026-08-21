@@ -36,6 +36,17 @@ function countWord(n: number): string {
  */
 export const strings = {
   brand: '한달음',
+  monthEndReminder: {
+    title: (monthNumber: number) => {
+      const name = MONTH_NAMES[monthNumber - 1];
+      return name ? `${name}의 마지막 저녁` : '한달음';
+    },
+    body: '이번 달이 끝납니다. 사진을 펼쳐 보세요.',
+  },
+  streakMilestone: {
+    title: (days: number) => `${days}일 연속 촬영`,
+    body: '하루도 빠지지 않았습니다.',
+  },
   /** Splash editorial line under the wordmark (sample D). */
   splashTagline: '한 달의 사진',
   /** Home hero line under the wordmark. */
@@ -154,6 +165,9 @@ export const strings = {
     albumSection: '앨범',
     displaySection: '화면',
     darkMode: '다크모드',
+    monthEndReminder: '월말 알림',
+    monthEndReminderHint: '그달 마지막 날 저녁 9시',
+    monthEndReminderTest: '지금 보내 보기',
     homeSection: '집',
     albumSync: '사진 다시 담기',
     albumSyncing: '불러오는 중…',
@@ -323,6 +337,10 @@ export const strings = {
     boardRenamePlaceholder: '예: 한옥마을',
     boardRenameHint: '탭하면 사진. 길게 누르면 이름 수정.',
     boardDayHint: '날짜를 누르면 그날 사진을 봅니다.',
+    streakLive: (n: number) => `${n}일 연속 촬영!`,
+    streakLiveBest: (n: number, best: number) =>
+      `${n}일 연속 · 최고 ${best}일`,
+    streakBest: (n: number) => `최고 ${n}일`,
     boardPhotosClose: '닫기',
     boardSetCover: '대표로 쓰기',
     boardCoverOn: '대표 사진',

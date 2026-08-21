@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/shared/components/Button';
@@ -35,6 +35,8 @@ import { useMonthlyPhotos } from '../../photos/hooks/useMonthlyPhotos';
 
 export function CardListScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ mode?: string | string[] }>();
+  const modeParam = Array.isArray(params.mode) ? params.mode[0] : params.mode;
   const insets = useSafeAreaInsets();
   const shellBg = useShellBackground();
   const shell = useShellInk();
@@ -332,6 +334,7 @@ export function CardListScreen() {
               month={month}
               photos={monthPhotos}
               visitPlaces={visitPlaces}
+              initialMode={modeParam === 'day' ? 'day' : 'place'}
             />
           )}
         </ScrollView>

@@ -1,5 +1,6 @@
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -13,32 +14,40 @@ import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 import { useTheme } from '@/shared/theme/ThemeProvider';
 
+import { AssetThumbImage } from '../../photos/components/AssetThumbImage';
 import { useHiddenPhotos } from '../../photos/hooks/useHiddenPhotos';
 import { usePinCovers } from '../../photos/hooks/usePinCovers';
 import { placeBucketKey } from '../../photos/services/placeCache';
-import { AssetThumbImage } from '../../photos/components/AssetThumbImage';
 import type { MonthKey, PhotoRef, VisitPlace } from '../../photos/types';
+import {
+  streakFlamePx,
+  type PhotoStreak,
+} from '../../photos/utils/photoStreak';
+import { usePhotoStreak } from '../hooks/usePhotoStreak';
 import { usePlaceAliases } from '../hooks/usePlaceAliases';
 import { useRecapCovers } from '../hooks/useRecapCovers';
 import { formatMonthDot } from '../utils/cardMeta';
 import {
   applyPlaceAliases,
-  recapDayCalendarNodes,
-  resolveRecapCoverAssetId,
   chunkRows,
   placeIdentityFromVisitNodeId,
+  recapDayCalendarNodes,
+  resolveRecapCoverAssetId,
   snakeRailPath,
   snakeRows,
   type RecapBoardMode,
   type RecapBoardNode,
 } from '../utils/recapBoard';
 import {
-  recapPlaceNodes,
-  recapNodePhotos,
   pinCoverAmongPhotos,
+  recapNodePhotos,
+  recapPlaceNodes,
 } from '../utils/recapPlaceNodes';
 import { PlaceAliasModal } from './PlaceAliasModal';
 import { RecapPhotosModal } from './RecapPhotosModal';
+
+/** Fluent Emoji Fire 3D (MIT, Microsoft). */
+const STREAK_FLAME = require('../../../../assets/icons/streak-flame.png');
 
 const PLACE_COLS = 4;
 const DAY_COLS = 7;
@@ -54,10 +63,102 @@ function canRenamePlace(id: string): boolean {
   return id.length > 0 && !id.startsWith('pending:');
 }
 
+function PhotoStreakLine({
+  streak,
+  ink,
+  inkSoft,
+}: {
+  streak: PhotoStreak;
+  ink: string;
+  inkSoft: string;
+}) {
+  const flamePx = streak.kind === 'best' ? 0 : streakFlamePx(streak.current);
+  const numberStyle = [styles.streakNumber, { color: ink }];
+  const phraseStyle = [styles.streakPhrase, { color: inkSoft }];
+  const label =
+    streak.kind === 'live'
+      ? strings.cards.streakLive(streak.current)
+      : streak.kind === 'liveBest'
+        ? strings.cards.streakLiveBest(streak.current, streak.best)
+        : strings.cards.streakBest(streak.best);
+
+  return (
+    <View
+      style={styles.streakRow}
+      accessibilityRole="text"
+      accessibilityLabel={label}
+    >
+      {flamePx > 0 ? (
+        <View style={[styles.streakFlame, { width: flamePx, height: flamePx }]}>
+          <Image
+            source={STREAK_FLAME}
+            style={{
+              width: flamePx * 1.28,
+              height: flamePx * 1.28,
+              marginLeft: flamePx * -0.14,
+              marginTop: flamePx * -0.14,
+            }}
+            resizeMode="contain"
+            accessibilityElementsHidden
+          />
+          <Text
+            style={[
+              styles.streakFlameCount,
+              {
+                top: flamePx * 0.3,
+                fontSize: Math.max(11, flamePx * 0.36),
+                color: theme.colors.surface,
+                textShadowColor: theme.colors.ink,
+              },
+            ]}
+            allowFontScaling={false}
+          >
+            {streak.current}
+          </Text>
+        </View>
+      ) : null}
+      <Text style={styles.streakLine} numberOfLines={1}>
+        {streak.kind === 'live' ? (
+          flamePx > 0 ? (
+            <Text style={phraseStyle}>일 연속 촬영!</Text>
+          ) : (
+            <>
+              <Text style={numberStyle}>{streak.current}</Text>
+              <Text style={phraseStyle}>일 연속 촬영!</Text>
+            </>
+          )
+        ) : streak.kind === 'liveBest' ? (
+          flamePx > 0 ? (
+            <>
+              <Text style={phraseStyle}>일 연속 · 최고 </Text>
+              <Text style={numberStyle}>{streak.best}</Text>
+              <Text style={phraseStyle}>일</Text>
+            </>
+          ) : (
+            <>
+              <Text style={numberStyle}>{streak.current}</Text>
+              <Text style={phraseStyle}>일 연속 · 최고 </Text>
+              <Text style={numberStyle}>{streak.best}</Text>
+              <Text style={phraseStyle}>일</Text>
+            </>
+          )
+        ) : (
+          <>
+            <Text style={phraseStyle}>최고 </Text>
+            <Text style={numberStyle}>{streak.best}</Text>
+            <Text style={phraseStyle}>일</Text>
+          </>
+        )}
+      </Text>
+    </View>
+  );
+}
+
 export interface RecapBoardProps {
   month: MonthKey;
   photos: PhotoRef[];
   visitPlaces: VisitPlace[];
+  initialMode?: RecapBoardMode;
 }
 
 const NodeCell = memo(function NodeCell({
@@ -232,6 +333,7 @@ export function RecapBoard({
   month,
   photos,
   visitPlaces,
+  initialMode = 'place',
 }: RecapBoardProps) {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
@@ -239,9 +341,16 @@ export function RecapBoard({
   const { covers: recapCovers, setCover: setRecapCover } = useRecapCovers(month);
   const { covers: pinCovers, setCover: setPinCover } = usePinCovers(month);
   const { hide: hidePhoto } = useHiddenPhotos(month);
-  const [mode, setMode] = useState<RecapBoardMode>('place');
+  const streak = usePhotoStreak(month, photos);
+  const [mode, setMode] = useState<RecapBoardMode>(initialMode);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [viewerNodeId, setViewerNodeId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialMode === 'day') {
+      setMode('day');
+    }
+  }, [initialMode]);
 
   const swipeMode = useMemo(
     () =>
@@ -340,19 +449,10 @@ export function RecapBoard({
 
   const editingAdmin = placeBase.find((node) => node.id === editingId);
   const editingShown = placeNodes.find((node) => node.id === editingId);
+  const showStreak = mode === 'day' && streak != null;
 
-  if (photos.length === 0) {
-    return (
-      <View style={styles.empty}>
-        <Text style={[styles.emptyText, { color: colors.shellInkSoft }]}>
-          {strings.cards.boardEmpty}
-        </Text>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.wrap}>
+  const toolbar = (
+    <>
       <View style={styles.toolbar}>
         <View style={styles.monthSlot}>
           <Text style={[styles.month, { color: colors.shellInk }]}>
@@ -392,13 +492,42 @@ export function RecapBoard({
             );
           })}
         </View>
-        <View style={styles.monthSlot} />
+        <View style={styles.monthSlotEnd}>
+          {showStreak && streak ? (
+            <PhotoStreakLine
+              streak={streak}
+              ink={colors.shellInk}
+              inkSoft={colors.shellInkSoft}
+            />
+          ) : null}
+        </View>
       </View>
-      <Text style={[styles.hint, { color: colors.shellSubtle }]}>
-        {mode === 'place'
-          ? strings.cards.boardRenameHint
-          : strings.cards.boardDayHint}
-      </Text>
+      {mode === 'place' || !showStreak ? (
+        <Text style={[styles.hint, { color: colors.shellSubtle }]}>
+          {mode === 'place'
+            ? strings.cards.boardRenameHint
+            : strings.cards.boardDayHint}
+        </Text>
+      ) : null}
+    </>
+  );
+
+  if (photos.length === 0) {
+    return (
+      <View style={styles.wrap}>
+        {toolbar}
+        <View style={styles.empty}>
+          <Text style={[styles.emptyText, { color: colors.shellInkSoft }]}>
+            {strings.cards.boardEmpty}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.wrap}>
+      {toolbar}
 
       <GestureDetector gesture={swipeMode}>
         <View style={styles.board}>
@@ -453,6 +582,12 @@ const styles = StyleSheet.create({
   },
   monthSlot: {
     flex: 1,
+    justifyContent: 'center',
+  },
+  monthSlotEnd: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
   },
   month: {
     ...theme.type.label,
@@ -486,6 +621,44 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: theme.spacing.xs,
     textAlign: 'center',
+  },
+  streakRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    maxWidth: '100%',
+  },
+  streakFlame: {
+    overflow: 'hidden',
+  },
+  streakLine: {
+    fontFamily: theme.fonts.sans,
+    textAlign: 'right',
+  },
+  streakNumber: {
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.2,
+  },
+  streakFlameCount: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    fontFamily: theme.fonts.sans,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.4,
+    textShadowOffset: { width: 0, height: 0.5 },
+    textShadowRadius: 2,
+  },
+  streakPhrase: {
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
+    fontWeight: '500',
+    letterSpacing: 0.35,
   },
   board: {
     paddingHorizontal: theme.spacing.lg,

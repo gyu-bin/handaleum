@@ -84,6 +84,8 @@ function iosAddr(
  * Nationwide demo hubs — map pins, journey chips, 발도장, card “위치별”.
  * Coordinates stay inside the named leaf so jitter still resolves via
  * offline PIP / canned geocode (see dummyHubs.pip.check.ts).
+ * One photo per hub on consecutive local days ending today (this month)
+ * so recap day cells stay sparse but the streak line can show.
  *
  * Stress: `DUMMY_STRESS_MULT` multiplies per-hub counts.
  * Image URIs reuse a small pool so picsum/network doesn't mask JS jank.
@@ -95,14 +97,14 @@ export const DUMMY_STRESS_MULT = 1;
  * Bump when HUBS lat/lng set changes so 발도장 drops the stale GPS snapshot
  * and rebuilds 모은 동네 from the new sample album.
  */
-export const DUMMY_HUBS_REV = 1;
+export const DUMMY_HUBS_REV = 2;
 
 /** One hub per major region — enough for glance-dot coverage. */
 const HUBS: DummyHub[] = [
   {
     lat: 37.5345,
     lng: 126.9946,
-    count: 30,
+    count: 1,
     label: '이태원',
     address: iosAddr({
       region: '서울특별시',
@@ -117,7 +119,7 @@ const HUBS: DummyHub[] = [
   {
     lat: 37.2636,
     lng: 127.0286,
-    count: 22,
+    count: 1,
     label: '수원',
     address: iosAddr({
       region: '경기도',
@@ -132,7 +134,7 @@ const HUBS: DummyHub[] = [
   {
     lat: 37.3825,
     lng: 126.6564,
-    count: 22,
+    count: 1,
     label: '송도',
     address: iosAddr({
       region: '인천광역시',
@@ -147,7 +149,7 @@ const HUBS: DummyHub[] = [
   {
     lat: 37.765,
     lng: 128.897,
-    count: 22,
+    count: 1,
     label: '강릉',
     address: iosAddr({
       region: '강원특별자치도',
@@ -161,7 +163,7 @@ const HUBS: DummyHub[] = [
   {
     lat: 36.815,
     lng: 127.113,
-    count: 18,
+    count: 1,
     label: '천안',
     address: iosAddr({
       region: '충청남도',
@@ -176,7 +178,7 @@ const HUBS: DummyHub[] = [
   {
     lat: 36.635,
     lng: 127.491,
-    count: 18,
+    count: 1,
     label: '청주',
     address: iosAddr({
       region: '충청북도',
@@ -191,7 +193,7 @@ const HUBS: DummyHub[] = [
   {
     lat: 36.328,
     lng: 127.427,
-    count: 22,
+    count: 1,
     label: '대전',
     address: iosAddr({
       region: '대전광역시',
@@ -206,7 +208,7 @@ const HUBS: DummyHub[] = [
   {
     lat: 35.815,
     lng: 127.153,
-    count: 22,
+    count: 1,
     label: '전주',
     address: iosAddr({
       region: '전북특별자치도',
@@ -221,7 +223,7 @@ const HUBS: DummyHub[] = [
   {
     lat: 35.1498,
     lng: 126.9195,
-    count: 22,
+    count: 1,
     label: '광주',
     address: iosAddr({
       region: '광주광역시',
@@ -236,7 +238,7 @@ const HUBS: DummyHub[] = [
   {
     lat: 34.7395,
     lng: 127.736,
-    count: 18,
+    count: 1,
     label: '여수',
     address: iosAddr({
       region: '전라남도',
@@ -250,7 +252,7 @@ const HUBS: DummyHub[] = [
   {
     lat: 35.8667,
     lng: 128.597,
-    count: 22,
+    count: 1,
     label: '대구',
     address: iosAddr({
       region: '대구광역시',
@@ -265,7 +267,7 @@ const HUBS: DummyHub[] = [
   {
     lat: 35.8372,
     lng: 129.211,
-    count: 18,
+    count: 1,
     label: '경주',
     address: iosAddr({
       region: '경상북도',
@@ -279,7 +281,7 @@ const HUBS: DummyHub[] = [
   {
     lat: 35.1587,
     lng: 129.1604,
-    count: 30,
+    count: 1,
     label: '해운대',
     address: iosAddr({
       region: '부산광역시',
@@ -294,7 +296,7 @@ const HUBS: DummyHub[] = [
   {
     lat: 35.538,
     lng: 129.338,
-    count: 18,
+    count: 1,
     label: '울산',
     address: iosAddr({
       region: '울산광역시',
@@ -309,7 +311,7 @@ const HUBS: DummyHub[] = [
   {
     lat: 35.221,
     lng: 128.685,
-    count: 18,
+    count: 1,
     label: '창원',
     address: iosAddr({
       region: '경상남도',
@@ -324,7 +326,7 @@ const HUBS: DummyHub[] = [
   {
     lat: 33.4996,
     lng: 126.5312,
-    count: 26,
+    count: 1,
     label: '제주',
     address: iosAddr({
       region: '제주특별자치도',
@@ -372,20 +374,29 @@ function hubCount(hub: DummyHub): number {
 }
 
 export function buildDummyMonthlyPhotos(month: MonthKey): MonthlyPhotos {
-  const { startMs, endMs } = monthBounds(month);
-  const span = Math.max(1, endMs - startMs - 1);
+  const { startMs } = monthBounds(month);
+  const origin = new Date(startMs);
+  const year = origin.getFullYear();
+  const monthIndex = origin.getMonth();
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const now = new Date();
+  const lastDay =
+    now.getFullYear() === year && now.getMonth() === monthIndex
+      ? Math.min(now.getDate(), daysInMonth)
+      : daysInMonth;
   const photos: PhotoRef[] = [];
   const total = dummyPhotoCount();
+  const firstDay = Math.max(1, lastDay - total + 1);
   let i = 0;
 
   for (const hub of HUBS) {
     const n = hubCount(hub);
     const tight = n >= 50;
     for (let k = 0; k < n; k += 1) {
-      const t = startMs + Math.floor(((i + 1) / (total + 1)) * span);
+      const day = Math.min(lastDay, firstDay + i);
       photos.push({
         assetId: `${DUMMY_ASSET_PREFIX}${month}:${i}`,
-        takenAt: new Date(t).toISOString(),
+        takenAt: new Date(year, monthIndex, day, 12, i % 12, 0).toISOString(),
         lat: hub.lat + jitter(i, 0, tight),
         lng: hub.lng + jitter(i, 1, tight),
       });

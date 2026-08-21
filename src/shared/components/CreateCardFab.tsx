@@ -4,7 +4,7 @@ import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
 /**
- * Journal create control — paper chip + ink tick, not a Material FAB.
+ * Journal create control — paper chip + ink plus, not a Material FAB.
  * Same mark on the home map and 내 회고.
  */
 export function CreateCardFab({ onPress }: { onPress: () => void }) {
@@ -15,7 +15,10 @@ export function CreateCardFab({ onPress }: { onPress: () => void }) {
       accessibilityLabel={strings.cards.createTitle}
       style={({ pressed }) => [styles.fab, pressed && styles.pressed]}
     >
-      <View style={styles.tick} />
+      <View style={styles.plus} accessibilityElementsHidden>
+        <View style={styles.plusBarH} />
+        <View style={styles.plusBarV} />
+      </View>
       <Text style={styles.label}>{strings.cards.createTitle}</Text>
     </Pressable>
   );
@@ -35,9 +38,22 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.panelBorder,
     ...theme.shadows.raised,
   },
-  tick: {
+  plus: {
+    width: 14,
+    height: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  plusBarH: {
+    position: 'absolute',
+    width: 14,
+    height: 2,
+    backgroundColor: theme.colors.ink,
+  },
+  plusBarV: {
+    position: 'absolute',
     width: 2,
-    height: 16,
+    height: 14,
     backgroundColor: theme.colors.ink,
   },
   label: {

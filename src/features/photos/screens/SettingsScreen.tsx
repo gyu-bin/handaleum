@@ -34,6 +34,7 @@ import { ProPaywallModal } from '@/features/insights/components/ProPaywallModal'
 import { useIsPro } from '@/features/insights/hooks/useIsPro';
 
 import { useCurrentMonth } from '../hooks/useCurrentMonth';
+import { useMonthEndReminder } from '../hooks/useMonthEndReminder';
 import { useMonthlyPhotos } from '../hooks/useMonthlyPhotos';
 import { useDevDummyPhotos } from '../hooks/useDevDummyPhotos';
 import { useHiddenPhotos } from '../hooks/useHiddenPhotos';
@@ -41,6 +42,7 @@ import { useHomeLocation } from '../hooks/useHomeLocation';
 import { photosQueryKeys } from '../hooks/photosQueryKeys';
 import { geocodeQueueDebug } from '../services/geocodeQueue';
 import { getVisitResolveDebug } from '../services/placeResolve';
+import { presentMonthEndReminderNow } from '../services/monthEndReminder';
 import { DEFAULT_HOME_RADIUS_M } from '../services/homeLocationStorage';
 
 const RADIUS_CHOICES = [100, 300, 500, 1000] as const;
@@ -138,6 +140,8 @@ export function SettingsScreen() {
   const shell = useShellInk();
   const { colors } = useTheme();
   const { enabled: darkMode, setEnabled: setDarkMode } = useDarkMode();
+  const { enabled: monthEndReminder, setEnabled: setMonthEndReminder } =
+    useMonthEndReminder();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { home, setHome, clearHome } = useHomeLocation();
@@ -241,6 +245,44 @@ export function SettingsScreen() {
               accessibilityLabel={strings.settings.darkMode}
             />
           </View>
+          <View style={[styles.row, styles.followRow]}>
+            <View style={styles.rowCopy}>
+              <Text style={[styles.rowTitle, shell.ink]}>
+                {strings.settings.monthEndReminder}
+              </Text>
+              <Text style={[styles.noticeExplain, shell.subtle]}>
+                {strings.settings.monthEndReminderHint}
+              </Text>
+            </View>
+            <Switch
+              value={monthEndReminder}
+              onValueChange={setMonthEndReminder}
+              trackColor={{
+                false: colors.line,
+                true: colors.shellInk,
+              }}
+              thumbColor={theme.colors.surface}
+              accessibilityLabel={strings.settings.monthEndReminder}
+            />
+          </View>
+          {__DEV__ ? (
+            <Pressable
+              onPress={() => {
+                void presentMonthEndReminderNow();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={strings.settings.monthEndReminderTest}
+              style={({ pressed }) => [
+                styles.row,
+                styles.followRow,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={[styles.rowMuted, shell.subtle]}>
+                {strings.settings.monthEndReminderTest}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
 
         <View style={styles.group}>
@@ -565,6 +607,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: theme.spacing.md,
+  },
+  rowCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  followRow: {
+    paddingTop: theme.spacing.md,
   },
   rowDisabled: {
     opacity: 0.45,

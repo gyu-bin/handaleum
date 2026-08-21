@@ -11,6 +11,10 @@ import {
   startOtaAutoApply,
 } from '@/lib/applyOtaUpdate';
 import { configurePurchases } from '@/lib/purchases';
+import { configureMonthEndReminder } from '@/features/photos/services/monthEndReminder';
+import { useOpenHomeOnMonthEndReminder } from '@/features/photos/hooks/useMonthEndReminder';
+import { useStreakMilestonePopup } from '@/features/photos/hooks/useStreakMilestonePopup';
+import { StreakMilestoneOverlay } from '@/features/photos/components/StreakMilestoneOverlay';
 import { consumeOtaJustApplied } from '@/lib/otaUpdateFlag';
 import { queryClient } from '@/lib/queryClient';
 import { ErrorBoundary } from '@/shared/components/ErrorBoundary';
@@ -19,6 +23,7 @@ import { strings } from '@/shared/constants/strings';
 import { ThemeProvider, useDarkMode, useTheme } from '@/shared/theme/ThemeProvider';
 
 configurePurchases();
+configureMonthEndReminder();
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -34,13 +39,22 @@ function hidesOtaToast(pathname: string): boolean {
 
 function AppNavigation() {
   const { colors } = useTheme();
+  const pathname = usePathname();
+  useOpenHomeOnMonthEndReminder();
+  const { days: streakDays, dismiss: dismissStreak } = useStreakMilestonePopup();
+  const quiet = hidesOtaToast(pathname);
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        contentStyle: { backgroundColor: colors.background },
-      }}
-    />
+    <>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: colors.background },
+        }}
+      />
+      {!quiet && streakDays >= 10 ? (
+        <StreakMilestoneOverlay days={streakDays} onDone={dismissStreak} />
+      ) : null}
+    </>
   );
 }
 

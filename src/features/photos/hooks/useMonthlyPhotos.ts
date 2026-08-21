@@ -21,6 +21,19 @@ import type { MonthKey, MonthlyPhotos, PhotoRef } from '../types';
 import { withoutHiddenPhotos } from '../utils/withoutHiddenPhotos';
 import { excludeHomePhotos } from '../utils/homeFilter';
 import { isKoreaLatLng } from '../utils/koreaBounds';
+import { isDummyAssetId } from '../services/dummyPhotos';
+import {
+  ensurePhotoStreakEpoch,
+  offerStreakMilestonePopup,
+  readPhotoStreakDays,
+  recordPhotoStreakMonth,
+} from '../services/photoStreakStore';
+import {
+  collectStreakDays,
+  computePhotoStreak,
+  dayKeyFromDate,
+  dayKeysFromPhotos,
+} from '../utils/photoStreak';
 import { useHiddenPhotos } from './useHiddenPhotos';
 import { useHomeLocation } from './useHomeLocation';
 import { photosQueryKeys } from './photosQueryKeys';
@@ -125,6 +138,26 @@ export function useMonthlyPhotos(month: MonthKey, options?: { enabled?: boolean 
         query.data.noLocationPhotos?.length ?? query.data.noLocationCount ?? 0,
     };
   }, [hidden, query.data, home]);
+
+  useEffect(() => {
+    if (!data || query.isPlaceholderData) {
+      return;
+    }
+    recordPhotoStreakMonth(month, data.photos);
+    if (data.photos.some((photo) => isDummyAssetId(photo.assetId))) {
+      return;
+    }
+    const today = dayKeyFromDate(new Date());
+    const liveDays = dayKeysFromPhotos(data.photos);
+    const days = collectStreakDays(
+      readPhotoStreakDays(),
+      month,
+      liveDays,
+      ensurePhotoStreakEpoch(),
+      today,
+    );
+    offerStreakMilestonePopup(computePhotoStreak(days, today).current);
+  }, [data, month, query.isPlaceholderData]);
 
   return {
     ...query,
