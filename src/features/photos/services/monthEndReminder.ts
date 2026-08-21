@@ -116,40 +116,6 @@ export async function syncMonthEndReminder(now = new Date()): Promise<void> {
   }
 }
 
-/** Immediate local banner with the same copy as the scheduled month-end. */
-export async function presentMonthEndReminderNow(
-  now = new Date(),
-): Promise<boolean> {
-  try {
-    const permission = await getMonthEndReminderPermission();
-    if (permission !== 'granted') {
-      const ok = await requestMonthEndReminderPermission();
-      if (!ok) {
-        return false;
-      }
-    }
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
-        name: strings.settings.monthEndReminder,
-        importance: Notifications.AndroidImportance.DEFAULT,
-      });
-    }
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: strings.monthEndReminder.title(now.getMonth() + 1),
-        body: strings.monthEndReminder.body,
-        sound: true,
-        data: { kind: MONTH_END_REMINDER_KIND },
-      },
-      trigger: null,
-    });
-    return true;
-  } catch (error) {
-    console.error('presentMonthEndReminderNow failed', error);
-    return false;
-  }
-}
-
 export async function requestMonthEndReminderPermission(): Promise<boolean> {
   try {
     const existing = await Notifications.getPermissionsAsync();

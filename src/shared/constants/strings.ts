@@ -167,7 +167,6 @@ export const strings = {
     darkMode: '다크모드',
     monthEndReminder: '월말 알림',
     monthEndReminderHint: '그달 마지막 날 저녁 9시',
-    monthEndReminderTest: '지금 보내 보기',
     homeSection: '집',
     albumSync: '사진 다시 담기',
     albumSyncing: '불러오는 중…',

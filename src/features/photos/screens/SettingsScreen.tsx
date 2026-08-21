@@ -42,7 +42,6 @@ import { useHomeLocation } from '../hooks/useHomeLocation';
 import { photosQueryKeys } from '../hooks/photosQueryKeys';
 import { geocodeQueueDebug } from '../services/geocodeQueue';
 import { getVisitResolveDebug } from '../services/placeResolve';
-import { presentMonthEndReminderNow } from '../services/monthEndReminder';
 import { DEFAULT_HOME_RADIUS_M } from '../services/homeLocationStorage';
 
 const RADIUS_CHOICES = [100, 300, 500, 1000] as const;
@@ -265,24 +264,6 @@ export function SettingsScreen() {
               accessibilityLabel={strings.settings.monthEndReminder}
             />
           </View>
-          {__DEV__ ? (
-            <Pressable
-              onPress={() => {
-                void presentMonthEndReminderNow();
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={strings.settings.monthEndReminderTest}
-              style={({ pressed }) => [
-                styles.row,
-                styles.followRow,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text style={[styles.rowMuted, shell.subtle]}>
-                {strings.settings.monthEndReminderTest}
-              </Text>
-            </Pressable>
-          ) : null}
         </View>
 
         <View style={styles.group}>
