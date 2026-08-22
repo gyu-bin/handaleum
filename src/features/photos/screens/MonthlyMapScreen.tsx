@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Redirect, useRouter, type Href } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Path } from 'react-native-svg';
 
 import { LoadingView } from '@/shared/components/LoadingView';
 import { CreateCardFab } from '@/shared/components/CreateCardFab';
@@ -22,7 +23,7 @@ import { clusterSeedId } from '../components/MapClusterMarker';
 import { HomeNavBar } from '../components/HomeNavBar';
 import { PhotoPreviewSheet } from '../components/PhotoPreviewSheet';
 import { getSharedMonth, useCurrentMonth } from '../hooks/useCurrentMonth';
-import { useJourneyPathOrder } from '../hooks/useJourneyPathOrder';
+import { useMonthEndReminder } from '../hooks/useMonthEndReminder';
 import { useMonthlyPhotos } from '../hooks/useMonthlyPhotos';
 import { usePhotoPermission } from '../hooks/usePhotoPermission';
 import { usePinCovers } from '../hooks/usePinCovers';
@@ -48,6 +49,21 @@ function formatMonthLabel(month: MonthKey): string {
   return `${year}. ${mon}`;
 }
 
+function SettingsGear({ color }: { color: string }) {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24">
+      <Path
+        fill={color}
+        fillRule="evenodd"
+        stroke={color}
+        strokeWidth={0.45}
+        strokeLinejoin="round"
+        d="M9.82 5.09 L10.23 2.46 L13.77 2.46 L14.18 5.09 L15.35 5.57 L17.49 4.01 L19.99 6.51 L18.43 8.65 L18.91 9.82 L21.54 10.23 L21.54 13.77 L18.91 14.18 L18.43 15.35 L19.99 17.49 L17.49 19.99 L15.35 18.43 L14.18 18.91 L13.77 21.54 L10.23 21.54 L9.82 18.91 L8.65 18.43 L6.51 19.99 L4.01 17.49 L5.57 15.35 L5.09 14.18 L2.46 13.77 L2.46 10.23 L5.09 9.82 L5.57 8.65 L4.01 6.51 L6.51 4.01 L8.65 5.57 Z M15.3 12 A3.3 3.3 0 1 1 8.7 12 A3.3 3.3 0 1 1 15.3 12 Z"
+      />
+    </Svg>
+  );
+}
+
 /** Stable dock items — stamp badge is owned by HomeNavBar. */
 const MAP_NAV_ITEMS = [
   { href: '/months' as const, label: strings.months.title, icon: 'calendar' as const },
@@ -68,12 +84,12 @@ export function MonthlyMapScreen() {
   // Pull chrome closer to the status bar — full inset leaves too much empty top.
   const headerPadTop = Math.max(0, insets.top - 10);
   const { seen: onboardingSeen } = useOnboarding();
+  useMonthEndReminder({ promptIfUndetermined: onboardingSeen });
   const { status, isReady } = usePhotoPermission();
   const hasLibraryAccess = status === 'granted' || status === 'limited';
   const hasAccess = hasLibraryAccess || isDevDummyPhotosEnabled();
   const { month, setMonth, canOpenMonth } = useCurrentMonth();
   const { covers, setCover } = usePinCovers(month);
-  const { showPathOrder, togglePathOrder } = useJourneyPathOrder();
   const {
     data,
     isPending,
@@ -285,7 +301,7 @@ export function MonthlyMapScreen() {
             <View style={styles.headerActions}>
               <Pressable
                 onPress={() => router.push('/settings')}
-                hitSlop={10}
+                hitSlop={{ top: 8, bottom: 2, left: 8, right: 8 }}
                 accessibilityRole="button"
                 accessibilityLabel={strings.map.settings}
                 style={({ pressed }) => [
@@ -293,9 +309,7 @@ export function MonthlyMapScreen() {
                   pressed && styles.actionBtnPressed,
                 ]}
               >
-                <Text style={[styles.actionLabel, { color: colors.shellInkSoft }]}>
-                  {strings.map.settings}
-                </Text>
+                <SettingsGear color={colors.shellInkSoft} />
               </Pressable>
             </View>
           </View>
@@ -345,7 +359,7 @@ export function MonthlyMapScreen() {
             <Pressable
               onPress={goNextMonth}
               disabled={nextMonth == null}
-              hitSlop={10}
+              hitSlop={{ top: 2, bottom: 10, left: 8, right: 6 }}
               accessibilityRole="button"
               accessibilityLabel={strings.map.monthNext}
               style={({ pressed }) => [
@@ -377,8 +391,6 @@ export function MonthlyMapScreen() {
             onSelectCluster={onSelectCluster}
             selectedClusterId={selectedSeedId}
             pinCovers={covers}
-            showPathOrder={showPathOrder}
-            onTogglePathOrder={togglePathOrder}
           />
           {!isStaleMonth && data && data.photos.length === 0 ? (
             <View style={styles.emptyOverlay} pointerEvents="box-none">
@@ -415,22 +427,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingHorizontal: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
     paddingTop: 0,
     paddingBottom: 2,
-    gap: 0,
+    gap: 6,
   },
   headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 22,
-    paddingHorizontal: theme.spacing.xs,
+    minHeight: 36,
   },
   headerTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: -2,
   },
   monthEdgeBtn: {
     width: 40,
@@ -458,17 +468,13 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   actionBtn: {
-    paddingVertical: 4,
-    paddingHorizontal: 4,
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   actionBtnPressed: {
     opacity: 0.55,
-  },
-  actionLabel: {
-    ...theme.type.micro,
-    fontFamily: theme.fonts.sans,
-    color: theme.colors.inkSoft,
-    fontWeight: '600',
   },
   hero: {
     flex: 1,

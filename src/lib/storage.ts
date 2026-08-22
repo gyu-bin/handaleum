@@ -270,21 +270,6 @@ export function setPlaceResolveRaw(cacheKey: string, json: string): void {
   storage.set(`${PLACE_RESOLVE_PREFIX}${cacheKey}`, json);
 }
 
-/**
- * Home-map journey path order labels (mid-segment numbers). Absent = on.
- */
-const JOURNEY_PATH_ORDER_KEY = 'journeyPathOrderVisible';
-
-export function getJourneyPathOrderVisible(): boolean {
-  const raw = storage.getString(JOURNEY_PATH_ORDER_KEY);
-  // Default on — first install / missing key shows order numbers.
-  return raw !== '0';
-}
-
-export function setJourneyPathOrderVisible(visible: boolean): void {
-  storage.set(JOURNEY_PATH_ORDER_KEY, visible ? '1' : '0');
-}
-
 /** JSON map of recap nodeId → assetId for one month. */
 const RECAP_COVERS_PREFIX = 'recapCovers:';
 

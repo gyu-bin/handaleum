@@ -33,6 +33,7 @@ import {
   LibrarySyncDock,
 } from '../components/LibrarySyncDock';
 import { useCurrentMonth } from '../hooks/useCurrentMonth';
+import { useMonthEndReminder } from '../hooks/useMonthEndReminder';
 import { useMonthlyPhotos } from '../hooks/useMonthlyPhotos';
 import { useDevDummyPhotos } from '../hooks/useDevDummyPhotos';
 import { useHiddenPhotos } from '../hooks/useHiddenPhotos';
@@ -52,6 +53,8 @@ export function SettingsScreen() {
   const shellBg = useShellBackground();
   const { colors } = useTheme();
   const { enabled: darkMode, setEnabled: setDarkMode } = useDarkMode();
+  const { enabled: monthEndReminder, setEnabled: setMonthEndReminder } =
+    useMonthEndReminder();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { home, setHome, clearHome } = useHomeLocation();
@@ -233,6 +236,23 @@ export function SettingsScreen() {
             subtitle={strings.settings.albumSyncExplain}
             disabled={albumSyncing}
             onPress={() => setAlbumSyncOpen(true)}
+          />
+        </SettingsSection>
+
+        <SettingsSection label={strings.settings.notificationSection}>
+          <SettingsRow
+            title={strings.settings.monthEndReminder}
+            subtitle={strings.settings.monthEndReminderHint}
+            trailing={
+              <Switch
+                value={monthEndReminder}
+                onValueChange={setMonthEndReminder}
+                trackColor={switchTrack}
+                thumbColor={theme.colors.surface}
+                ios_backgroundColor={colors.border}
+                accessibilityLabel={strings.settings.monthEndReminder}
+              />
+            }
           />
         </SettingsSection>
 

@@ -2,13 +2,14 @@
   "expo": {
     "name": "한달음",
     "slug": "handaleum",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "handaleum",
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.handaleum.app",
+      "buildNumber": "16",
       "supportsTablet": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -23,6 +24,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
+      "versionCode": 16,
       "permissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
@@ -79,7 +81,15 @@
         }
       ],
       "expo-sqlite",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "color": "#2C3E50",
+          "defaultChannel": "month-end",
+          "enableBackgroundRemoteNotifications": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -140,6 +140,24 @@ export function findL1ForStamp(
   return units.find((u) => u.stampCity === stampCity) ?? null;
 }
 
+export type CityListSort = 'most' | 'least' | 'name';
+
+/** L1 (구·시·군) list order. Ties break 가나다. */
+export function sortCityRows<T extends { label: string; collected: number }>(
+  rows: T[],
+  sort: CityListSort,
+): T[] {
+  return [...rows].sort((a, b) => {
+    if (sort === 'most' && a.collected !== b.collected) {
+      return b.collected - a.collected;
+    }
+    if (sort === 'least' && a.collected !== b.collected) {
+      return a.collected - b.collected;
+    }
+    return a.label.localeCompare(b.label, 'ko');
+  });
+}
+
 /** Whether `leaf` is a known 읍·면 slot under a 군 stampCity. */
 export function isKnownGunLeaf(
   sido: string,

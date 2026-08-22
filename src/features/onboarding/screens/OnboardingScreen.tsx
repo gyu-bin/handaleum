@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { usePhotoPermission } from '@/features/photos/hooks/usePhotoPermission';
+import { requestMonthEndReminderPermission } from '@/features/photos/services/monthEndReminder';
 import { Button } from '@/shared/components/Button';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
@@ -45,6 +46,7 @@ export function OnboardingScreen() {
     markSeen();
     const next = await request();
     const granted = next === 'granted' || next === 'limited';
+    await requestMonthEndReminderPermission();
     router.replace(granted ? '/' : '/permission');
   };
 

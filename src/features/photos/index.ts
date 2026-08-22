@@ -14,7 +14,6 @@ export {
 } from './hooks/useMonthlyPhotos';
 export { useCurrentMonth } from './hooks/useCurrentMonth';
 export { useMapTheme } from './hooks/useMapTheme';
-export { useJourneyPathOrder } from './hooks/useJourneyPathOrder';
 export { usePinCovers } from './hooks/usePinCovers';
 export { usePhotoPermission } from './hooks/usePhotoPermission';
 export { useHomeLocation } from './hooks/useHomeLocation';

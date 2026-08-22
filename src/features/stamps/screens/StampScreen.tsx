@@ -46,6 +46,8 @@ import {
   findL1ForStamp,
   l1UnitsForSido,
   l2LeavesForUnit,
+  sortCityRows,
+  type CityListSort,
   type StampL1Unit,
 } from '../services/stampNavIndex';
 import {
@@ -62,9 +64,16 @@ function tiltForName(name: string): number {
   return h - 8;
 }
 
+const CITY_SORTS: { id: CityListSort; label: string }[] = [
+  { id: 'most', label: strings.stamps.sortMost },
+  { id: 'least', label: strings.stamps.sortLeast },
+  { id: 'name', label: strings.stamps.sortName },
+];
+
 function cityRowsForSido(
   sido: string,
   collected: StampsCollected,
+  sort: CityListSort,
 ): CityRow[] {
   const rows = l1UnitsForSido(sido).map((unit) => {
     const leaves = l2LeavesForUnit(sido, unit);
@@ -80,13 +89,7 @@ function cityRowsForSido(
       total: leaves.length,
     };
   });
-  rows.sort((a, b) => {
-    if ((a.collected > 0) !== (b.collected > 0)) {
-      return a.collected > 0 ? -1 : 1;
-    }
-    return a.label.localeCompare(b.label, 'ko');
-  });
-  return rows;
+  return sortCityRows(rows, sort);
 }
 
 function leafSectionForUnit(
@@ -170,6 +173,7 @@ export function StampScreen() {
   const [showScanIntro, setShowScanIntro] = useState(
     () => !getStampsScanIntroSeen(),
   );
+  const [citySort, setCitySort] = useState<CityListSort>('most');
   const [mapOpen, setMapOpen] = useState(false);
   const [dongPhotos, setDongPhotos] = useState<StampDongPhotosQuery | null>(
     null,
@@ -350,8 +354,8 @@ export function StampScreen() {
   );
 
   const l1Rows = useMemo(
-    () => cityRowsForSido(sido, collected),
-    [collected, sido],
+    () => cityRowsForSido(sido, collected, citySort),
+    [citySort, collected, sido],
   );
   const l1UnitByKey = useMemo(() => {
     const map = new Map<string, StampL1Unit>();
@@ -388,7 +392,7 @@ export function StampScreen() {
     (pageSido: string) => (
       <ScrollView style={styles.pageScroll} nestedScrollEnabled directionalLockEnabled>
         <CityList
-          cities={cityRowsForSido(pageSido, collected)}
+          cities={cityRowsForSido(pageSido, collected, citySort)}
           onSelect={(key) => {
             setSido(pageSido);
             setL1Key(key);
@@ -396,7 +400,7 @@ export function StampScreen() {
         />
       </ScrollView>
     ),
-    [collected],
+    [citySort, collected],
   );
   const renderL1Page = useCallback(
     (row: CityRow) => {
@@ -449,8 +453,8 @@ export function StampScreen() {
   }, [animateIds, collected, selectedL1, sido]);
 
   const pagerTick = useMemo(
-    () => [collected, replayNonce, animateIds] as const,
-    [animateIds, collected, replayNonce],
+    () => [collected, replayNonce, animateIds, citySort] as const,
+    [animateIds, citySort, collected, replayNonce],
   );
   const showBootLoading = useHeldBusy(!isReady, 1500);
 
@@ -523,17 +527,52 @@ export function StampScreen() {
           ) : null}
 
           <View style={styles.progressBlock}>
-            <Text style={[styles.progressLabel, shell.soft]}>
-              {selectedL1
-                ? strings.stamps.cityProgressLabel(selectedL1.label)
-                : strings.stamps.progressLabel(sido)}
-              {selectedL1 && leafSection
-                ? strings.stamps.progress(
-                    leafSection.collected,
-                    leafSection.total,
-                  )
-                : strings.stamps.progress(sidoCollected, sidoTotal)}
-            </Text>
+            <View style={styles.progressRow}>
+              <Text
+                style={[styles.progressLabel, shell.soft]}
+                numberOfLines={1}
+              >
+                {selectedL1
+                  ? strings.stamps.cityProgressLabel(selectedL1.label)
+                  : strings.stamps.progressLabel(sido)}
+                {selectedL1 && leafSection
+                  ? strings.stamps.progress(
+                      leafSection.collected,
+                      leafSection.total,
+                    )
+                  : strings.stamps.progress(sidoCollected, sidoTotal)}
+              </Text>
+              {!l1Key ? (
+                <View style={styles.sortRow}>
+                  {CITY_SORTS.map((opt, i) => (
+                    <View key={opt.id} style={styles.sortItem}>
+                      {i > 0 ? (
+                        <Text style={[styles.sortDot, shell.subtle]}>·</Text>
+                      ) : null}
+                      <Pressable
+                        onPress={() => setCitySort(opt.id)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: citySort === opt.id }}
+                        accessibilityLabel={opt.label}
+                        hitSlop={8}
+                        style={({ pressed }) => pressed && styles.sortPressed}
+                      >
+                        <Text
+                          style={[
+                            styles.sortText,
+                            shell.subtle,
+                            citySort === opt.id && styles.sortTextOn,
+                            citySort === opt.id && shell.ink,
+                          ]}
+                        >
+                          {opt.label}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+            </View>
             <View style={[styles.track, { backgroundColor: shell.line }]}>
               <View
                 style={[
@@ -620,11 +659,42 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.sm,
     gap: 6,
   },
+  progressRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: theme.spacing.sm,
+  },
   progressLabel: {
     ...theme.type.micro,
     fontFamily: theme.fonts.sans,
     color: theme.colors.inkSoft,
     fontWeight: '500',
+    flexShrink: 1,
+  },
+  sortRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    flexShrink: 0,
+  },
+  sortItem: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  sortText: {
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
+    fontWeight: '500',
+  },
+  sortTextOn: {
+    fontWeight: '700',
+  },
+  sortDot: {
+    ...theme.type.micro,
+    marginHorizontal: 5,
+  },
+  sortPressed: {
+    opacity: 0.5,
   },
   track: {
     height: 1,

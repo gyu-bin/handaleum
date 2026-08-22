@@ -111,10 +111,6 @@ export const strings = {
     zoomIn: '확대',
     zoomOut: '축소',
     resetView: '처음으로',
-    /** Toggle mid-segment visit-order numbers on the journey path. */
-    pathOrderToggle: '1·2',
-    pathOrderShow: '여정 선·순서 켜기',
-    pathOrderHide: '여정 선·순서 끄기',
     /** Accessibility label for the "!" button that reveals the map notices. */
     infoToggle: '안내 보기',
     /**
@@ -445,6 +441,9 @@ export const strings = {
     dongPhotosEmpty:
       '이 동네 사진을 아직 찾지 못했어요. 앨범 정리가 끝나면 다시 열어 보세요.',
     dongPhotosClose: '닫기',
+    sortMost: '많은순',
+    sortLeast: '적은순',
+    sortName: '가나다',
     dongPhotosNewest: '최신순',
     dongPhotosOldest: '오래된순',
     dongPhotosOpenPhoto: '사진 크게 보기',

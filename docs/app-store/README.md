@@ -1,9 +1,13 @@
 # App Store — 한달음
 
-## 스크린샷 (6.5" / 1284 × 2778)
+## 스크린샷
 
-**업로드용:** `docs/app-store/screenshots/1284x2778/`  
-(파스텔 배경 + 카피 + 폰 목업 합성본)
+종이(크림) + 잉크 카피 + 폰 목업. 파스텔 템플릿 아님.
+
+| 사이즈 | 경로 | Connect |
+|---|---|---|
+| 6.5" / 1284 × 2778 | `docs/app-store/screenshots/1284x2778/` | iPhone 6.5" |
+| 6.9" / 1320 × 2868 | `docs/app-store/screenshots/1320x2868/` | iPhone 6.9" (16 Pro Max) |
 
 **원본 UI 캡처:** `docs/app-store/screenshots/live/`
 
@@ -12,10 +16,10 @@
 | # | 파일 | 화면 | 카피 |
 |---|---|---|---|
 | 1 | `01-home.png` | 홈 지도 | 한 달의 사진이 지도가 됩니다 |
-| 2 | `02-months.png` | 월 선택 | 지난 달을 다시 꺼내 봐요 |
-| 3 | `03-playback.png` | 몰아보기 | 흩어진 하루를 한곳에 모아요 |
-| 4 | `04-stamps.png` | 발도장 | 동네마다 발도장을 모아요 |
-| 5 | `05-card.png` | 카드 만들기 | 한 달을 카드로 남겨요 |
+| 2 | `02-months.png` | 월 선택 | 지난 달을 다시 펼칩니다 |
+| 3 | `03-playback.png` | 몰아보기 | 흩어진 하루를 한곳에 |
+| 4 | `04-stamps.png` | 발도장 | 동네마다 발도장 |
+| 5 | `05-card.png` | 내 회고 | 한 달을 한눈에 |
 
 ## App Review Notes (영문 — Connect Notes에 붙여넣기)
 
