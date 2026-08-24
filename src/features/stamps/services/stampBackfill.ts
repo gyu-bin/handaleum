@@ -4,6 +4,7 @@ import type { PhotoRef, VisitPlace } from '@/features/photos/types';
 import { currentMonthKey } from '@/features/photos/utils/month';
 import { collectBuckets } from '@/features/photos/utils/visitPlaceBuild';
 import {
+  getStampsGpsScanAt,
   getStampsLibrarySyncAt,
   setStampsCoarseGeocodeAt,
   setStampsGpsScanAt,
@@ -17,6 +18,7 @@ import {
   writeLocatedPhotosSnapshot,
 } from './locatedPhotosSnapshot';
 import { resetStampDongPhotoIndex, prebuildStampDongPhotoIndex } from './stampDongPhotos';
+import { albumDeltaCreatedAfterMs, mergeLocatedPhotos } from './stampSyncResume';
 import {
   countCollected,
   clearAllStamps,
@@ -126,6 +128,8 @@ export type SyncStampsFromLibraryOptions = {
    * or parse-rev redo). Falls back to a silent album walk if missing.
    */
   resumeGeocodeOnly?: boolean;
+  /** Only list assets newer than the last GPS walk; merge into the snapshot. */
+  incremental?: boolean;
 };
 
 /**
@@ -142,6 +146,7 @@ export async function syncStampsFromLibrary(
   const fallbackMonth = currentMonthKey();
   const silent = wasEmpty;
   const resumeGeocodeOnly = options?.resumeGeocodeOnly === true;
+  const incremental = options?.incremental === true;
   /** Sample set is the album in __DEV__ when Settings sample is on. */
   const forceRealLibrary = !isDevDummyPhotosEnabled();
 
@@ -154,6 +159,7 @@ export async function syncStampsFromLibrary(
 
   const startedAt = Date.now();
   let photos: PhotoRef[] = [];
+  let indexPhotos: PhotoRef[] | undefined;
 
   if (resumeGeocodeOnly) {
     const snap = await readLocatedPhotosSnapshot();
@@ -206,6 +212,19 @@ export async function syncStampsFromLibrary(
       true,
     );
 
+    const prev =
+      incremental && forceRealLibrary
+        ? ((await readLocatedPhotosSnapshot()) ?? [])
+        : [];
+    const createdAfter =
+      incremental && forceRealLibrary
+        ? albumDeltaCreatedAfterMs({
+            snapshotCount: prev.length,
+            gpsScanAt: getStampsGpsScanAt(),
+            librarySyncAt: lastSync,
+          })
+        : undefined;
+
     photos = await loadAllLocatedPhotos({
       forceRealLibrary,
       locationBatchSize: LIBRARY_GPS_BATCH,
@@ -216,7 +235,8 @@ export async function syncStampsFromLibrary(
       // GPS: local metadata only (no iCloud download). Weekly pass may re-read
       // previously no-GPS assets if the user later downloaded originals.
       networkLocationFallback: false,
-      recheckCachedNoLocation: deepRecheck,
+      recheckCachedNoLocation: createdAfter != null ? false : deepRecheck,
+      createdAfter,
       onScanProgress: (scan) => {
         setProgress({
           ...progress,
@@ -228,15 +248,23 @@ export async function syncStampsFromLibrary(
       },
     });
 
+    if (createdAfter != null) {
+      const { merged, fresh } = mergeLocatedPhotos(prev, photos);
+      indexPhotos = merged;
+      photos = fresh;
+      await writeLocatedPhotosSnapshot(merged);
+    } else {
+      await writeLocatedPhotosSnapshot(photos);
+    }
+
     setStampsGpsScanAt(Date.now());
-    await writeLocatedPhotosSnapshot(photos);
     resetStampDongPhotoIndex();
 
     console.warn(
       '[stamps] library GPS scan done',
-      photos.length,
+      (indexPhotos ?? photos).length,
       'photos — matching dongs locally',
-      deepRecheck ? '(deep)' : '(incremental)',
+      createdAfter != null ? '(delta)' : deepRecheck ? '(deep)' : '(incremental)',
     );
   }
 
@@ -341,26 +369,26 @@ export async function syncStampsFromLibrary(
   console.warn(
     '[stamps] library sync done',
     'photos=',
-    photos.length,
+    (indexPhotos ?? photos).length,
     'added=',
     totalAdded,
   );
 
   // Popup leaves should not rebuild PIP on first open.
-  await prebuildStampDongPhotoIndex(photos);
+  await prebuildStampDongPhotoIndex(indexPhotos ?? photos);
 
   setProgress(
     {
       ...progress,
       phase: 'done',
-      photoCount: photos.length,
+      photoCount: (indexPhotos ?? photos).length,
       chunkDone: placeTotal,
       chunkTotal: placeTotal,
     },
     true,
   );
 
-  return { added: totalAdded, photoCount: photos.length };
+  return { added: totalAdded, photoCount: (indexPhotos ?? photos).length };
 }
 
 /** Reset banner state after the runner tears down syncing. */

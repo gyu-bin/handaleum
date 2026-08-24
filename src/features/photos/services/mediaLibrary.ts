@@ -435,6 +435,8 @@ export type LoadAllLocatedPhotosOptions = {
    * may fill in after the user downloads the original in Photos).
    */
   recheckCachedNoLocation?: boolean;
+  /** Only list assets with creationTime after this (ms). Omit for full album. */
+  createdAfter?: number;
 };
 
 /**
@@ -585,6 +587,7 @@ export async function loadAllLocatedPhotos(
     retryFailedLocations,
     networkLocationFallback,
     recheckCachedNoLocation,
+    createdAfter,
   } = options ?? {};
   const batchSize =
     locationBatchSize != null && locationBatchSize > 0
@@ -635,6 +638,7 @@ export async function loadAllLocatedPhotos(
     const page = await getAssetsAsync({
       first: LIBRARY_PAGE_SIZE,
       after,
+      ...(createdAfter != null ? { createdAfter } : {}),
       mediaType: MediaType.photo,
       sortBy: [[SortBy.creationTime, false]],
     });

@@ -92,12 +92,14 @@ export function scheduleStampLibrarySyncFromMap(): void {
 }
 
 export type StartStampLibrarySyncOptions = {
-  /** Ignore cooldown (e.g. user explicitly asked to rescan). */
+  /** Ignore cooldown and wipe GPS snapshot (sample hubs / sparse dummy). */
   force?: boolean;
+  /** Ignore cooldown; only walk assets newer than the last GPS scan. */
+  incremental?: boolean;
 };
 
 /**
- * Single-flight full-album stamp sync.
+ * Single-flight stamp sync.
  * GPS → offline dong PIP. Reuses located snapshot when present (Approach A).
  */
 export function startStampLibrarySync(
@@ -111,10 +113,11 @@ export function startStampLibrarySync(
   const dummyHubsStale =
     isDevDummyPhotosEnabled() && getDevDummyHubsRev() < DUMMY_HUBS_REV;
   const userForce = options?.force === true || dummyHubsStale;
+  const userIncremental = options?.incremental === true && !userForce;
   const now = Date.now();
   const librarySyncAt = getStampsLibrarySyncAt();
 
-  if (!userForce && !parseRevStale) {
+  if (!userForce && !userIncremental && !parseRevStale) {
     if (librarySyncAt > 0 && now - librarySyncAt < SYNC_COOLDOWN_MS) {
       // Warm dong popup index without touching MediaLibrary.
       void prebuildStampDongPhotoIndex();
@@ -124,13 +127,15 @@ export function startStampLibrarySync(
 
   const run = (async () => {
     const hasSnap = await hasLocatedPhotosSnapshot();
-    const resumeGeocodeOnly = shouldReuseLocatedSnapshot({
-      force: userForce,
-      hasSnapshot: hasSnap,
-      librarySyncAt,
-      now,
-      deepRecheckMs: STAMP_DEEP_RECHECK_MS,
-    });
+    const resumeGeocodeOnly =
+      !userIncremental &&
+      shouldReuseLocatedSnapshot({
+        force: userForce,
+        hasSnapshot: hasSnap,
+        librarySyncAt,
+        now,
+        deepRecheckMs: STAMP_DEEP_RECHECK_MS,
+      });
 
     syncing = true;
     setFullAlbumScanBusy(true);
@@ -149,7 +154,10 @@ export function startStampLibrarySync(
         setStampsCoarseGeocodeAt(0);
       }
 
-      const result = await syncStampsFromLibrary({ resumeGeocodeOnly });
+      const result = await syncStampsFromLibrary({
+        resumeGeocodeOnly,
+        incremental: userIncremental,
+      });
       setStampsLibrarySyncAt(Date.now());
       if (result.photoCount > 0) {
         setStampsPlaceParseRev(STAMPS_PLACE_PARSE_REV);

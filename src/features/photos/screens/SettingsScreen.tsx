@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import * as Location from 'expo-location';
 import { useRouter, type Href } from 'expo-router';
@@ -40,9 +40,15 @@ import { useHiddenPhotos } from '../hooks/useHiddenPhotos';
 import { useHomeLocation } from '../hooks/useHomeLocation';
 import { photosQueryKeys } from '../hooks/photosQueryKeys';
 import { DEFAULT_HOME_RADIUS_M } from '../services/homeLocationStorage';
+import {
+  getMonthEndReminderPermission,
+  sendTestNotification,
+} from '../services/monthEndReminder';
 import { diagLine } from '../utils/settingsDiagnostics';
 
 const RADIUS_CHOICES = [100, 300, 500, 1000] as const;
+const EASTER_TAPS = 5;
+const EASTER_WINDOW_MS = 2000;
 
 function radiusLabel(radiusM: number): string {
   return radiusM >= 1000 ? `${radiusM / 1000}km` : `${radiusM}m`;
@@ -71,6 +77,10 @@ export function SettingsScreen() {
   const [albumSyncing, setAlbumSyncing] = useState(isStampLibrarySyncing);
   const [devOpen, setDevOpen] = useState(false);
   const [diag, setDiag] = useState(diagLine);
+  const [easterOpen, setEasterOpen] = useState(false);
+  const [easterBusy, setEasterBusy] = useState(false);
+  const [easterError, setEasterError] = useState<string | null>(null);
+  const easterTaps = useRef({ count: 0, firstAt: 0 });
 
   useEffect(() => subscribeStampLibrarySync(setAlbumSyncing), []);
 
@@ -118,8 +128,43 @@ export function SettingsScreen() {
   const confirmAlbumSync = () => {
     setAlbumSyncOpen(false);
     void queryClient.invalidateQueries({ queryKey: photosQueryKeys.all });
-    void startStampLibrarySync({ force: true });
+    void startStampLibrarySync({ incremental: true });
   };
+
+  const onTitlePress = useCallback(() => {
+    const now = performance.now();
+    const prev = easterTaps.current;
+    if (now - prev.firstAt > EASTER_WINDOW_MS) {
+      easterTaps.current = { count: 1, firstAt: now };
+      return;
+    }
+    const count = prev.count + 1;
+    if (count >= EASTER_TAPS) {
+      easterTaps.current = { count: 0, firstAt: 0 };
+      setEasterOpen(true);
+      return;
+    }
+    easterTaps.current = { count, firstAt: prev.firstAt };
+  }, []);
+
+  const sendEasterNotification = useCallback(async () => {
+    setEasterError(null);
+    setEasterBusy(true);
+    try {
+      const ok = await sendTestNotification();
+      if (ok) {
+        return;
+      }
+      const permission = await getMonthEndReminderPermission();
+      setEasterError(
+        permission === 'denied'
+          ? strings.settings.sendTestNotificationDenied
+          : strings.settings.sendTestNotificationFailed,
+      );
+    } finally {
+      setEasterBusy(false);
+    }
+  }, []);
 
   // `shellInk` is near-white in dark mode, which erases the light thumb —
   // the on-state fill needs its own token. See theme.colors.shellSwitchOn.
@@ -127,12 +172,15 @@ export function SettingsScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
-      <ScreenHeader title={strings.settings.title} />
+      <ScreenHeader
+        title={strings.settings.title}
+        onTitlePress={onTitlePress}
+      />
 
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          showProgress && { paddingBottom: 96 + insets.bottom },
+          (showProgress || easterOpen) && { paddingBottom: 96 + insets.bottom },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -347,6 +395,30 @@ export function SettingsScreen() {
 
       <LibrarySyncDock progress={indexing} syncing={albumSyncing} />
 
+      {easterOpen ? (
+        <View
+          style={[
+            styles.easterBar,
+            {
+              backgroundColor: colors.background,
+              borderTopColor: colors.hairline,
+              paddingBottom: Math.max(insets.bottom, theme.spacing.md),
+            },
+          ]}
+        >
+          {easterError ? (
+            <Text style={[styles.easterError, { color: colors.shellInk }]}>
+              {easterError}
+            </Text>
+          ) : null}
+          <Button
+            title={strings.settings.sendTestNotification}
+            loading={easterBusy}
+            onPress={() => void sendEasterNotification()}
+          />
+        </View>
+      ) : null}
+
       <AlbumSyncModal
         visible={albumSyncOpen}
         onCancel={() => setAlbumSyncOpen(false)}
@@ -429,6 +501,17 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   devMono: {
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
+  },
+  easterBar: {
+    zIndex: 2,
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.sm,
+    gap: theme.spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  easterError: {
     ...theme.type.micro,
     fontFamily: theme.fonts.sans,
   },

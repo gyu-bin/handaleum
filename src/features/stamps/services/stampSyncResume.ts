@@ -12,6 +12,46 @@ export const STAMP_GPS_RESUME_MS = 6 * 60 * 60 * 1000;
 export const STAMP_DEEP_RECHECK_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
+ * MediaLibrary `createdAfter` for "photos added since last album walk".
+ * No snapshot / no cursor → undefined (full scan).
+ */
+export function albumDeltaCreatedAfterMs(input: {
+  snapshotCount: number;
+  gpsScanAt: number;
+  librarySyncAt: number;
+}): number | undefined {
+  if (input.snapshotCount <= 0) {
+    return undefined;
+  }
+  if (input.gpsScanAt > 0) {
+    return input.gpsScanAt;
+  }
+  if (input.librarySyncAt > 0) {
+    return input.librarySyncAt;
+  }
+  return undefined;
+}
+
+/** Append newly located photos; skip ids already in the snapshot. */
+export function mergeLocatedPhotos<T extends { assetId: string }>(
+  prev: T[],
+  added: T[],
+): { merged: T[]; fresh: T[] } {
+  if (added.length === 0) {
+    return { merged: prev, fresh: [] };
+  }
+  if (prev.length === 0) {
+    return { merged: added, fresh: added };
+  }
+  const seen = new Set(prev.map((photo) => photo.assetId));
+  const fresh = added.filter((photo) => !seen.has(photo.assetId));
+  if (fresh.length === 0) {
+    return { merged: prev, fresh: [] };
+  }
+  return { merged: prev.concat(fresh), fresh };
+}
+
+/**
  * Approach A: reuse on-disk GPS list instead of re-listing the album.
  * Skip when user forces a rescan or the weekly deep recheck is due.
  */

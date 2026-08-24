@@ -7,6 +7,8 @@ import assert from 'node:assert/strict';
 import {
   STAMP_DEEP_RECHECK_MS,
   STAMP_GPS_RESUME_MS,
+  albumDeltaCreatedAfterMs,
+  mergeLocatedPhotos,
   shouldReuseLocatedSnapshot,
   shouldResumeGeocodeOnly,
   shouldSkipCoarseGeocode,
@@ -155,6 +157,72 @@ assert.equal(
   }),
   false,
   'parse-rev redoes coarse',
+);
+
+assert.equal(
+  albumDeltaCreatedAfterMs({
+    snapshotCount: 0,
+    gpsScanAt: now,
+    librarySyncAt: now,
+  }),
+  undefined,
+  'no snapshot → full scan',
+);
+
+assert.equal(
+  albumDeltaCreatedAfterMs({
+    snapshotCount: 10,
+    gpsScanAt: now - 60_000,
+    librarySyncAt: now - 30_000,
+  }),
+  now - 60_000,
+  'GPS cursor wins',
+);
+
+assert.equal(
+  albumDeltaCreatedAfterMs({
+    snapshotCount: 10,
+    gpsScanAt: 0,
+    librarySyncAt: now - 30_000,
+  }),
+  now - 30_000,
+  'library sync cursor if GPS missing',
+);
+
+assert.equal(
+  albumDeltaCreatedAfterMs({
+    snapshotCount: 10,
+    gpsScanAt: 0,
+    librarySyncAt: 0,
+  }),
+  undefined,
+  'snapshot without cursor → full scan',
+);
+
+assert.deepEqual(
+  mergeLocatedPhotos([], [{ assetId: 'a' }]).fresh.map((p) => p.assetId),
+  ['a'],
+  'empty prev → all added are fresh',
+);
+
+const merged = mergeLocatedPhotos(
+  [{ assetId: 'a' }, { assetId: 'b' }],
+  [{ assetId: 'b' }, { assetId: 'c' }],
+);
+assert.deepEqual(
+  merged.fresh.map((p) => p.assetId),
+  ['c'],
+  'skip ids already in snapshot',
+);
+assert.deepEqual(
+  merged.merged.map((p) => p.assetId),
+  ['a', 'b', 'c'],
+  'append only new ids',
+);
+assert.equal(
+  mergeLocatedPhotos([{ assetId: 'a' }], [{ assetId: 'a' }]).fresh.length,
+  0,
+  'no-op when nothing new',
 );
 
 console.log('stampSyncResume.check.ts: ok');

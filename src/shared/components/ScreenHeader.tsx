@@ -13,6 +13,8 @@ export interface ScreenHeaderProps {
   onBack?: () => void;
   /** Hide the back control (title stays optically centered). */
   hideBack?: boolean;
+  /** Center-title taps only — back/trailing keep their own hits. */
+  onTitlePress?: () => void;
 }
 
 /**
@@ -23,6 +25,7 @@ export function ScreenHeader({
   trailing,
   onBack,
   hideBack = false,
+  onTitlePress,
 }: ScreenHeaderProps) {
   const router = useRouter();
   const { colors } = useTheme();
@@ -65,6 +68,13 @@ export function ScreenHeader({
       >
         {title}
       </Text>
+      {onTitlePress ? (
+        <Pressable
+          onPress={onTitlePress}
+          accessible={false}
+          style={styles.titleHit}
+        />
+      ) : null}
 
       <View style={[styles.side, styles.sideEnd]}>{trailing}</View>
     </View>
@@ -129,5 +139,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '700',
     zIndex: 0,
+  },
+  titleHit: {
+    position: 'absolute',
+    left: SIDE_MIN,
+    right: SIDE_MIN,
+    top: 0,
+    bottom: 0,
+    zIndex: 1,
   },
 });

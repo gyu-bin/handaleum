@@ -11,6 +11,7 @@ import { nextMonthEndAt } from '../utils/monthEndAt';
 
 export const MONTH_END_REMINDER_ID = 'month-end-reminder';
 export const MONTH_END_REMINDER_KIND = 'month-end';
+const TEST_NOTIFICATION_ID = 'month-end-test';
 
 const CHANNEL_ID = 'month-end';
 
@@ -89,12 +90,7 @@ export async function syncMonthEndReminder(now = new Date()): Promise<void> {
       await cancelMonthEndReminder();
       return;
     }
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
-        name: strings.settings.monthEndReminder,
-        importance: Notifications.AndroidImportance.DEFAULT,
-      });
-    }
+    await ensureAndroidChannel();
     const fire = nextMonthEndAt(now);
     await Notifications.cancelScheduledNotificationAsync(MONTH_END_REMINDER_ID);
     await Notifications.scheduleNotificationAsync({
@@ -116,19 +112,60 @@ export async function syncMonthEndReminder(now = new Date()): Promise<void> {
   }
 }
 
+async function ensureNotificationPermission(): Promise<boolean> {
+  const existing = await Notifications.getPermissionsAsync();
+  if (isGranted(existing)) {
+    return true;
+  }
+  const asked = await Notifications.requestPermissionsAsync({
+    ios: {
+      allowAlert: true,
+      allowBadge: false,
+      allowSound: true,
+    },
+  });
+  return isGranted(asked);
+}
+
+async function ensureAndroidChannel(): Promise<void> {
+  if (Platform.OS !== 'android') {
+    return;
+  }
+  await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
+    name: strings.settings.monthEndReminder,
+    importance: Notifications.AndroidImportance.DEFAULT,
+  });
+}
+
+/** Foreground banner now. Does not enable or reschedule the month-end reminder. */
+export async function sendTestNotification(now = new Date()): Promise<boolean> {
+  configureMonthEndReminder();
+  try {
+    const ok = await ensureNotificationPermission();
+    if (!ok) {
+      return false;
+    }
+    await ensureAndroidChannel();
+    await Notifications.scheduleNotificationAsync({
+      identifier: TEST_NOTIFICATION_ID,
+      content: {
+        title: strings.monthEndReminder.title(now.getMonth() + 1),
+        body: strings.monthEndReminder.body,
+        sound: true,
+        ...(Platform.OS === 'android' ? { channelId: CHANNEL_ID } : {}),
+      },
+      trigger: null,
+    });
+    return true;
+  } catch (error) {
+    console.error('sendTestNotification failed', error);
+    return false;
+  }
+}
+
 export async function requestMonthEndReminderPermission(): Promise<boolean> {
   try {
-    const existing = await Notifications.getPermissionsAsync();
-    const already = isGranted(existing)
-      ? existing
-      : await Notifications.requestPermissionsAsync({
-          ios: {
-            allowAlert: true,
-            allowBadge: false,
-            allowSound: true,
-          },
-        });
-    const ok = isGranted(already);
+    const ok = await ensureNotificationPermission();
     setMonthEndReminderEnabled(ok);
     if (ok) {
       await syncMonthEndReminder();
