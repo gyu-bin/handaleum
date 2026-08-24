@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -72,41 +72,47 @@ export function OnboardingScreen() {
         <View style={styles.topPad} />
       )}
 
-      <View style={styles.body}>
-        <Text style={[styles.brand, shell.subtle]}>{strings.brand}</Text>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.body}>
+          <Text style={[styles.brand, shell.subtle]}>{strings.brand}</Text>
 
-        <View style={styles.panelSlot}>
-          <PaperPanelArt />
+          <View style={styles.panelSlot}>
+            <PaperPanelArt />
+          </View>
+
+          <Text style={styles.headline}>
+            <Text style={[styles.headlineLead, shell.soft]}>
+              {strings.onboarding.headlineLead}
+            </Text>
+            {'\n'}
+            <Text style={[styles.headlineKey, shell.ink]}>
+              {strings.onboarding.headlineKey}
+            </Text>
+          </Text>
+          <Text style={[styles.subhead, shell.soft]}>
+            {strings.onboarding.subhead}
+          </Text>
         </View>
 
-        <Text style={styles.headline}>
-          <Text style={[styles.headlineLead, shell.soft]}>
-            {strings.onboarding.headlineLead}
-          </Text>
-          {'\n'}
-          <Text style={[styles.headlineKey, shell.ink]}>
-            {strings.onboarding.headlineKey}
-          </Text>
-        </Text>
-        <Text style={[styles.subhead, shell.soft]}>
-          {strings.onboarding.subhead}
-        </Text>
-      </View>
-
-      <View style={styles.footer}>
-        {!isReplay ? (
-          <Text style={[styles.privacy, shell.subtle]}>
-            {strings.onboarding.privacy}
-          </Text>
-        ) : null}
-        <Button
-          title={isReplay ? strings.onboarding.close : strings.onboarding.start}
-          variant="primary"
-          loading={busy}
-          onPress={() => void onStart()}
-          style={styles.startBtn}
-        />
-      </View>
+        <View style={styles.footer}>
+          {!isReplay ? (
+            <Text style={[styles.privacy, shell.subtle]}>
+              {strings.onboarding.privacy}
+            </Text>
+          ) : null}
+          <Button
+            title={isReplay ? strings.onboarding.close : strings.onboarding.start}
+            variant="primary"
+            loading={busy}
+            onPress={() => void onStart()}
+            style={styles.startBtn}
+          />
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -132,6 +138,13 @@ const styles = StyleSheet.create({
     ...theme.type.label,
     fontFamily: theme.fonts.sans,
     fontWeight: '500',
+  },
+  scroll: {
+    flex: 1,
+  },
+  /** Fill tall phones; scroll on short ones without shrinking type or the map slot. */
+  scrollContent: {
+    flexGrow: 1,
   },
   body: {
     flex: 1,

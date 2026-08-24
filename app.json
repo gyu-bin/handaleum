@@ -89,6 +89,7 @@
       [
         "expo-notifications",
         {
+          "icon": "./assets/images/notification-icon.png",
           "color": "#2C3E50",
           "defaultChannel": "month-end",
           "enableBackgroundRemoteNotifications": false

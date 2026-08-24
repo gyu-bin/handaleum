@@ -14,6 +14,9 @@ export interface PhotoPermissionState {
   request: () => Promise<PhotoPermissionStatus>;
 }
 
+/** Android 13+ defaults to photo+video+audio unless scoped. */
+const PHOTO_ONLY = ['photo'] as const;
+
 function mapPermission(response: PermissionResponse): PhotoPermissionStatus {
   if (response.status === 'undetermined') {
     return 'undetermined';
@@ -35,7 +38,7 @@ export function usePhotoPermission(): PhotoPermissionState {
     let cancelled = false;
     void (async () => {
       try {
-        const response = await getPermissionsAsync();
+        const response = await getPermissionsAsync(false, [...PHOTO_ONLY]);
         if (!cancelled) {
           setStatus(mapPermission(response));
         }
@@ -57,7 +60,7 @@ export function usePhotoPermission(): PhotoPermissionState {
 
   const request = useCallback(async () => {
     try {
-      const response = await requestPermissionsAsync();
+      const response = await requestPermissionsAsync(false, [...PHOTO_ONLY]);
       const next = mapPermission(response);
       setStatus(next);
       return next;

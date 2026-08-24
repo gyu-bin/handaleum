@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Linking, StyleSheet, Text, View } from 'react-native';
+import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -36,29 +36,35 @@ export function PermissionScreen() {
   return (
     <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'bottom', 'left', 'right']}>
       <PaperGrain style={styles.grain} />
-      <View style={styles.body}>
-        <View style={styles.hero}>
-          <View style={styles.iconCircle}>
-            <Text style={styles.icon}>🗺️</Text>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.body}>
+          <View style={styles.hero}>
+            <View style={styles.iconCircle}>
+              <Text style={styles.icon}>🗺️</Text>
+            </View>
+            <Text style={[styles.title, shell.ink]}>{strings.permission.title}</Text>
+            <Text style={[styles.bodyText, shell.soft]}>
+              {isDenied ? strings.permission.denied : strings.permission.description}
+            </Text>
           </View>
-          <Text style={[styles.title, shell.ink]}>{strings.permission.title}</Text>
-          <Text style={[styles.bodyText, shell.soft]}>
-            {isDenied ? strings.permission.denied : strings.permission.description}
-          </Text>
         </View>
-      </View>
-      <View style={styles.footer}>
-        <Button
-          title={
-            isDenied ? strings.permission.openSettings : strings.permission.request
-          }
-          variant="accent"
-          style={styles.cta}
-          onPress={() =>
-            isDenied ? void Linking.openSettings() : void onRequest()
-          }
-        />
-      </View>
+        <View style={styles.footer}>
+          <Button
+            title={
+              isDenied ? strings.permission.openSettings : strings.permission.request
+            }
+            variant="accent"
+            style={styles.cta}
+            onPress={() =>
+              isDenied ? void Linking.openSettings() : void onRequest()
+            }
+          />
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -69,6 +75,12 @@ const styles = StyleSheet.create({
   },
   grain: {
     opacity: 0.3,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   body: {
     flex: 1,
