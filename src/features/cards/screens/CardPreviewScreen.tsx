@@ -9,7 +9,6 @@ import {
   View,
 } from 'react-native';
 import { saveToLibraryAsync } from 'expo-media-library';
-import * as Sharing from 'expo-sharing';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -43,6 +42,28 @@ function waitMs(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+/**
+ * Android file share. `expo-sharing` is native — a top-level import crashes OTA
+ * onto binaries that never linked it. Require only here, fall back to album.
+ */
+async function shareAndroidPng(uri: string): Promise<void> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Sharing = require('expo-sharing') as typeof import('expo-sharing');
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(uri, {
+        mimeType: 'image/png',
+        dialogTitle: strings.cards.share,
+      });
+      return;
+    }
+  } catch {
+    // Native module missing, or share sheet unavailable.
+  }
+  await saveToLibraryAsync(uri);
+  Alert.alert(strings.cards.saved, strings.cards.shareAndroidHint);
 }
 
 /**
@@ -139,15 +160,7 @@ export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
         await Share.share({ url: plan.url, message: plan.message });
         return;
       }
-      const available = await Sharing.isAvailableAsync();
-      if (!available) {
-        setActionError(strings.common.error);
-        return;
-      }
-      await Sharing.shareAsync(plan.uri, {
-        mimeType: plan.mimeType,
-        dialogTitle: strings.cards.share,
-      });
+      await shareAndroidPng(plan.uri);
     } catch (error) {
       console.error('share failed', error);
       setActionError(strings.common.error);

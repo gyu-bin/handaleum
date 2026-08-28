@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
 
-import { CardPreviewScreen } from '@/features/cards';
+import { CardPreviewScreen } from '@/features/cards/screens/CardPreviewScreen';
 
 export default function CardPreviewRoute() {
   const { id } = useLocalSearchParams<{ id: string | string[] }>();
