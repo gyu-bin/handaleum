@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { saveToLibraryAsync } from 'expo-media-library';
+import * as Sharing from 'expo-sharing';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -25,6 +26,7 @@ import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 import { CardTemplateStory } from '../components/CardTemplateStory';
 import { useCard, useDeleteCard } from '../hooks/useCards';
 import { captureCardImage, EXPORT_RENDER_WIDTH } from '../services/cardExport';
+import { planCardShare } from '../services/cardShare';
 
 export interface CardPreviewScreenProps {
   cardId: string;
@@ -132,14 +134,20 @@ export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
         setActionError(strings.common.error);
         return;
       }
-      if (Platform.OS === 'ios') {
-        await Share.share({ url: uri, message: data?.title });
+      const plan = planCardShare(Platform.OS, uri, data?.title);
+      if (plan.kind === 'activity') {
+        await Share.share({ url: plan.url, message: plan.message });
         return;
       }
-      // Android Share API does not attach file:// images via `url`.
-      // expo-sharing is still an open product decision (cards/ARCHITECTURE.md).
-      await saveToLibraryAsync(uri);
-      Alert.alert(strings.cards.saved, strings.cards.shareAndroidHint);
+      const available = await Sharing.isAvailableAsync();
+      if (!available) {
+        setActionError(strings.common.error);
+        return;
+      }
+      await Sharing.shareAsync(plan.uri, {
+        mimeType: plan.mimeType,
+        dialogTitle: strings.cards.share,
+      });
     } catch (error) {
       console.error('share failed', error);
       setActionError(strings.common.error);

@@ -16,6 +16,7 @@ import { useTheme } from '@/shared/theme/ThemeProvider';
 import { useOnboarding } from '@/features/onboarding/hooks/useOnboarding';
 import { IndexingBanner } from '@/features/stamps/components/IndexingBanner';
 import { useStampLibraryProgress } from '@/features/stamps/hooks/useStampLibraryProgress';
+import { useStampSync } from '@/features/stamps/hooks/useStampSync';
 import { scheduleStampLibrarySyncFromMap } from '@/features/stamps/services/stampLibrarySyncRunner';
 
 import { DEFAULT_MAP_ZOOM, MapCanvas } from '../components/MapCanvas';
@@ -176,6 +177,11 @@ export function MonthlyMapScreen() {
   }, []);
 
   // Location chips removed from home header — geocode only when opening sheets.
+
+  // New 동 in this month → unseen (nav dot + 발도장 overlay). Current month only.
+  useStampSync(month, data?.allPhotos, {
+    enabled: isReady && hasLibraryAccess && !isFetching && !isStaleMonth,
+  });
 
   // Full-album stamp sync — session-once, after first month GPS finishes.
   useEffect(() => {

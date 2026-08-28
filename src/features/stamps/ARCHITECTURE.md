@@ -22,7 +22,8 @@ Grain = **시군구** (서울·광역 구, 도 시·군, 일반구 시 → 구�
 |---|---|---|
 | collected / unseen | sqlite kv + useSyncExternalStore | useCurrentMonth 패턴 |
 | 시·도·L1 선택, 축하 오버레이 | 화면 로컬 | |
-| **전체 라이브러리 sync만** | 지도/발도장 진입 (single-flight) | 월 선택으로 도장 추가 금지 |
+| **전체 라이브러리 sync** | 지도/발도장 진입 (single-flight) | 과거 달 포함 전량 누적 |
+| **현재 달 라이브 적립** | 홈 `useStampSync(month, allPhotos)` | 이번 달 새 동 → unseen (탭 레드닷 + 발도장 팝업) |
 
 ## 내비
 
@@ -35,6 +36,7 @@ Grain = **시군구** (서울·광역 구, 도 시·군, 일반구 시 → 구�
 
 | 결정 | 대안 | 선택 이유 | 날짜 |
 |---|---|---|---|
+| **현재 달 라이브 적립**: 홈 월 사진 로드 후 `useStampSync` → 오프라인 동 PIP → `syncStampsFromVisits`. 가드 = 현재 달만 · `librarySyncAt>0` · 전체 sync 중 양보. unseen이 레드닷·팝업을 켬 (새 UI 없음) | 주간 패스만 / 열람 중인 달 전부 적립 | 2026-08-02에 월 sync를 떼며 "오늘 새 동네 → 즉시 도장"이 사라짐. 현재 달로 제한해 옛 버그(안 간 달 열면 쌓임)는 재발 없음 | 2026-08-27 |
 | 발도장 화면 UI = **Plan A** (크림·그레인·ink 진행/도장). 지도 dawn-blue와 분리 — 마스코트/맵 핀 글리프는 dawn accent 유지 가능 | 발도장도 dawn accent / terracotta 복귀 | photos Plan A와 동일 | 2026-08-05 |
 | 총량 = districts + dong-gu 일반구 + municipalities 시 + KOSTAT 군 | 전체 행정구역 재수집 | 시군구 grain | 2026-08-01 |
 | 저장 키 = `sido/name` | 시군구명만 | 중구 등 동명 구 충돌 | 2026-08-01 |
@@ -84,7 +86,7 @@ Grain = **시군구** (서울·광역 구, 도 시·군, 일반구 시 → 구�
 ## 경계
 
 - 의존: photos(VisitPlace, placeResolve/resolveVisitPlaces, loadAllLocatedPhotos, geo utils), lib/storage, theme, PinGlyph 언어, assets/geo
-- 피의존: HomeNavBar badge, MonthlyMapScreen sync, app/stamps
+- 피의존: HomeNavBar badge, MonthlyMapScreen(전체 sync kickoff + 현재 달 라이브 적립), app/stamps
 
 ## 범위 제외
 
@@ -95,3 +97,4 @@ Grain = **시군구** (서울·광역 구, 도 시·군, 일반구 시 → 구�
 - 맵 공유/저장 이미지
 - 사용자 커스텀 지도 색
 - 연간 회고 지도 (12월 로드맵)
+- 과거 달의 즉시 적립 (주간 전체 패스가 담당)

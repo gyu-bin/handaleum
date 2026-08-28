@@ -374,8 +374,6 @@ export const strings = {
         : `선택한 ${count}장을 삭제합니다. 되돌릴 수 없습니다.`,
     saveToAlbum: '앨범에 저장',
     saved: '앨범에 저장했습니다',
-    /** Android: RN Share cannot attach file images without expo-sharing. */
-    shareAndroidHint: '갤러리 앱에서 사진을 골라 공유해 주세요.',
     share: '공유',
     delete: '삭제',
     notFound: '카드를 찾을 수 없습니다',

@@ -17,10 +17,12 @@ import {
   loadMonthSummaries,
 } from '../services/mediaLibrary';
 import { startMonthWarmup } from '../services/monthWarmup';
+import { subscribeAppForeground } from '../services/appForeground';
 import type { MonthKey, MonthlyPhotos, PhotoRef } from '../types';
 import { withoutHiddenPhotos } from '../utils/withoutHiddenPhotos';
 import { excludeHomePhotos } from '../utils/homeFilter';
 import { isKoreaLatLng } from '../utils/koreaBounds';
+import { currentMonthKey } from '../utils/month';
 import { isDummyAssetId } from '../services/dummyPhotos';
 import {
   ensurePhotoStreakEpoch,
@@ -97,6 +99,20 @@ export function useMonthlyPhotos(month: MonthKey, options?: { enabled?: boolean 
     // full-screen spinner flash when switching months.
     placeholderData: keepPreviousData,
   });
+
+  // Camera → back to the app: pick up today's shots so live 발도장 can mint.
+  // Current month only — other months stay on staleTime (native GPS is per photo).
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+    return subscribeAppForeground((active) => {
+      if (!active || month !== currentMonthKey()) {
+        return;
+      }
+      void client.invalidateQueries({ queryKey: photosQueryKeys.monthly(month) });
+    });
+  }, [client, enabled, month]);
 
   // Neighbors first — don't wait 6s / session-once for ‹ › to feel instant.
   useEffect(() => {
