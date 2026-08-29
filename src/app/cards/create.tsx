@@ -1,4 +1,4 @@
-import { CardCreateScreen } from '@/features/cards/screens/CardCreateScreen';
+import { CardCreateScreen } from '@/features/cards';
 
 export default function CardCreateRoute() {
   return <CardCreateScreen />;
