@@ -9,7 +9,6 @@ import {
   View,
 } from 'react-native';
 import { saveToLibraryAsync } from 'expo-media-library';
-import * as Sharing from 'expo-sharing';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -139,15 +138,8 @@ export function CardPreviewScreen({ cardId }: CardPreviewScreenProps) {
         await Share.share({ url: plan.url, message: plan.message });
         return;
       }
-      const available = await Sharing.isAvailableAsync();
-      if (!available) {
-        setActionError(strings.common.error);
-        return;
-      }
-      await Sharing.shareAsync(plan.uri, {
-        mimeType: plan.mimeType,
-        dialogTitle: strings.cards.share,
-      });
+      await saveToLibraryAsync(uri);
+      Alert.alert(strings.cards.saved, strings.cards.shareAndroidHint);
     } catch (error) {
       console.error('share failed', error);
       setActionError(strings.common.error);
