@@ -8,6 +8,7 @@ import { getStampsLibrarySyncAt } from '@/lib/storage';
 
 import { lookupDong } from '../services/dongLookup';
 import { isKoreaLatLng } from '../services/koreaBounds';
+import { mergeMonthPhotosIntoDongIndex } from '../services/stampDongPhotos';
 import {
   isStampLibrarySyncing,
   subscribeStampLibrarySync,
@@ -81,14 +82,25 @@ export function useStampSync(
       if (cancelled || isStampLibrarySyncing()) {
         return;
       }
-      const visits = dongVisitsFromPhotos(photos);
-      if (cancelled || visits.length === 0) {
-        return;
-      }
-      const { added } = syncStampsFromVisits(visits, { month });
-      if (added.length > 0) {
-        notifyStampsChanged();
-      }
+      void (async () => {
+        try {
+          // Index first so NEW / overlay cannot open an empty 동 popup.
+          await mergeMonthPhotosIntoDongIndex(photos);
+          if (cancelled) {
+            return;
+          }
+          const visits = dongVisitsFromPhotos(photos);
+          if (visits.length === 0) {
+            return;
+          }
+          const { added } = syncStampsFromVisits(visits, { month });
+          if (added.length > 0) {
+            notifyStampsChanged();
+          }
+        } catch (error) {
+          console.warn('[stamps] live sync failed', error);
+        }
+      })();
     });
 
     return () => {

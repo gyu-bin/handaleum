@@ -76,10 +76,8 @@ export const theme = {
     sand: '#2C3E50',
     terracotta: '#2C3E50',
     terracottaSoft: 'rgba(44,62,80,0.10)',
-    /**
-     * Unseen badge — same navy family (no second brand hue).
-     */
-    notify: '#2C3E50',
+    /** Unseen tab dot — notification red so it reads against navy icons. */
+    notify: '#E24B4A',
     /** Progress track / empty stamp outline. */
     line: '#E8E4DC',
     overlay: 'rgba(251,249,244,0.88)',

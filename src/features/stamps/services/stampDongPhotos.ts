@@ -37,6 +37,49 @@ function buildIndexFromPhotos(photos: PhotoRef[]): void {
   indexedAt = Date.now();
 }
 
+/**
+ * Add photos into the warm leaf index (dedupe by assetId). Does not replace
+ * the snapshot-backed index — live 발도장 can mint a 동 before the weekly GPS
+ * snapshot contains today's shots.
+ */
+export function mergePhotosIntoDongIndex(photos: PhotoRef[]): void {
+  if (photos.length === 0) {
+    return;
+  }
+  if (!indexByStampId) {
+    indexByStampId = new Map();
+  }
+  let changed = false;
+  for (const photo of photos) {
+    if (!isKoreaLatLng(photo.lat, photo.lng)) {
+      continue;
+    }
+    const hit = lookupDong(photo.lat, photo.lng);
+    if (!hit) {
+      continue;
+    }
+    const id = stampId(hit.sido, hit.city, hit.name);
+    const list = indexByStampId.get(id) ?? [];
+    if (list.some((row) => row.assetId === photo.assetId)) {
+      continue;
+    }
+    list.push(photo);
+    list.sort((a, b) => b.takenAt.localeCompare(a.takenAt));
+    indexByStampId.set(id, list);
+    changed = true;
+  }
+  if (changed) {
+    indexedAt = Date.now();
+  }
+}
+
+export async function mergeMonthPhotosIntoDongIndex(
+  photos: PhotoRef[],
+): Promise<void> {
+  await ensureIndex();
+  mergePhotosIntoDongIndex(photos);
+}
+
 async function buildIndex(): Promise<void> {
   const photos = (await readLocatedPhotosSnapshot()) ?? [];
   buildIndexFromPhotos(photos);
