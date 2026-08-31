@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
+  InteractionManager,
   Pressable,
   StyleSheet,
   Text,
@@ -436,9 +437,13 @@ export function CardCreateScreen() {
   const [placeOverlay, setPlaceOverlay] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
   const [collageDragging, setCollageDragging] = useState(false);
+  // Unmount the live collage while preview sits on top — keep the pick so back
+  // can re-edit. Clearing ids made back look like a reset.
+  const [collageSuspended, setCollageSuspended] = useState(false);
   const [sortMode, setSortMode] = useState<PickerSortMode>('newest');
   const selectedIdsRef = useRef(selectedAssetIds);
   selectedIdsRef.current = selectedAssetIds;
+  const coveringPreviewRef = useRef(false);
   const insets = useSafeAreaInsets();
   const { width: windowW, height: windowH } = useWindowDimensions();
   // Body height under the screen header — size the card so the sheet always peeks.
@@ -478,7 +483,15 @@ export function CardCreateScreen() {
   useFocusEffect(
     useCallback(() => {
       setGridThumbWarmPaused(false);
-      return undefined;
+      coveringPreviewRef.current = false;
+      // Wait until preview finishes tearing down before remounting the collage.
+      const task = InteractionManager.runAfterInteractions(() => {
+        if (coveringPreviewRef.current) {
+          return;
+        }
+        setCollageSuspended(false);
+      });
+      return () => task.cancel();
     }, []),
   );
 
@@ -653,20 +666,20 @@ export function CardCreateScreen() {
           : undefined,
         mapSnapshot,
       });
-      // Clear heavy draft before preview mounts under-stack create stays alive.
-      // Returning to a full collage + grid selection was freezing then crashing.
-      setSelectedAssetIds([]);
-      setSelectionUndoStack([]);
-      setSelectionHint(null);
-      setComment('');
       setCollageDragging(false);
-      resetScroll();
-      // Pause bake while preview/export is on top (create stays mounted underneath).
+      setSelectionHint(null);
+      // Create stays mounted under preview (freezeOnBlur). Drop the live
+      // collage only — selection/comment stay so back can re-pick.
+      coveringPreviewRef.current = true;
+      setCollageSuspended(true);
       setGridThumbWarmPaused(true);
       // Keep create under preview so back returns to 카드 만들기.
-      router.push({
-        pathname: '/cards/[id]',
-        params: { id: card.id, from: 'create' },
+      // Next frame: let the collage unmount commit before freezeOnBlur snapshots.
+      requestAnimationFrame(() => {
+        router.push({
+          pathname: '/cards/[id]',
+          params: { id: card.id, from: 'create' },
+        });
       });
     } catch (error) {
       console.error('saveCard failed', error);
@@ -947,7 +960,7 @@ export function CardCreateScreen() {
       ) : null}
       <View style={styles.body}>
         {/* Preview height shrinks in normal flow — do not translate the sheet (clips bottom). */}
-        {selectedCount > 0 ? (
+        {selectedCount > 0 && !collageSuspended ? (
           <Animated.View
             style={[
               styles.stickyPreview,
@@ -990,7 +1003,7 @@ export function CardCreateScreen() {
             { borderTopColor: colors.hairline },
           ]}
         >
-          {selectedCount > 0 ? (
+          {selectedCount > 0 && !collageSuspended ? (
             <GestureDetector gesture={previewPan}>{sheetChrome}</GestureDetector>
           ) : (
             sheetChrome

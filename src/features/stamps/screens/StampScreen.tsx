@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  BackHandler,
+  InteractionManager,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useNavigation, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -96,7 +104,6 @@ function leafSectionForUnit(
   sido: string,
   unit: StampL1Unit,
   collected: StampsCollected,
-  animateIds: Set<string>,
 ): CityStampSection {
   const leaves = l2LeavesForUnit(sido, unit);
   const thisMonth = currentMonthKey();
@@ -108,7 +115,8 @@ function leafSectionForUnit(
       name,
       collected: Boolean(entry),
       isNew: Boolean(entry) && entry.firstMonth === thisMonth,
-      animateIn: animateIds.has(id),
+      // Earn overlay is the celebration — mass grid slam janks on many NEW.
+      animateIn: false,
       tiltDeg: tiltForName(name),
     };
   });
@@ -168,7 +176,6 @@ export function StampScreen() {
   const [sido, setSido] = useState(SIDO_ORDER[0] ?? '서울');
   const [l1Key, setL1Key] = useState<string | null>(null);
   const [celebrate, setCelebrate] = useState<string[] | null>(null);
-  const [animateIds, setAnimateIds] = useState<Set<string>>(() => new Set());
   const [replayNonce, setReplayNonce] = useState<Record<string, number>>({});
   const [showScanIntro, setShowScanIntro] = useState(
     () => !getStampsScanIntroSeen(),
@@ -180,6 +187,9 @@ export function StampScreen() {
   );
   const celebratedIds = useRef(new Set<string>());
   const celebrating = useRef(false);
+  const pendingFocusRef = useRef<{ sido: string; l1Key: string | null } | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!gateOpen) {
@@ -189,13 +199,16 @@ export function StampScreen() {
     setDongPhotos(null);
   }, [gateOpen]);
 
-  // Warm leaf→photos index so the first 동 tap does not wait on full PIP.
+  // After earn overlay / unseen settle — don't fight first paint with PIP.
   useEffect(() => {
-    if (!isReady || gateOpen) {
+    if (!isReady || gateOpen || celebrate != null || unseen.length > 0) {
       return;
     }
-    void prebuildStampDongPhotoIndex();
-  }, [gateOpen, isReady]);
+    const task = InteractionManager.runAfterInteractions(() => {
+      void prebuildStampDongPhotoIndex();
+    });
+    return () => task.cancel();
+  }, [celebrate, gateOpen, isReady, unseen.length]);
 
   const onScanIntroConfirm = useCallback(() => {
     setStampsScanIntroSeen();
@@ -298,14 +311,12 @@ export function StampScreen() {
       celebratedIds.current.add(id);
     }
 
-    const ids = new Set<string>();
     const names: string[] = [];
     for (const id of fresh) {
       const entry = collected[id];
       if (!entry) {
         continue;
       }
-      ids.add(id);
       if (!names.includes(entry.name)) {
         names.push(entry.name);
       }
@@ -313,26 +324,36 @@ export function StampScreen() {
 
     markAllSeen();
 
-    if (ids.size > 0) {
-      setAnimateIds(ids);
+    const firstId = fresh[0];
+    const first = firstId ? collected[firstId] : undefined;
+    const unit =
+      first?.sido && first.city && first.name
+        ? findL1ForStamp(first.sido, first.city, first.name)
+        : null;
+    const focus =
+      first?.sido != null
+        ? { sido: first.sido, l1Key: unit?.key ?? null }
+        : null;
+
+    if (names.length > 0) {
+      pendingFocusRef.current = focus;
       setCelebrate(names.slice(0, 5));
-      const firstId = fresh[0];
-      const first = firstId ? collected[firstId] : undefined;
-      if (first?.sido) {
-        setSido(first.sido);
-      }
-      if (first?.sido && first.city && first.name) {
-        const unit = findL1ForStamp(first.sido, first.city, first.name);
-        if (unit) {
-          setL1Key(unit.key);
-        }
-      }
+    } else if (focus) {
+      setSido(focus.sido);
+      setL1Key(focus.l1Key);
+      celebrating.current = false;
     } else {
       celebrating.current = false;
     }
   }, [collected, markAllSeen, unseen]);
 
   const onOverlayDone = useCallback(() => {
+    const focus = pendingFocusRef.current;
+    pendingFocusRef.current = null;
+    if (focus) {
+      setSido(focus.sido);
+      setL1Key(focus.l1Key);
+    }
     setCelebrate(null);
     celebrating.current = false;
   }, []);
@@ -408,7 +429,7 @@ export function StampScreen() {
       if (!unit) {
         return null;
       }
-      const section = leafSectionForUnit(sido, unit, collected, animateIds);
+      const section = leafSectionForUnit(sido, unit, collected);
       if (section.total === 0) {
         return (
           <View style={styles.emptyWrap}>
@@ -431,7 +452,7 @@ export function StampScreen() {
         />
       );
     },
-    [animateIds, collected, l1UnitByKey, openDongPhotos, replayNonce, sido],
+    [collected, l1UnitByKey, openDongPhotos, replayNonce, sido],
   );
 
   const sidoCollected = useMemo(
@@ -449,12 +470,12 @@ export function StampScreen() {
     if (!selectedL1) {
       return null;
     }
-    return leafSectionForUnit(sido, selectedL1, collected, animateIds);
-  }, [animateIds, collected, selectedL1, sido]);
+    return leafSectionForUnit(sido, selectedL1, collected);
+  }, [collected, selectedL1, sido]);
 
   const pagerTick = useMemo(
-    () => [collected, replayNonce, animateIds, citySort] as const,
-    [animateIds, citySort, collected, replayNonce],
+    () => [collected, replayNonce, citySort] as const,
+    [citySort, collected, replayNonce],
   );
   const showBootLoading = useHeldBusy(!isReady, 1500);
 

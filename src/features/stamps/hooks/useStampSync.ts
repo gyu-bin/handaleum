@@ -8,6 +8,7 @@ import { getStampsLibrarySyncAt } from '@/lib/storage';
 
 import { lookupDong } from '../services/dongLookup';
 import { isKoreaLatLng } from '../services/koreaBounds';
+import { forEachPipChunk } from '../services/pipChunk';
 import { mergeMonthPhotosIntoDongIndex } from '../services/stampDongPhotos';
 import {
   isStampLibrarySyncing,
@@ -21,15 +22,17 @@ export type UseStampSyncOptions = {
   enabled?: boolean;
 };
 
-function dongVisitsFromPhotos(photos: PhotoRef[]): VisitPlace[] {
+async function dongVisitsFromPhotos(
+  photos: PhotoRef[],
+): Promise<VisitPlace[]> {
   const domestic = photos.filter((photo) =>
     isKoreaLatLng(photo.lat, photo.lng),
   );
   const visits: VisitPlace[] = [];
-  for (const bucket of collectBuckets(domestic)) {
+  await forEachPipChunk(collectBuckets(domestic), (bucket) => {
     const hit = lookupDong(bucket.lat, bucket.lng);
     if (!hit) {
-      continue;
+      return;
     }
     visits.push({
       key: bucket.key,
@@ -40,7 +43,7 @@ function dongVisitsFromPhotos(photos: PhotoRef[]): VisitPlace[] {
       dong: hit.name,
       firstTakenAt: bucket.firstTakenAt,
     });
-  }
+  });
   return visits;
 }
 
@@ -89,8 +92,8 @@ export function useStampSync(
           if (cancelled) {
             return;
           }
-          const visits = dongVisitsFromPhotos(photos);
-          if (visits.length === 0) {
+          const visits = await dongVisitsFromPhotos(photos);
+          if (cancelled || visits.length === 0) {
             return;
           }
           const { added } = syncStampsFromVisits(visits, { month });

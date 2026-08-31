@@ -325,6 +325,8 @@ export const strings = {
     commentAlignRight: '오른쪽',
     templateLabel: '템플릿',
     photoLabel: '사진 선택',
+    photoPeekHint: '탭하면 선택, 길게 누르면 크게 보기',
+    photoPeekClose: '사진 닫기',
     sortNewest: '최신순',
     sortOldest: '오래된순',
     sortByPlace: '위치별',

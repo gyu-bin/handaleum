@@ -4,6 +4,7 @@ import { isKoreaLatLng } from '@/features/photos/utils/koreaBounds';
 import { stampId } from './dongIndex';
 import { lookupDong } from './dongLookup';
 import { readLocatedPhotosSnapshot } from './locatedPhotosSnapshot';
+import { forEachPipChunk } from './pipChunk';
 
 let indexedAt = 0;
 let indexByStampId: Map<string, PhotoRef[]> | null = null;
@@ -18,18 +19,18 @@ function pushPhoto(map: Map<string, PhotoRef[]>, id: string, photo: PhotoRef): v
   map.set(id, [photo]);
 }
 
-function buildIndexFromPhotos(photos: PhotoRef[]): void {
+async function buildIndexFromPhotos(photos: PhotoRef[]): Promise<void> {
   const next = new Map<string, PhotoRef[]>();
-  for (const photo of photos) {
+  await forEachPipChunk(photos, (photo) => {
     if (!isKoreaLatLng(photo.lat, photo.lng)) {
-      continue;
+      return;
     }
     const hit = lookupDong(photo.lat, photo.lng);
     if (!hit) {
-      continue;
+      return;
     }
     pushPhoto(next, stampId(hit.sido, hit.city, hit.name), photo);
-  }
+  });
   for (const list of next.values()) {
     list.sort((a, b) => b.takenAt.localeCompare(a.takenAt));
   }
@@ -42,32 +43,35 @@ function buildIndexFromPhotos(photos: PhotoRef[]): void {
  * the snapshot-backed index — live 발도장 can mint a 동 before the weekly GPS
  * snapshot contains today's shots.
  */
-export function mergePhotosIntoDongIndex(photos: PhotoRef[]): void {
+export async function mergePhotosIntoDongIndex(
+  photos: PhotoRef[],
+): Promise<void> {
   if (photos.length === 0) {
     return;
   }
   if (!indexByStampId) {
     indexByStampId = new Map();
   }
+  const map = indexByStampId;
   let changed = false;
-  for (const photo of photos) {
+  await forEachPipChunk(photos, (photo) => {
     if (!isKoreaLatLng(photo.lat, photo.lng)) {
-      continue;
+      return;
     }
     const hit = lookupDong(photo.lat, photo.lng);
     if (!hit) {
-      continue;
+      return;
     }
     const id = stampId(hit.sido, hit.city, hit.name);
-    const list = indexByStampId.get(id) ?? [];
+    const list = map.get(id) ?? [];
     if (list.some((row) => row.assetId === photo.assetId)) {
-      continue;
+      return;
     }
     list.push(photo);
     list.sort((a, b) => b.takenAt.localeCompare(a.takenAt));
-    indexByStampId.set(id, list);
+    map.set(id, list);
     changed = true;
-  }
+  });
   if (changed) {
     indexedAt = Date.now();
   }
@@ -77,12 +81,12 @@ export async function mergeMonthPhotosIntoDongIndex(
   photos: PhotoRef[],
 ): Promise<void> {
   await ensureIndex();
-  mergePhotosIntoDongIndex(photos);
+  await mergePhotosIntoDongIndex(photos);
 }
 
 async function buildIndex(): Promise<void> {
   const photos = (await readLocatedPhotosSnapshot()) ?? [];
-  buildIndexFromPhotos(photos);
+  await buildIndexFromPhotos(photos);
 }
 
 async function ensureIndex(): Promise<void> {
@@ -112,7 +116,7 @@ export async function prebuildStampDongPhotoIndex(
   photos?: PhotoRef[],
 ): Promise<void> {
   if (photos) {
-    buildIndexFromPhotos(photos);
+    await buildIndexFromPhotos(photos);
     return;
   }
   await ensureIndex();

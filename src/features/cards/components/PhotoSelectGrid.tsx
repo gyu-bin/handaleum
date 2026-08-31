@@ -1,6 +1,7 @@
-import { memo, useCallback, useEffect, useMemo, type ComponentProps, type ReactElement } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState, type ComponentProps, type ReactElement } from 'react';
 import {
   InteractionManager,
+  Modal,
   Platform,
   type ListRenderItemInfo,
   Pressable,
@@ -11,7 +12,9 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import { Image } from 'expo-image';
 import Animated from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LoadProgressBanner } from '@/shared/components/LoadProgressBanner';
 import { strings } from '@/shared/constants/strings';
@@ -20,10 +23,15 @@ import { useShellInk } from '@/shared/hooks/useShellBackground';
 import { useTheme } from '@/shared/theme/ThemeProvider';
 
 import { AssetThumbImage } from '../../photos/components/AssetThumbImage';
+import { useGridThumbUri } from '../../photos/hooks/useGridThumbUri';
 import { usePauseGridThumbWarmOnScroll } from '../../photos/hooks/usePauseGridThumbWarmOnScroll';
 import { warmGridThumbs } from '../../photos/services/mediaLibrary';
 import type { PhotoRef } from '../../photos/types';
 import type { PlacePhotoSection } from '../../photos/utils/placeJourney';
+
+/** Match stamp dong viewer — skip the 128px grid thumb. */
+const PEEK_IMAGE_SIZE = 1080;
+const LONG_PRESS_MS = 350;
 
 export interface PhotoSelectGridProps {
   photos: PhotoRef[];
@@ -90,30 +98,95 @@ function rowsFromSections(sections: PlacePhotoSection[]): ListRow[] {
   return rows;
 }
 
+function PeekOverlay({
+  assetId,
+  onClose,
+}: {
+  assetId: string;
+  onClose: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const uri = useGridThumbUri(assetId, PEEK_IMAGE_SIZE);
+  const imgW = width - theme.spacing.lg * 2;
+  const imgH =
+    height - insets.top - insets.bottom - theme.spacing.lg * 2;
+
+  return (
+    <Modal
+      visible
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <Pressable
+        style={[
+          styles.peekScrim,
+          {
+            paddingTop: insets.top + theme.spacing.md,
+            paddingBottom: insets.bottom + theme.spacing.md,
+          },
+        ]}
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel={strings.cards.photoPeekClose}
+      >
+        {uri ? (
+          <Image
+            source={{ uri }}
+            style={{ width: imgW, height: imgH }}
+            contentFit="contain"
+            cachePolicy="memory-disk"
+            recyclingKey={`${assetId}-peek`}
+            priority="high"
+            transition={0}
+            allowDownscaling
+          />
+        ) : (
+          <View
+            style={[
+              styles.peekPlaceholder,
+              { width: imgW, height: Math.min(imgW, imgH) },
+            ]}
+          />
+        )}
+      </Pressable>
+    </Modal>
+  );
+}
+
 const Cell = memo(function Cell({
   photo,
   selected,
   size,
   onToggle,
+  onPeek,
 }: {
   photo: PhotoRef;
   selected: boolean;
   size: number;
   onToggle: (assetId: string) => void;
+  onPeek: (assetId: string) => void;
 }) {
   const { colors } = useTheme();
   const onPress = useCallback(() => {
     onToggle(photo.assetId);
   }, [onToggle, photo.assetId]);
+  const onLongPress = useCallback(() => {
+    onPeek(photo.assetId);
+  }, [onPeek, photo.assetId]);
 
   const inner = Math.max(1, size - 4);
 
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={LONG_PRESS_MS}
       style={{ width: size, height: size, padding: 2 }}
       accessibilityRole="checkbox"
       accessibilityState={{ checked: selected }}
+      accessibilityHint={strings.cards.photoPeekHint}
     >
       <View style={[styles.tile, { backgroundColor: colors.shellChip }]}>
         <AssetThumbImage assetId={photo.assetId} size={inner} />
@@ -162,6 +235,14 @@ export function PhotoSelectGrid({
     () => new Set(selectedAssetIds),
     [selectedAssetIds],
   );
+
+  const [peekAssetId, setPeekAssetId] = useState<string | null>(null);
+  const onPeek = useCallback((assetId: string) => {
+    setPeekAssetId(assetId);
+  }, []);
+  const onClosePeek = useCallback(() => {
+    setPeekAssetId(null);
+  }, []);
 
   const rows = useMemo(
     () => (sections != null ? rowsFromSections(sections) : rowsFromPhotos(photos)),
@@ -222,45 +303,60 @@ export function PhotoSelectGrid({
               selected={selected.has(photo.assetId)}
               size={size}
               onToggle={onToggle}
+              onPeek={onPeek}
             />
           ))}
         </View>
       );
     },
-    [onToggle, selected, size, shell],
+    [onPeek, onToggle, selected, size, shell],
   );
 
   return (
-    <Animated.FlatList
-      style={styles.list}
-      data={rows}
-      keyExtractor={(item) => item.key}
-      extraData={selectedAssetIds}
-      scrollEnabled={scrollEnabled}
-      keyboardShouldPersistTaps={keyboardShouldPersistTaps}
-      showsVerticalScrollIndicator={false}
-      ListHeaderComponent={header}
-      ListFooterComponent={ListFooterComponent}
-      contentContainerStyle={contentContainerStyle}
-      initialNumToRender={8}
-      maxToRenderPerBatch={4}
-      windowSize={6}
-      updateCellsBatchingPeriod={40}
-      removeClippedSubviews={Platform.OS === 'android'}
-      renderItem={renderItem}
-      onScroll={onScroll}
-      scrollEventThrottle={scrollEventThrottle}
-      onScrollBeginDrag={thumbWarmScroll.onScrollBeginDrag}
-      onMomentumScrollBegin={thumbWarmScroll.onMomentumScrollBegin}
-      onScrollEndDrag={thumbWarmScroll.onScrollEndDrag}
-      onMomentumScrollEnd={thumbWarmScroll.onMomentumScrollEnd}
-    />
+    <View style={styles.list}>
+      <Animated.FlatList
+        style={styles.list}
+        data={rows}
+        keyExtractor={(item) => item.key}
+        extraData={selectedAssetIds}
+        scrollEnabled={scrollEnabled}
+        keyboardShouldPersistTaps={keyboardShouldPersistTaps}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={header}
+        ListFooterComponent={ListFooterComponent}
+        contentContainerStyle={contentContainerStyle}
+        initialNumToRender={8}
+        maxToRenderPerBatch={4}
+        windowSize={6}
+        updateCellsBatchingPeriod={40}
+        removeClippedSubviews={Platform.OS === 'android'}
+        renderItem={renderItem}
+        onScroll={onScroll}
+        scrollEventThrottle={scrollEventThrottle}
+        onScrollBeginDrag={thumbWarmScroll.onScrollBeginDrag}
+        onMomentumScrollBegin={thumbWarmScroll.onMomentumScrollBegin}
+        onScrollEndDrag={thumbWarmScroll.onScrollEndDrag}
+        onMomentumScrollEnd={thumbWarmScroll.onMomentumScrollEnd}
+      />
+      {peekAssetId ? (
+        <PeekOverlay assetId={peekAssetId} onClose={onClosePeek} />
+      ) : null}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   list: {
     flex: 1,
+  },
+  peekScrim: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.tint.full,
+  },
+  peekPlaceholder: {
+    backgroundColor: theme.colors.surfaceAlt,
   },
   tile: {
     position: 'relative',
