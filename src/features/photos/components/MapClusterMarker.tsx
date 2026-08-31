@@ -16,12 +16,6 @@ const CARD_SELECTED = 44;
 const BORDER = 2.5;
 const CARET_H = 8;
 
-/** Dawn-blue default pin while thumb export is still in the concurrency queue. */
-const PLACEHOLDER_IMAGE: MapImageProp = {
-  symbol: 'lightblue',
-  reuseIdentifier: 'handaleum-pin-placeholder',
-};
-
 /** Earliest photo in the cluster — stable React key across zoom grain changes. */
 export function clusterSeedId(cluster: PlaceCluster): string {
   return cluster.photos[0]?.assetId ?? cluster.id;
@@ -163,7 +157,7 @@ function MapClusterMarkerInner({
     };
   }, [photoUri, selected, cardSize, displayAssetId]);
 
-  const image = useMemo((): MapImageProp => {
+  const image = useMemo((): MapImageProp | null => {
     const uri = framedUri ?? photoUri;
     if (uri && displayAssetId) {
       const next: MapImageProp = {
@@ -177,9 +171,14 @@ function MapClusterMarkerInner({
       lastHttpRef.current = next;
       return next;
     }
-    // Keep previous photo while the next asset loads; else show symbol now.
-    return lastHttpRef.current ?? PLACEHOLDER_IMAGE;
+    // Keep previous photo while the next asset loads. No symbol placeholder —
+    // Naver's default pin (green) was leaking when thumbs were still queued.
+    return lastHttpRef.current;
   }, [framedUri, photoUri, displayAssetId, cardSize]);
+
+  if (!image) {
+    return null;
+  }
 
   return (
     <NaverMapMarkerOverlay
@@ -189,6 +188,8 @@ function MapClusterMarkerInner({
       height={markerH}
       anchor={{ x: 0.5, y: 1 }}
       zIndex={selected ? 3 : 2}
+      // Raw file thumb before the paper frame — quiet so sequential load-in isn't loud.
+      alpha={photoUri && !framedUri ? 0.4 : 1}
       isHideCollidedSymbols
       image={image}
       onTap={() => onSelect(cluster)}
