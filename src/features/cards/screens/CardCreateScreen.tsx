@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  InteractionManager,
   Pressable,
   StyleSheet,
   Text,
@@ -221,11 +220,6 @@ function CreateCardPreview({
   const monthNumber = Number(month.split('-')[1]);
   const skin = resolvePaperSkin(paperSkin);
 
-  // Remeasure collage when preview size changes (sticky maxHeight used to squash it).
-  useEffect(() => {
-    setHeroH(null);
-  }, [cardW]);
-
   return (
     <View style={styles.previewStage}>
       <View style={styles.previewRow}>
@@ -292,6 +286,7 @@ function CreateCardPreview({
 
               <View
                 style={styles.cardHero}
+                collapsable={false}
                 onLayout={(e) => {
                   const next = e.nativeEvent.layout.height;
                   setHeroH((prev) =>
@@ -437,13 +432,9 @@ export function CardCreateScreen() {
   const [placeOverlay, setPlaceOverlay] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
   const [collageDragging, setCollageDragging] = useState(false);
-  // Unmount the live collage while preview sits on top — keep the pick so back
-  // can re-edit. Clearing ids made back look like a reset.
-  const [collageSuspended, setCollageSuspended] = useState(false);
   const [sortMode, setSortMode] = useState<PickerSortMode>('newest');
   const selectedIdsRef = useRef(selectedAssetIds);
   selectedIdsRef.current = selectedAssetIds;
-  const coveringPreviewRef = useRef(false);
   const insets = useSafeAreaInsets();
   const { width: windowW, height: windowH } = useWindowDimensions();
   // Body height under the screen header — size the card so the sheet always peeks.
@@ -483,15 +474,6 @@ export function CardCreateScreen() {
   useFocusEffect(
     useCallback(() => {
       setGridThumbWarmPaused(false);
-      coveringPreviewRef.current = false;
-      // Wait until preview finishes tearing down before remounting the collage.
-      const task = InteractionManager.runAfterInteractions(() => {
-        if (coveringPreviewRef.current) {
-          return;
-        }
-        setCollageSuspended(false);
-      });
-      return () => task.cancel();
     }, []),
   );
 
@@ -668,18 +650,12 @@ export function CardCreateScreen() {
       });
       setCollageDragging(false);
       setSelectionHint(null);
-      // Create stays mounted under preview (freezeOnBlur). Drop the live
-      // collage only — selection/comment stay so back can re-pick.
-      coveringPreviewRef.current = true;
-      setCollageSuspended(true);
+      // Keep the live collage mounted under freezeOnBlur so back still shows
+      // photos. Unmounting reset heroH and onLayout often never refired.
       setGridThumbWarmPaused(true);
-      // Keep create under preview so back returns to 카드 만들기.
-      // Next frame: let the collage unmount commit before freezeOnBlur snapshots.
-      requestAnimationFrame(() => {
-        router.push({
-          pathname: '/cards/[id]',
-          params: { id: card.id, from: 'create' },
-        });
+      router.push({
+        pathname: '/cards/[id]',
+        params: { id: card.id, from: 'create' },
       });
     } catch (error) {
       console.error('saveCard failed', error);
@@ -960,7 +936,7 @@ export function CardCreateScreen() {
       ) : null}
       <View style={styles.body}>
         {/* Preview height shrinks in normal flow — do not translate the sheet (clips bottom). */}
-        {selectedCount > 0 && !collageSuspended ? (
+        {selectedCount > 0 ? (
           <Animated.View
             style={[
               styles.stickyPreview,
@@ -1003,7 +979,7 @@ export function CardCreateScreen() {
             { borderTopColor: colors.hairline },
           ]}
         >
-          {selectedCount > 0 && !collageSuspended ? (
+          {selectedCount > 0 ? (
             <GestureDetector gesture={previewPan}>{sheetChrome}</GestureDetector>
           ) : (
             sheetChrome
