@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 
-import { getLastViewedMonth, setLastViewedMonth } from '@/lib/storage';
+import {
+  getLastCalendarMonth,
+  getLastViewedMonth,
+  setLastCalendarMonth,
+  setLastViewedMonth,
+} from '@/lib/storage';
 import { useIsPro } from '@/features/insights/hooks/useIsPro';
 
 import type { MonthKey } from '../types';
 import { monthKeySchema } from '../schema';
+import { subscribeAppForeground } from '../services/appForeground';
 import { currentMonthKey } from '../utils/month';
 import { canAccessMonth, clampMonthToAccess } from '../utils/monthAccess';
 
@@ -21,6 +27,19 @@ function resolveMonth(): MonthKey {
 
 let currentMonth: MonthKey = resolveMonth();
 const listeners = new Set<() => void>();
+
+/**
+ * When the device calendar month advances, land on this month even if empty.
+ * Same-month browsing of older months is kept until the next rollover.
+ */
+function alignViewedMonthToCalendar(): void {
+  const cal = currentMonthKey();
+  if (getLastCalendarMonth() === cal) {
+    return;
+  }
+  setLastCalendarMonth(cal);
+  setSharedMonth(cal);
+}
 
 function emit() {
   listeners.forEach((listener) => listener());
@@ -51,6 +70,13 @@ function setSharedMonth(next: MonthKey): void {
   setLastViewedMonth(parsed);
   emit();
 }
+
+alignViewedMonthToCalendar();
+subscribeAppForeground((active) => {
+  if (active) {
+    alignViewedMonthToCalendar();
+  }
+});
 
 /**
  * Shared viewed month across screens.

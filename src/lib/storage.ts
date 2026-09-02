@@ -1,6 +1,7 @@
 import Storage from 'expo-sqlite/kv-store';
 
 const LAST_VIEWED_MONTH_KEY = 'lastViewedMonth';
+const LAST_CALENDAR_MONTH_KEY = 'lastCalendarMonth';
 const MAP_THEME_KEY = 'mapThemeId';
 const PIN_COVERS_PREFIX = 'pinCovers:';
 const HOME_LOCATION_KEY = 'homeLocation';
@@ -49,6 +50,15 @@ export function getLastViewedMonth(): string | null {
 
 export function setLastViewedMonth(month: string): void {
   storage.set(LAST_VIEWED_MONTH_KEY, month);
+}
+
+/** Calendar YYYY-MM when we last auto-landed on this month. */
+export function getLastCalendarMonth(): string | null {
+  return storage.getString(LAST_CALENDAR_MONTH_KEY) ?? null;
+}
+
+export function setLastCalendarMonth(month: string): void {
+  storage.set(LAST_CALENDAR_MONTH_KEY, month);
 }
 
 /** Paper map palette id (`dawn` | `ink` | `warm`). */

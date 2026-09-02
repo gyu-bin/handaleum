@@ -19,7 +19,7 @@
 | 월별 사진 목록 | TanStack Query (`photosQueryKeys.monthly`) | 소스는 expo-media-library. 서버 데이터 취급 |
 | 월별 카운트 | TanStack Query (`photosQueryKeys.summaries`) | 동일 |
 | 지도 뷰포트, 시간 슬라이더, 선택 핀, map scale | 화면 로컬 useState | 탐색 중 상태. 공유 불필요 |
-| 마지막 조회 월 | sqlite kv + `useCurrentMonth` | 화면마다 useState면 월 선택이 지도에 반영 안 됨 |
+| 마지막 조회 월 | sqlite kv + `useCurrentMonth` | 화면마다 useState면 월 선택이 지도에 반영 안 됨. 달력 월이 바뀌면 이번 달로 맞춤 |
 | 지도 팔레트 | sqlite kv + `useMapTheme` | 앱 설정. Zustand 대신 kv (기존 month 패턴) |
 | 핀 대표 사진 | sqlite kv + `usePinCovers(month)` | 월별 설정. 클러스터 id는 줌에 따라 변하므로 placeKey 사용 |
 | 숨긴 사진 | sqlite kv + `useHiddenPhotos(month)` | 지도·회고·몰아보기에서 제외. 앨범은 유지 |
@@ -29,6 +29,7 @@
 
 | 결정 | 대안 | 선택 이유 | 날짜 |
 |---|---|---|---|
+| 달력 월이 바뀌면 조회 월을 **이번 달**로 (빈 달 포함). 같은 달 안 과거 월 탐색은 유지 | 마지막 조회 월만 유지 | 사용자 2026-09-02 | 2026-09-02 |
 | **UI=Dawn Survey / Plan A** (크림 + 단일 ink·serif 히어로만) / **Map=dawn-blue** (land/water/accent·핀 유지). `terracotta` 토큰은 ink alias. 맵 팔레트 교체 금지 | 전면 저널 맵 리틴트 / UI terracotta 복귀 | 사용자 A안 2026-08-05. philosophy 정렬 | 2026-08-05 |
 | **현재 달만** 포그라운드 복귀 시 monthly query invalidate. 카메라→앱 복귀에서 오늘 사진이 지도·라이브 발도장에 보이게 | 전체 월 refetch / 포커스 refetch 없음 | 기본 staleTime 5분 + refetchOnWindowFocus=false면 백그라운드에서 찍은 사진이 안 들어옴 | 2026-08-27 |
 | 월 선택 = **저널 UI: 연도 스테퍼 + 1–12월 2열** (0장 비활성) | 전체 월 스크롤 / 연도 칩 | 사용자 시안(옵션 C) | 2026-08-02 |
