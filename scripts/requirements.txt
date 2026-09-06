@@ -1,0 +1,5 @@
+# Marketing-image compositing (App Store frames, Instagram carousel).
+# Setup:  python3 -m venv scripts/.venv && scripts/.venv/bin/pip install -r scripts/requirements.txt
+# Run:    scripts/.venv/bin/python3 scripts/compose-app-store-shots.py
+#         scripts/.venv/bin/python3 scripts/compose-instagram-shots.py
+Pillow==12.3.0

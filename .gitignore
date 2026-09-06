@@ -52,3 +52,7 @@ CLAUDE.md
 .env
 .env.*
 !.env.example
+
+# python
+__pycache__/
+scripts/.venv/
