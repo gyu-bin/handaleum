@@ -17,6 +17,7 @@ import {
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { useLocalSearchParams } from 'expo-router';
 import Animated from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -145,19 +146,34 @@ const ClusterSlide = memo(function ClusterSlide({
   cluster,
   width,
   coverAssetId,
+  initialAssetId,
   onSetCover,
   onHidePhoto,
 }: {
   cluster: PlaceCluster;
   width: number;
   coverAssetId?: string | null;
+  /** Prefer this photo in the hero when present in the cluster. */
+  initialAssetId?: string | null;
   onSetCover: (placeKey: string, assetId: string) => void;
   onHidePhoto: (assetId: string) => void;
 }) {
   const shell = useShellInk();
   const placeKey = placeBucketKey(cluster.centerLat, cluster.centerLng);
-  const [activeId, setActiveId] = useState(
-    () => coverAssetId ?? cluster.photos[0]?.assetId ?? '',
+  const [activeId, setActiveId] = useState(() => {
+    if (
+      initialAssetId &&
+      cluster.photos.some((p) => p.assetId === initialAssetId)
+    ) {
+      return initialAssetId;
+    }
+    return coverAssetId ?? cluster.photos[0]?.assetId ?? '';
+  });
+  const deepLinkAppliedRef = useRef(
+    Boolean(
+      initialAssetId &&
+        cluster.photos.some((p) => p.assetId === initialAssetId),
+    ),
   );
   const [asyncHero, setAsyncHero] = useState<{
     id: string;
@@ -195,6 +211,10 @@ const ClusterSlide = memo(function ClusterSlide({
   }, [heroEdge, setExpandedHeight]);
 
   useEffect(() => {
+    // Deep-link focus wins for this mount; don't snap back when cover updates.
+    if (deepLinkAppliedRef.current) {
+      return;
+    }
     const next =
       (coverAssetId &&
       cluster.photos.some((p) => p.assetId === coverAssetId)
@@ -456,12 +476,17 @@ export function PlaybackScreen() {
   const shellBg = useShellBackground();
   const shell = useShellInk();
   const { width } = useWindowDimensions();
+  const params = useLocalSearchParams<{ assetId?: string | string[] }>();
+  const focusAssetId = Array.isArray(params.assetId)
+    ? params.assetId[0]
+    : params.assetId;
   const { month } = useCurrentMonth();
   const { data, isPending, isError, refetch } = useMonthlyPhotos(month);
   const showLoading = useHeldBusy(isPending);
   const { covers, setCover } = usePinCovers(month);
   const { hide: hidePhoto } = useHiddenPhotos(month);
   const [index, setIndex] = useState(0);
+  const focusedAssetRef = useRef<string | null>(null);
 
   const clusters = useMemo(() => {
     if (!data) {
@@ -476,6 +501,7 @@ export function PlaybackScreen() {
 
   useEffect(() => {
     setIndex(0);
+    focusedAssetRef.current = null;
   }, [month]);
 
   useEffect(() => {
@@ -483,6 +509,23 @@ export function PlaybackScreen() {
       setIndex(Math.max(0, clusters.length - 1));
     }
   }, [clusters.length, index]);
+
+  // Open from memory notification: jump to the place that owns the asset.
+  useEffect(() => {
+    if (!focusAssetId || clusters.length === 0) {
+      return;
+    }
+    if (focusedAssetRef.current === focusAssetId) {
+      return;
+    }
+    const next = clusters.findIndex((c) =>
+      c.photos.some((p) => p.assetId === focusAssetId),
+    );
+    if (next >= 0) {
+      setIndex(next);
+      focusedAssetRef.current = focusAssetId;
+    }
+  }, [clusters, focusAssetId]);
 
   // Same middle-path prewarm if user opens playback without visiting the map first.
   // Wait until the bike leaves — bake during LoadingView hitchs the spin.
@@ -550,6 +593,12 @@ export function PlaybackScreen() {
           cluster={cluster}
           width={width}
           coverAssetId={covers[placeKey] ?? null}
+          initialAssetId={
+            focusAssetId &&
+            cluster.photos.some((p) => p.assetId === focusAssetId)
+              ? focusAssetId
+              : null
+          }
           onSetCover={setCover}
           onHidePhoto={hidePhoto}
         />

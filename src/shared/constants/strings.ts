@@ -120,6 +120,8 @@ export const strings = {
     /** Header edge steppers — previous / next calendar month. */
     monthPrev: '이전 달',
     monthNext: '다음 달',
+    /** Shown above the month title when viewing a past month. */
+    jumpToCurrentMonth: '이번 달',
     timeFilter: '이 날짜까지',
     timeFilterHint: '슬라이더로 월 안에서 사진 기간을 줄입니다',
     clusterCount: (count: number) => `사진 ${count}장`,
@@ -183,8 +185,8 @@ export const strings = {
     monthEndReminder: '월말 알림',
     monthEndReminderHint: '그달 마지막 날 저녁 9시',
     memoryReminderTest: '추억 알림 보내보기',
-    memoryReminderTestHint: '사진 첨부 포함 · 바로 전송',
-    memoryReminderTestOk: '5초 뒤 알림 · 바로 홈으로 나가 보세요.',
+    memoryReminderTestHint: '사진 첨부 포함 · 5초 뒤 전송',
+    memoryReminderTestOk: '5초 뒤 알림 · 바로 나가 보세요.',
     memoryReminderTestOkNoPhoto: '보냈어요. 사진은 붙지 않았어요.',
     sendTestNotification: '알림 보내기',
     sendTestNotificationDenied: '알림이 꺼져 있습니다',

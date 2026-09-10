@@ -9,6 +9,7 @@ import { getMonthEndReminderEnabled } from '@/lib/storage';
 import {
   clearHandledMemoryReminder,
   isMemoryReminderResponse,
+  memoryAssetIdFromResponse,
   memoryMonthFromResponse,
   syncMemoryReminder,
 } from '../services/memoryReminder';
@@ -108,7 +109,7 @@ export function useMonthEndReminder(options?: {
 }
 
 /**
- * Cold start / tap: open home. Memory reminders also jump to the content month.
+ * Cold start / tap: month-end → home. Memory → 몰아보기 focused on the photo.
  */
 export function useOpenHomeOnMonthEndReminder(): void {
   const router = useRouter();
@@ -118,10 +119,18 @@ export function useOpenHomeOnMonthEndReminder(): void {
   useEffect(() => {
     if (isMemoryReminderResponse(last)) {
       const month = memoryMonthFromResponse(last);
+      const assetId = memoryAssetIdFromResponse(last);
       if (month && canAccessMonth(month, isPro)) {
         applyViewedMonth(month);
       }
-      router.replace('/');
+      if (assetId) {
+        router.replace({
+          pathname: '/playback',
+          params: { assetId },
+        });
+      } else {
+        router.replace('/playback');
+      }
       clearHandledMemoryReminder();
       return;
     }

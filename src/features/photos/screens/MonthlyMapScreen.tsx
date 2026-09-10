@@ -293,6 +293,11 @@ export function MonthlyMapScreen() {
 
   const monthLabel = formatMonthLabel(month);
   const monthNumber = Number(month.split('-')[1] ?? 0);
+  const calendarMonth = currentMonthKey();
+  const showJumpToCurrent = month !== calendarMonth;
+  const goToCurrentMonth = useCallback(() => {
+    setMonth(calendarMonth);
+  }, [calendarMonth, setMonth]);
   // Content destinations live in the thumb-reachable bottom bar; settings is a
   // low-frequency config, so it sits as a quiet link in the header instead.
 
@@ -344,6 +349,25 @@ export function MonthlyMapScreen() {
             </Pressable>
 
             <View style={styles.hero}>
+              {showJumpToCurrent ? (
+                <Pressable
+                  onPress={goToCurrentMonth}
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityLabel={strings.map.jumpToCurrentMonth}
+                  style={({ pressed }) => [
+                    styles.jumpCurrentHit,
+                    pressed && styles.jumpCurrentHitPressed,
+                  ]}
+                >
+                  <Text
+                    style={[styles.jumpCurrent, { color: colors.shellSubtle }]}
+                    numberOfLines={1}
+                  >
+                    {strings.map.jumpToCurrentMonth}
+                  </Text>
+                </Pressable>
+              ) : null}
               <Pressable
                 onPress={() => router.push('/months')}
                 accessibilityRole="button"
@@ -491,6 +515,20 @@ const styles = StyleSheet.create({
   },
   heroTitleHit: {
     alignItems: 'center',
+  },
+  jumpCurrentHit: {
+    alignItems: 'center',
+    paddingBottom: 1,
+  },
+  jumpCurrentHitPressed: {
+    opacity: 0.45,
+  },
+  jumpCurrent: {
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
+    fontWeight: '600',
+    letterSpacing: -0.1,
+    textAlign: 'center',
   },
   brandEyebrow: {
     ...theme.type.label,

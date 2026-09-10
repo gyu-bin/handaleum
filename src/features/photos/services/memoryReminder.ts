@@ -375,6 +375,7 @@ export async function sendTestMemoryNotification(
         data: {
           kind: MEMORY_REMINDER_KIND,
           month: pick.contentMonth,
+          ...(pick.assetId ? { assetId: pick.assetId } : {}),
         },
         ...(attachUri
           ? {
@@ -446,6 +447,7 @@ export async function syncMemoryReminder(now = new Date()): Promise<void> {
         data: {
           kind: MEMORY_REMINDER_KIND,
           month: pick.contentMonth,
+          ...(pick.assetId ? { assetId: pick.assetId } : {}),
         },
         ...(attachUri
           ? {
@@ -500,6 +502,17 @@ export function memoryMonthFromResponse(
   }
   const parsed = monthKeySchema.safeParse(raw);
   return parsed.success ? parsed.data : null;
+}
+
+/** Asset to focus in 몰아보기 when the memory notification is opened. */
+export function memoryAssetIdFromResponse(
+  response: Notifications.NotificationResponse | null | undefined,
+): string | null {
+  if (!response || !isMemoryReminderResponse(response)) {
+    return null;
+  }
+  const raw = response.notification.request.content.data?.assetId;
+  return typeof raw === 'string' && raw.length > 0 ? raw : null;
 }
 
 export function clearHandledMemoryReminder(): void {

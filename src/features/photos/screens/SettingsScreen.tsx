@@ -152,6 +152,7 @@ export function SettingsScreen() {
 
   const sendEasterNotification = useCallback(async () => {
     setEasterError(null);
+    setMemoryTestMsg(null);
     setEasterBusy(true);
     try {
       const ok = await sendTestNotification();
@@ -170,6 +171,7 @@ export function SettingsScreen() {
   }, []);
 
   const sendMemoryTest = useCallback(async () => {
+    setEasterError(null);
     setMemoryTestMsg(null);
     setMemoryTestBusy(true);
     try {
@@ -183,7 +185,7 @@ export function SettingsScreen() {
         return;
       }
       const permission = await getMonthEndReminderPermission();
-      setMemoryTestMsg(
+      setEasterError(
         permission === 'denied'
           ? strings.settings.sendTestNotificationDenied
           : strings.settings.sendTestNotificationFailed,
@@ -329,17 +331,6 @@ export function SettingsScreen() {
               />
             }
           />
-          <SettingsDivider />
-          <SettingsRow
-            title={strings.settings.memoryReminderTest}
-            subtitle={
-              memoryTestBusy
-                ? strings.common.loading
-                : (memoryTestMsg ?? strings.settings.memoryReminderTestHint)
-            }
-            disabled={memoryTestBusy}
-            onPress={() => void sendMemoryTest()}
-          />
         </SettingsSection>
 
         <SettingsSection label={strings.settings.displaySection}>
@@ -449,10 +440,20 @@ export function SettingsScreen() {
               {easterError}
             </Text>
           ) : null}
+          {memoryTestMsg ? (
+            <Text style={[styles.easterError, { color: colors.shellInk }]}>
+              {memoryTestMsg}
+            </Text>
+          ) : null}
           <Button
             title={strings.settings.sendTestNotification}
             loading={easterBusy}
             onPress={() => void sendEasterNotification()}
+          />
+          <Button
+            title={strings.settings.memoryReminderTest}
+            loading={memoryTestBusy}
+            onPress={() => void sendMemoryTest()}
           />
         </View>
       ) : null}
