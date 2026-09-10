@@ -3,8 +3,15 @@ import { AppState, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 
+import { useIsPro } from '@/features/insights/hooks/useIsPro';
 import { getMonthEndReminderEnabled } from '@/lib/storage';
 
+import {
+  clearHandledMemoryReminder,
+  isMemoryReminderResponse,
+  memoryMonthFromResponse,
+  syncMemoryReminder,
+} from '../services/memoryReminder';
 import {
   clearHandledMonthEndReminder,
   getMonthEndReminderPermission,
@@ -13,6 +20,8 @@ import {
   setMonthEndReminderOn,
   syncMonthEndReminder,
 } from '../services/monthEndReminder';
+import { canAccessMonth } from '../utils/monthAccess';
+import { applyViewedMonth } from './useCurrentMonth';
 
 /**
  * Prompt once when OS permission is still undetermined (existing installs),
@@ -31,10 +40,14 @@ export function useMonthEndReminder(options?: {
     const permission = await getMonthEndReminderPermission();
     if (mayPrompt && permission === 'undetermined') {
       const granted = await requestMonthEndReminderPermission();
+      if (granted) {
+        await syncMemoryReminder();
+      }
       setEnabledState(granted);
       return;
     }
     await syncMonthEndReminder();
+    await syncMemoryReminder();
     const latest = await getMonthEndReminderPermission();
     setEnabledState(latest === 'granted' && getMonthEndReminderEnabled());
   }, []);
@@ -42,6 +55,28 @@ export function useMonthEndReminder(options?: {
   useEffect(() => {
     void refresh(promptIfUndetermined);
   }, [promptIfUndetermined, refresh]);
+
+  useEffect(() => {
+    if (!__DEV__ || process.env.EXPO_PUBLIC_TEST_MEMORY !== '1') {
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void (async () => {
+        const { sendTestMemoryNotification } = await import(
+          '../services/memoryReminder'
+        );
+        if (cancelled) {
+          return;
+        }
+        await sendTestMemoryNotification();
+      })();
+    }, 4000);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, []);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
@@ -72,16 +107,28 @@ export function useMonthEndReminder(options?: {
   return { enabled, setEnabled };
 }
 
-/** Cold start / tap: open the home monthly map, then drop the response. */
+/**
+ * Cold start / tap: open home. Memory reminders also jump to the content month.
+ */
 export function useOpenHomeOnMonthEndReminder(): void {
   const router = useRouter();
+  const { isPro } = useIsPro();
   const last = Notifications.useLastNotificationResponse();
 
   useEffect(() => {
+    if (isMemoryReminderResponse(last)) {
+      const month = memoryMonthFromResponse(last);
+      if (month && canAccessMonth(month, isPro)) {
+        applyViewedMonth(month);
+      }
+      router.replace('/');
+      clearHandledMemoryReminder();
+      return;
+    }
     if (!isMonthEndReminderResponse(last)) {
       return;
     }
     router.replace('/');
     clearHandledMonthEndReminder();
-  }, [last, router]);
+  }, [isPro, last, router]);
 }

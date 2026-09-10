@@ -44,6 +44,7 @@ import {
   getMonthEndReminderPermission,
   sendTestNotification,
 } from '../services/monthEndReminder';
+import { sendTestMemoryNotification } from '../services/memoryReminder';
 import { diagLine } from '../utils/settingsDiagnostics';
 
 const RADIUS_CHOICES = [100, 300, 500, 1000] as const;
@@ -80,6 +81,8 @@ export function SettingsScreen() {
   const [easterOpen, setEasterOpen] = useState(false);
   const [easterBusy, setEasterBusy] = useState(false);
   const [easterError, setEasterError] = useState<string | null>(null);
+  const [memoryTestBusy, setMemoryTestBusy] = useState(false);
+  const [memoryTestMsg, setMemoryTestMsg] = useState<string | null>(null);
   const easterTaps = useRef({ count: 0, firstAt: 0 });
 
   useEffect(() => subscribeStampLibrarySync(setAlbumSyncing), []);
@@ -163,6 +166,30 @@ export function SettingsScreen() {
       );
     } finally {
       setEasterBusy(false);
+    }
+  }, []);
+
+  const sendMemoryTest = useCallback(async () => {
+    setMemoryTestMsg(null);
+    setMemoryTestBusy(true);
+    try {
+      const result = await sendTestMemoryNotification();
+      if (result.ok) {
+        setMemoryTestMsg(
+          result.attached
+            ? strings.settings.memoryReminderTestOk
+            : strings.settings.memoryReminderTestOkNoPhoto,
+        );
+        return;
+      }
+      const permission = await getMonthEndReminderPermission();
+      setMemoryTestMsg(
+        permission === 'denied'
+          ? strings.settings.sendTestNotificationDenied
+          : strings.settings.sendTestNotificationFailed,
+      );
+    } finally {
+      setMemoryTestBusy(false);
     }
   }, []);
 
@@ -301,6 +328,17 @@ export function SettingsScreen() {
                 accessibilityLabel={strings.settings.monthEndReminder}
               />
             }
+          />
+          <SettingsDivider />
+          <SettingsRow
+            title={strings.settings.memoryReminderTest}
+            subtitle={
+              memoryTestBusy
+                ? strings.common.loading
+                : (memoryTestMsg ?? strings.settings.memoryReminderTestHint)
+            }
+            disabled={memoryTestBusy}
+            onPress={() => void sendMemoryTest()}
           />
         </SettingsSection>
 

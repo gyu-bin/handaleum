@@ -71,6 +71,11 @@ function setSharedMonth(next: MonthKey): void {
   emit();
 }
 
+/** Apply a viewed month from a notification / deep link (caller checks access). */
+export function applyViewedMonth(month: MonthKey): void {
+  setSharedMonth(month);
+}
+
 alignViewedMonthToCalendar();
 subscribeAppForeground((active) => {
   if (active) {

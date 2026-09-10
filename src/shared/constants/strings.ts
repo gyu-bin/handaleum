@@ -43,6 +43,24 @@ export const strings = {
     },
     body: '이번 달이 끝납니다. 사진을 펼쳐 보세요.',
   },
+  memoryReminder: {
+    channelName: '추억',
+    titleNewDong: (monthNumber: number, dong: string) => {
+      const name = MONTH_NAMES[monthNumber - 1];
+      return name ? `작년 ${name}, 처음 간 ${dong}` : `처음 간 ${dong}`;
+    },
+    titleMost: (monthNumber: number) => {
+      const name = MONTH_NAMES[monthNumber - 1];
+      return name ? `작년 ${name}, 제일 많이 찍은 날` : '제일 많이 찍은 날';
+    },
+    titleFallback: (monthNumber: number) => {
+      const name = MONTH_NAMES[monthNumber - 1];
+      return name ? `${name} 추억` : '추억';
+    },
+    titleThisMonth: '이번 달 지도 열어보기',
+    body: '사진을 지도로 펼쳐 보세요.',
+    bodyThisMonth: '이번 달 길을 지도로 열어 보세요.',
+  },
   streakMilestone: {
     title: (days: number) => `${days}일 연속 촬영`,
     body: '하루도 빠지지 않았습니다.',
@@ -164,6 +182,10 @@ export const strings = {
     darkMode: '다크모드',
     monthEndReminder: '월말 알림',
     monthEndReminderHint: '그달 마지막 날 저녁 9시',
+    memoryReminderTest: '추억 알림 보내보기',
+    memoryReminderTestHint: '사진 첨부 포함 · 바로 전송',
+    memoryReminderTestOk: '5초 뒤 알림 · 바로 홈으로 나가 보세요.',
+    memoryReminderTestOkNoPhoto: '보냈어요. 사진은 붙지 않았어요.',
     sendTestNotification: '알림 보내기',
     sendTestNotificationDenied: '알림이 꺼져 있습니다',
     sendTestNotificationFailed: '알림을 보내지 못했어요',

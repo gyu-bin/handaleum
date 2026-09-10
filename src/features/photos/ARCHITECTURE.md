@@ -24,11 +24,13 @@
 | 핀 대표 사진 | sqlite kv + `usePinCovers(month)` | 월별 설정. 클러스터 id는 줌에 따라 변하므로 placeKey 사용 |
 | 숨긴 사진 | sqlite kv + `useHiddenPhotos(month)` | 지도·회고·몰아보기에서 제외. 앨범은 유지 |
 | 방문지 / 장소 라벨 | `placeCache` 메모리+디스크 (`placeRes:`) → `placeResolve` → `useMonthJourney` hydrate | GPS는 assetLoc. 이름은 geocode 후 디스크에 남겨 콜드스타트 칩 즉시 표시 |
+| 월중 추억 알림 | 로컬 스케줄 (`memoryReminder`) — OS 알림 권한만. 설정 토글 없음 | 월 1통. 탭 시 content month로 `applyViewedMonth` |
 
 ## 결정 기록
 
 | 결정 | 대안 | 선택 이유 | 날짜 |
 |---|---|---|---|
+| 장소 라벨 = **landmark bbox > 동 alias > city+구+동**. 회고·몰아보기(detailLabel) 동까지. 광화문 등 소수는 좌표 박스 | 구만 / POI 지오코드 그대로 | 사용자 2026-09-07: 서울만·동명 쪼개짐 | 2026-09-07 |
 | 달력 월이 바뀌면 조회 월을 **이번 달**로 (빈 달 포함). 같은 달 안 과거 월 탐색은 유지 | 마지막 조회 월만 유지 | 사용자 2026-09-02 | 2026-09-02 |
 | **UI=Dawn Survey / Plan A** (크림 + 단일 ink·serif 히어로만) / **Map=dawn-blue** (land/water/accent·핀 유지). `terracotta` 토큰은 ink alias. 맵 팔레트 교체 금지 | 전면 저널 맵 리틴트 / UI terracotta 복귀 | 사용자 A안 2026-08-05. philosophy 정렬 | 2026-08-05 |
 | **현재 달만** 포그라운드 복귀 시 monthly query invalidate. 카메라→앱 복귀에서 오늘 사진이 지도·라이브 발도장에 보이게 | 전체 월 refetch / 포커스 refetch 없음 | 기본 staleTime 5분 + refetchOnWindowFocus=false면 백그라운드에서 찍은 사진이 안 들어옴 | 2026-08-27 |
@@ -93,10 +95,11 @@
 | 사진 빼기: `hiddenPhotos:{month}` assetId 집합. `useMonthlyPhotos.photos`에서 걸러 지도·회고·몰아보기 공유. 설정 → `HiddenPhotosScreen`에서 장별 unhide | 화면별 숨김 / 앨범 삭제 | 사용자 2026-08-20 | 2026-08-20 |
 | 홈 자전거 로딩 **최대 2초**. 그다음엔 빈 지도 + "위치 확인 중". GPS가 길어도 바이크를 붙잡지 않음 | 끝날 때까지 LoadingView | 사용자 2026-08-21 | 2026-08-21 |
 | GPS 연속 10·20·30일 도달 후 앱 진입 시 **인앱 팝업** 한 번. 불꽃은 날 탭 유지. 푸시 없음. 샘플 앨범은 안 띄움 | 10일 푸시 / 매일 리마인드 | 사용자 2026-08-21 | 2026-08-21 |
+| **월중 추억 알림** (로컬): 월 1통·20시. 보내는 날 = 작년 같은 달 안 **새 동네(firstMonth) 날 → GPS 최다일**. 월말±2일 피함. 폴백=최근 과거 달→이번 달. 첨부 1장(iOS). 설정 스위치 없음(OS 권한만). 탭→해당 월 홈 | 고정 15일 / 월말과 토글 공유 / 최다일만 | 사용자 2026-09-10 | 2026-09-10 |
 
 ## 경계
 
-- 이 feature가 의존하는 것: `asset-locations` (로컬 네이티브), expo-media-library, expo-image-manipulator, expo-location, @mj-studio/react-native-naver-map, react-native-svg (카드/스플래시), react-native-gesture-handler, react-native-reanimated, assets/geo/*, lib/storage, shared/constants
+- 이 feature가 의존하는 것: `asset-locations` (로컬 네이티브), expo-media-library, expo-image-manipulator, expo-location, @mj-studio/react-native-naver-map, react-native-svg (카드/스플래시), react-native-gesture-handler, react-native-reanimated, assets/geo/*, lib/storage, shared/constants, stamps(`readStampsCollected`·`lookupDong`·located snapshot — 월중 추억 날 선정)
 - 이 feature에 의존하는 것: cards (photoRefSchema, useMonthlyPhotos, useCurrentMonth를 import)
 
 ## 범위 제외

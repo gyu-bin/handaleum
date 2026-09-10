@@ -3,12 +3,13 @@ import { isKoreaLatLng } from '@/features/photos/utils/koreaBounds';
 
 import { stampId } from './dongIndex';
 import { lookupDong } from './dongLookup';
-import { readLocatedPhotosSnapshot } from './locatedPhotosSnapshot';
 import { forEachPipChunk } from './pipChunk';
 
 let indexedAt = 0;
 let indexByStampId: Map<string, PhotoRef[]> | null = null;
 let indexPromise: Promise<void> | null = null;
+/** Bump to drop in-flight PIP builds after reset / a newer prebuild. */
+let buildGen = 0;
 
 function pushPhoto(map: Map<string, PhotoRef[]>, id: string, photo: PhotoRef): void {
   const list = map.get(id);
@@ -19,7 +20,13 @@ function pushPhoto(map: Map<string, PhotoRef[]>, id: string, photo: PhotoRef): v
   map.set(id, [photo]);
 }
 
-async function buildIndexFromPhotos(photos: PhotoRef[]): Promise<void> {
+async function buildIndexFromPhotos(
+  photos: PhotoRef[],
+  gen: number,
+): Promise<void> {
+  if (photos.length === 0) {
+    return;
+  }
   const next = new Map<string, PhotoRef[]>();
   await forEachPipChunk(photos, (photo) => {
     if (!isKoreaLatLng(photo.lat, photo.lng)) {
@@ -31,11 +38,25 @@ async function buildIndexFromPhotos(photos: PhotoRef[]): Promise<void> {
     }
     pushPhoto(next, stampId(hit.sido, hit.city, hit.name), photo);
   });
+  if (gen !== buildGen) {
+    return;
+  }
   for (const list of next.values()) {
     list.sort((a, b) => b.takenAt.localeCompare(a.takenAt));
   }
   indexByStampId = next;
   indexedAt = Date.now();
+}
+
+function runBuild(work: (gen: number) => Promise<void>): Promise<void> {
+  const gen = ++buildGen;
+  const task = work(gen).finally(() => {
+    if (indexPromise === task) {
+      indexPromise = null;
+    }
+  });
+  indexPromise = task;
+  return task;
 }
 
 /**
@@ -53,6 +74,7 @@ export async function mergePhotosIntoDongIndex(
     indexByStampId = new Map();
   }
   const map = indexByStampId;
+  const gen = buildGen;
   let changed = false;
   await forEachPipChunk(photos, (photo) => {
     if (!isKoreaLatLng(photo.lat, photo.lng)) {
@@ -72,6 +94,9 @@ export async function mergePhotosIntoDongIndex(
     map.set(id, list);
     changed = true;
   });
+  if (gen !== buildGen) {
+    return;
+  }
   if (changed) {
     indexedAt = Date.now();
   }
@@ -84,25 +109,26 @@ export async function mergeMonthPhotosIntoDongIndex(
   await mergePhotosIntoDongIndex(photos);
 }
 
-async function buildIndex(): Promise<void> {
-  const photos = (await readLocatedPhotosSnapshot()) ?? [];
-  await buildIndexFromPhotos(photos);
-}
-
 async function ensureIndex(): Promise<void> {
   if (indexByStampId) {
     return;
   }
-  if (!indexPromise) {
-    indexPromise = buildIndex().finally(() => {
-      indexPromise = null;
-    });
+  if (indexPromise) {
+    await indexPromise;
+    return;
   }
-  await indexPromise;
+  await runBuild(async (gen) => {
+    const { readLocatedPhotosSnapshot } = await import(
+      './locatedPhotosSnapshot'
+    );
+    const photos = (await readLocatedPhotosSnapshot()) ?? [];
+    await buildIndexFromPhotos(photos, gen);
+  });
 }
 
 /** Drop memoized index (e.g. before rewriting the GPS snapshot). */
 export function resetStampDongPhotoIndex(): void {
+  buildGen += 1;
   indexByStampId = null;
   indexedAt = 0;
   indexPromise = null;
@@ -116,7 +142,9 @@ export async function prebuildStampDongPhotoIndex(
   photos?: PhotoRef[],
 ): Promise<void> {
   if (photos) {
-    await buildIndexFromPhotos(photos);
+    await runBuild(async (gen) => {
+      await buildIndexFromPhotos(photos, gen);
+    });
     return;
   }
   await ensureIndex();

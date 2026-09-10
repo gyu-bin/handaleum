@@ -4,7 +4,8 @@ import type { VisitAdminLevel, VisitPlace } from '../types';
 
 /**
  * How a place is turned into a label people recognize: colloquial aliases (판교),
- * 구 recovery from the 법정동, and collapsing visit places to a zoom grain.
+ * landmark bboxes (광화문), 구 recovery from the 법정동, and collapsing visit
+ * places to a zoom grain.
  */
 
 /**
@@ -72,11 +73,11 @@ export function guForDong(cityShort: string, dong: string | null): string | null
  * Familiar colloquial area names so the finest label reads like a place people
  * know (판교) instead of an official dong (삼평동). Entries also cover dongs that
  * are themselves the well-known name (성수동 → 성수). Anything not listed falls
- * back to the 구. Keyed by dong; a "구 동" key disambiguates repeated dongs.
- * Extend freely.
+ * back to city+구+동. Keyed by dong; a "구 동" key disambiguates repeated dongs.
  *
  * Do NOT map whole 법정동 to a street nickname (e.g. 신사동→가로수길): 한남대교
- * GPS often reverse-geocodes to 신사동 and was mislabeled. Garosu-gil is bbox-only.
+ * GPS often reverse-geocodes to 신사동 and was mislabeled. Street/landmark names
+ * are bbox-only via {@link LANDMARKS}.
  */
 const AREA_ALIAS: Record<string, string> = {
   삼평동: '판교',
@@ -95,23 +96,80 @@ const AREA_ALIAS: Record<string, string> = {
   청담동: '청담',
 };
 
-/** Core 가로수길 corridor (압구정로 일대) — not all of 신사동 / 한남대교. */
-const GAROSU_GIL = {
-  minLat: 37.5198,
-  maxLat: 37.5248,
-  minLng: 127.0205,
-  maxLng: 127.0258,
-};
-
 export type PlaceCoords = { lat: number; lng: number };
 
-function inGarosuGil(lat: number, lng: number): boolean {
-  return (
-    lat >= GAROSU_GIL.minLat &&
-    lat <= GAROSU_GIL.maxLat &&
-    lng >= GAROSU_GIL.minLng &&
-    lng <= GAROSU_GIL.maxLng
-  );
+type LandmarkBox = {
+  label: string;
+  minLat: number;
+  maxLat: number;
+  minLng: number;
+  maxLng: number;
+};
+
+/**
+ * Curated Seoul landmarks — first match wins. Keep boxes tight so nearby streets
+ * do not inherit the nickname. Order: smaller / more specific first.
+ */
+const LANDMARKS: LandmarkBox[] = [
+  // 광화문 광장·문루 (경복궁 본궁보다 남쪽).
+  {
+    label: '광화문',
+    minLat: 37.5718,
+    maxLat: 37.5772,
+    minLng: 126.9748,
+    maxLng: 126.9792,
+  },
+  // 경복궁 내부 (광화문 박스와 겹치면 광화문이 이김).
+  {
+    label: '경복궁',
+    minLat: 37.5768,
+    maxLat: 37.5895,
+    minLng: 126.974,
+    maxLng: 126.9818,
+  },
+  {
+    label: '명동',
+    minLat: 37.5605,
+    maxLat: 37.5658,
+    minLng: 126.9835,
+    maxLng: 126.9905,
+  },
+  {
+    label: '남산타워',
+    minLat: 37.5502,
+    maxLat: 37.5528,
+    minLng: 126.9868,
+    maxLng: 126.9902,
+  },
+  {
+    label: '롯데타워',
+    minLat: 37.5112,
+    maxLat: 37.5142,
+    minLng: 127.1005,
+    maxLng: 127.1045,
+  },
+  // Core 가로수길 corridor (압구정로 일대) — not all of 신사동 / 한남대교.
+  {
+    label: '가로수길',
+    minLat: 37.5198,
+    maxLat: 37.5248,
+    minLng: 127.0205,
+    maxLng: 127.0258,
+  },
+];
+
+function landmarkAt(lat: number, lng: number): string | null {
+  for (const box of LANDMARKS) {
+    if (
+      lat >= box.minLat &&
+      lat <= box.maxLat &&
+      lng >= box.minLng &&
+      lng <= box.maxLng
+    ) {
+      return box.label;
+    }
+  }
+  return null;
 }
 
 /** Colloquial alias for a dong, if we have one. */
@@ -123,9 +181,9 @@ function areaAlias(
   if (!dong) {
     return null;
   }
-  // 신사동 is huge; only the shopping street itself is "가로수길".
+  // 신사동 is huge; shopping-street nickname is landmark bbox only.
   if (gu === '강남구' && dong === '신사동') {
-    if (coords && inGarosuGil(coords.lat, coords.lng)) {
+    if (coords && landmarkAt(coords.lat, coords.lng) === '가로수길') {
       return '가로수길';
     }
     return '신사동';
@@ -137,12 +195,13 @@ function areaAlias(
 }
 
 /**
- * Finest-grain label people recognize: alias > 구 > 동·리 > 읍·면 > 시.
+ * Finest-grain label: landmark bbox > dong alias > city+구+동 > 읍·면 > 시.
  * Never drop 읍·면 just because parent 시 exists (강릉시 주문진읍).
- * Pass coords when available so street-level aliases (가로수길) stay accurate.
+ * Pass coords when available so landmarks (광화문) work even if geocode is
+ * city-only ("서울").
  *
- * `city` is used verbatim (서울 강남구, not 서울시 강남구) so chips, pin sheet
- * and playback all read the same for a metro.
+ * `city` is used verbatim (서울 종로구 사직동, not 서울시 …) so chips, pin
+ * sheet, playback and recap read the same for a metro.
  */
 export function composeFineLabel(
   city: string | null,
@@ -151,12 +210,21 @@ export function composeFineLabel(
   coords?: PlaceCoords | null,
   eupMyon?: string | null,
 ): string | null {
+  if (coords) {
+    const landmark = landmarkAt(coords.lat, coords.lng);
+    if (landmark) {
+      return landmark;
+    }
+  }
   const alias = areaAlias(gu, dong, coords);
   if (alias) {
     return alias;
   }
   if (!city) {
     return gu ?? dong ?? eupMyon ?? null;
+  }
+  if (gu && dong) {
+    return `${city} ${gu} ${dong}`;
   }
   if (gu) {
     return `${city} ${gu}`;
@@ -197,7 +265,7 @@ export function labelsForVisitLevel(
     } else if (level === 'city') {
       label = place.city ?? place.label;
     } else {
-      // Finest grain: alias > 구 > 동·리 > 읍·면.
+      // Finest grain: landmark / alias / city+구+동.
       label =
         composeFineLabel(
           place.city ?? null,

@@ -26,6 +26,7 @@ import {
 import {
   clearLocatedPhotosSnapshot,
   hasLocatedPhotosSnapshot,
+  readLocatedPhotosSnapshot,
 } from './locatedPhotosSnapshot';
 import {
   resetStampLibraryProgress,
@@ -117,72 +118,88 @@ export function startStampLibrarySync(
   const now = Date.now();
   const librarySyncAt = getStampsLibrarySyncAt();
 
-  if (!userForce && !userIncremental && !parseRevStale) {
-    if (librarySyncAt > 0 && now - librarySyncAt < SYNC_COOLDOWN_MS) {
-      // Warm dong popup index without touching MediaLibrary.
-      void prebuildStampDongPhotoIndex();
-      return Promise.resolve({ added: 0, photoCount: 0 });
-    }
-  }
-
   const run = (async () => {
-    const hasSnap = await hasLocatedPhotosSnapshot();
-    const resumeGeocodeOnly =
-      !userIncremental &&
-      shouldReuseLocatedSnapshot({
-        force: userForce,
-        hasSnapshot: hasSnap,
-        librarySyncAt,
-        now,
-        deepRecheckMs: STAMP_DEEP_RECHECK_MS,
-      });
-
-    syncing = true;
-    setFullAlbumScanBusy(true);
-    retainIndexingBackground();
-    emit();
-
+    let gated = false;
     try {
-      // Forced rescan (user or new sample hubs) drops the GPS snapshot.
-      if (userForce) {
-        clearPlaceResolveCache();
-        setStampsGpsScanAt(0);
-        setStampsCoarseGeocodeAt(0);
-        await clearLocatedPhotosSnapshot();
-      } else if (parseRevStale) {
-        clearPlaceResolveCache();
-        setStampsCoarseGeocodeAt(0);
-      }
-
-      const result = await syncStampsFromLibrary({
-        resumeGeocodeOnly,
-        incremental: userIncremental,
-      });
-      setStampsLibrarySyncAt(Date.now());
-      if (result.photoCount > 0) {
-        setStampsPlaceParseRev(STAMPS_PLACE_PARSE_REV);
-        if (isDevDummyPhotosEnabled()) {
-          setDevDummyHubsRev(DUMMY_HUBS_REV);
+      if (!userForce && !userIncremental && !parseRevStale) {
+        if (librarySyncAt > 0 && now - librarySyncAt < SYNC_COOLDOWN_MS) {
+          const snap = await readLocatedPhotosSnapshot();
+          if (snap && snap.length > 0) {
+            await prebuildStampDongPhotoIndex(snap);
+            return { added: 0, photoCount: 0 };
+          }
+          console.warn(
+            '[stamps] cooldown hit but GPS snapshot missing — scanning album',
+          );
         }
       }
-      return result;
-    } catch (error) {
-      console.warn('[stamps] library sync failed', error);
-      return { added: 0, photoCount: 0 };
+
+      const hasSnap = await hasLocatedPhotosSnapshot();
+      const resumeGeocodeOnly =
+        !userIncremental &&
+        shouldReuseLocatedSnapshot({
+          force: userForce,
+          hasSnapshot: hasSnap,
+          librarySyncAt,
+          now,
+          deepRecheckMs: STAMP_DEEP_RECHECK_MS,
+        });
+
+      gated = true;
+      syncing = true;
+      setFullAlbumScanBusy(true);
+      retainIndexingBackground();
+      emit();
+
+      try {
+        // Forced rescan (user or new sample hubs) drops the GPS snapshot.
+        if (userForce) {
+          clearPlaceResolveCache();
+          setStampsGpsScanAt(0);
+          setStampsCoarseGeocodeAt(0);
+          await clearLocatedPhotosSnapshot();
+        } else if (parseRevStale) {
+          clearPlaceResolveCache();
+          setStampsCoarseGeocodeAt(0);
+        }
+
+        const result = await syncStampsFromLibrary({
+          resumeGeocodeOnly,
+          incremental: userIncremental,
+        });
+        setStampsLibrarySyncAt(Date.now());
+        if (result.photoCount > 0) {
+          setStampsPlaceParseRev(STAMPS_PLACE_PARSE_REV);
+          if (isDevDummyPhotosEnabled()) {
+            setDevDummyHubsRev(DUMMY_HUBS_REV);
+          }
+        }
+        return result;
+      } catch (error) {
+        console.warn('[stamps] library sync failed', error);
+        return { added: 0, photoCount: 0 };
+      }
     } finally {
       inflight = null;
-      syncing = false;
-      setFullAlbumScanBusy(false);
-      releaseIndexingBackground();
-      emit();
-      setTimeout(() => {
-        if (!isStampLibrarySyncing()) {
-          resetStampLibraryProgress();
-        }
-      }, 400);
+      if (gated) {
+        syncing = false;
+        setFullAlbumScanBusy(false);
+        releaseIndexingBackground();
+        emit();
+        setTimeout(() => {
+          if (!isStampLibrarySyncing()) {
+            resetStampLibraryProgress();
+          }
+        }, 400);
+      }
     }
   })();
 
   inflight = run;
+  void run.finally(() => {
+    if (inflight === run) {
+      inflight = null;
+    }
+  });
   return run;
 }
