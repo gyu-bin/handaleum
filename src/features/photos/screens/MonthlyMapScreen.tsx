@@ -9,7 +9,6 @@ import { CreateCardFab } from '@/shared/components/CreateCardFab';
 import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
-import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 import { useShellBackground } from '@/shared/hooks/useShellBackground';
 import { useTheme } from '@/shared/theme/ThemeProvider';
 
@@ -184,7 +183,7 @@ export function MonthlyMapScreen() {
 
   // Boot only — keep the map visible while month GPS resolves (pin layer stale).
   const bootBusy = !isReady;
-  const showLoading = useHeldBusy(bootBusy, 1500, 2000);
+  const showLoading = bootBusy;
 
   // Middle-path prewarm after month GPS settles (not on every zoom recluster).
   // Skip while the loader is visible — pin baking competes for animation frames.

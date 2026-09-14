@@ -22,7 +22,7 @@ export interface LoadingViewProps {
  * album sync on first paint.
  */
 export function LoadingView({
-  message = strings.common.loading,
+  message,
   progress,
 }: LoadingViewProps) {
   const shellBg = useShellBackground();
@@ -31,20 +31,20 @@ export function LoadingView({
   return (
     <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
       <View style={styles.center} collapsable={false}>
-        <PaperMapLoader width={128} />
+        <PaperMapLoader width={240} />
         {progress ? (
           <View style={styles.progress}>
             <LoadProgressBanner
-              label={message}
+              label={message ?? strings.common.loading}
               done={progress.done}
               total={progress.total}
             />
           </View>
-        ) : (
+        ) : message ? (
           <Text style={[styles.message, { color: colors.shellSubtle }]}>
             {message}
           </Text>
-        )}
+        ) : null}
       </View>
     </SafeAreaView>
   );
@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: theme.spacing.sm,
     paddingHorizontal: theme.spacing.lg,
-    marginTop: -24,
+    marginTop: -56,
   },
   message: {
     ...theme.type.micro,

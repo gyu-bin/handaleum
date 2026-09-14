@@ -1,5 +1,5 @@
 import { memo, useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -15,10 +15,11 @@ import Svg, { Path } from 'react-native-svg';
 import { PinGlyph } from '@/shared/components/BrandMark';
 import { theme } from '@/shared/constants/theme';
 
-const VIEWBOX_W = 150;
-const VIEWBOX_H = 100;
+const FOLDED_MAP_ARTWORK = require('../../../assets/images/folded-korea-paper-map.png');
+const VIEWBOX_W = 180;
+const VIEWBOX_H = 121;
 const CYCLE_MS = 1120;
-const FINAL_FRAME = 0.9;
+const FINAL_FRAME = 0.88;
 
 function clamp01(value: number): number {
   'worklet';
@@ -28,43 +29,6 @@ function clamp01(value: number): number {
 function phase(value: number, start: number, end: number): number {
   'worklet';
   return clamp01((value - start) / (end - start));
-}
-
-function PaperPanel({ side }: { side: 'left' | 'center' | 'right' }) {
-  const path =
-    side === 'left'
-      ? 'M2 8 L45 0 L45 63 L2 70 Z'
-      : side === 'center'
-        ? 'M2 0 L45 8 L45 70 L2 63 Z'
-        : 'M2 8 L45 0 L45 70 L2 63 Z';
-  const fold = side === 'center' ? 'M23.5 4 L23.5 66' : 'M8 14 L39 8';
-
-  return (
-    <Svg width="100%" height="100%" viewBox="0 0 47 70">
-      <Path d={path} fill={theme.colors.waterLight} />
-      <Path
-        d={path}
-        fill="none"
-        stroke={theme.colors.surface}
-        strokeWidth={2.2}
-        strokeLinejoin="round"
-      />
-      <Path
-        d={fold}
-        fill="none"
-        stroke={theme.colors.border}
-        strokeWidth={0.8}
-        opacity={0.9}
-      />
-      <Path
-        d="M10 24 C18 18 27 29 38 21 M9 43 C18 36 27 47 38 39"
-        fill="none"
-        stroke={theme.colors.water}
-        strokeWidth={1.2}
-        opacity={0.72}
-      />
-    </Svg>
-  );
 }
 
 function LoaderPin({ size }: { size: number }) {
@@ -81,16 +45,16 @@ function LoaderPin({ size }: { size: number }) {
 }
 
 export interface PaperMapLoaderProps {
-  /** Display width in px; the artwork keeps a 3:2 aspect ratio. */
+  /** Display width in px; the artwork keeps the source illustration ratio. */
   width?: number;
 }
 
 /**
- * Small, repeatable loading mark: a folded paper map opens into a completed
- * month journey. The static final frame honors the OS Reduce Motion setting.
+ * Shared loading mark: the supplied folded Korea-map illustration opens, then
+ * receives the same quiet pins and hand-drawn route as the app icon.
  */
 export const PaperMapLoader = memo(function PaperMapLoader({
-  width = 128,
+  width = 184,
 }: PaperMapLoaderProps) {
   const reduceMotion = useReducedMotion();
   const cycle = useSharedValue(0);
@@ -119,58 +83,36 @@ export const PaperMapLoader = memo(function PaperMapLoader({
   }, [cycle, reduceMotion]);
 
   const stageStyle = useAnimatedStyle(() => {
-    const enter = phase(cycle.value, 0, 0.15);
-    const reset = phase(cycle.value, 0.94, 1);
-    return {
-      opacity: Math.min(1, enter * 2.2) * (1 - reset),
-    };
+    const enter = phase(cycle.value, 0, 0.09);
+    const reset = phase(cycle.value, 0.91, 1);
+    return { opacity: enter * (1 - reset) };
   });
   const mapStyle = useAnimatedStyle(() => {
-    const enter = phase(cycle.value, 0, 0.15);
-    return { transform: [{ scale: 0.84 + enter * 0.16 }] };
-  });
-  const leftPanelStyle = useAnimatedStyle(() => {
-    const unfold = phase(cycle.value, 0.15, 0.35);
+    const enter = phase(cycle.value, 0, 0.1);
     return {
       transform: [
-        { translateX: (1 - unfold) * 22 * scale },
-        { scaleX: 0.28 + unfold * 0.72 },
+        { translateY: (1 - enter) * 5 * scale },
+        { scale: 0.78 + enter * 0.22 },
       ],
     };
   });
-  const centerPanelStyle = useAnimatedStyle(() => {
-    const unfold = phase(cycle.value, 0.15, 0.35);
-    return { transform: [{ scaleX: 0.48 + unfold * 0.52 }] };
-  });
-  const rightPanelStyle = useAnimatedStyle(() => {
-    const unfold = phase(cycle.value, 0.15, 0.35);
-    return {
-      transform: [
-        { translateX: -(1 - unfold) * 22 * scale },
-        { scaleX: 0.28 + unfold * 0.72 },
-      ],
-    };
+  const unfoldStyle = useAnimatedStyle(() => {
+    const unfold = phase(cycle.value, 0.1, 0.3);
+    return { transform: [{ scaleX: 0.32 + unfold * 0.68 }] };
   });
   const pinOneStyle = useAnimatedStyle(() => {
-    const appear = phase(cycle.value, 0.35, 0.48);
-    return {
-      opacity: appear,
-      transform: [{ scale: appear }],
-    };
+    const appear = phase(cycle.value, 0.31, 0.43);
+    return { opacity: appear, transform: [{ scale: appear }] };
   });
   const routeStyle = useAnimatedStyle(() => ({
-    width: VIEWBOX_W * scale * phase(cycle.value, 0.46, 0.65),
+    opacity: phase(cycle.value, 0.42, 0.48),
+    width: VIEWBOX_W * scale * phase(cycle.value, 0.42, 0.64),
   }));
   const pinTwoStyle = useAnimatedStyle(() => {
-    const appear = phase(cycle.value, 0.64, 0.75);
-    return {
-      opacity: appear,
-      transform: [{ scale: appear }],
-    };
+    const appear = phase(cycle.value, 0.63, 0.74);
+    return { opacity: appear, transform: [{ scale: appear }] };
   });
 
-  const panelW = 47 * scale;
-  const panelH = 70 * scale;
   const pinSize = 18 * scale;
   const pinWidth = (pinSize + 2) * (24 / 32);
 
@@ -182,44 +124,20 @@ export const PaperMapLoader = memo(function PaperMapLoader({
       style={[styles.stage, { width, height }, stageStyle]}
     >
       <Animated.View style={[styles.mapLayer, mapStyle]}>
-        <Animated.View
-          style={[
-            styles.panel,
-            { left: 8 * scale, top: 21 * scale, width: panelW, height: panelH },
-            leftPanelStyle,
-          ]}
-        >
-          <PaperPanel side="left" />
-        </Animated.View>
-        <Animated.View
-          style={[
-            styles.panel,
-            { left: 52 * scale, top: 15 * scale, width: panelW, height: panelH },
-            centerPanelStyle,
-          ]}
-        >
-          <PaperPanel side="center" />
-        </Animated.View>
-        <Animated.View
-          style={[
-            styles.panel,
-            { left: 96 * scale, top: 21 * scale, width: panelW, height: panelH },
-            rightPanelStyle,
-          ]}
-        >
-          <PaperPanel side="right" />
+        <Animated.View style={[styles.paperArtwork, unfoldStyle]}>
+          <Image source={FOLDED_MAP_ARTWORK} resizeMode="contain" style={styles.mapImage} />
         </Animated.View>
       </Animated.View>
 
       <Animated.View style={[styles.routeClip, { height, width: 0 }, routeStyle]}>
         <Svg width={width} height={height} viewBox={`0 0 ${VIEWBOX_W} ${VIEWBOX_H}`}>
           <Path
-            d="M48 73 C56 59 69 64 78 57 C88 49 96 54 104 39"
+            d="M52 85 C65 70 75 76 88 65 C103 52 116 59 132 44"
             fill="none"
             stroke={theme.colors.splashMark}
-            strokeDasharray="5 6"
+            strokeDasharray="5 5"
             strokeLinecap="round"
-            strokeWidth={1.8}
+            strokeWidth={2}
           />
         </Svg>
       </Animated.View>
@@ -227,7 +145,7 @@ export const PaperMapLoader = memo(function PaperMapLoader({
       <Animated.View
         style={[
           styles.pin,
-          { left: 48 * scale - pinWidth / 2, top: 73 * scale - pinSize - 2 },
+          { left: 52 * scale - pinWidth / 2, top: 85 * scale - pinSize - 2 },
           pinOneStyle,
         ]}
       >
@@ -236,7 +154,7 @@ export const PaperMapLoader = memo(function PaperMapLoader({
       <Animated.View
         style={[
           styles.pin,
-          { left: 104 * scale - pinWidth / 2, top: 39 * scale - pinSize - 2 },
+          { left: 132 * scale - pinWidth / 2, top: 44 * scale - pinSize - 2 },
           pinTwoStyle,
         ]}
       >
@@ -254,14 +172,18 @@ const styles = StyleSheet.create({
   mapLayer: {
     ...StyleSheet.absoluteFillObject,
   },
-  panel: {
-    position: 'absolute',
+  paperArtwork: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  mapImage: {
+    height: '100%',
+    width: '100%',
   },
   routeClip: {
-    position: 'absolute',
     left: 0,
-    top: 0,
     overflow: 'hidden',
+    position: 'absolute',
+    top: 0,
   },
   pin: {
     position: 'absolute',
