@@ -53,7 +53,7 @@ export const MAP_THEMES: Record<MapThemeId, MapPalette> = {
     provinceStroke: '#3A3F46',
     cityStroke: '#5C6570',
     labelProvince: '#5A6B7A',
-    labelCity: '#2C3E50',
+    labelCity: '#33475B',
     labelMinor: '#5A6B7A',
     mountain: '#6B6E72',
     pine: '#6B7A5E',

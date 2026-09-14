@@ -97,7 +97,7 @@ export const DUMMY_STRESS_MULT = 1;
  * Bump when HUBS lat/lng set changes so 발도장 drops the stale GPS snapshot
  * and rebuilds 모은 동네 from the new sample album.
  */
-export const DUMMY_HUBS_REV = 2;
+export const DUMMY_HUBS_REV = 3;
 
 /** One hub per major region — enough for glance-dot coverage. */
 const HUBS: DummyHub[] = [
@@ -114,6 +114,20 @@ const HUBS: DummyHub[] = [
       name: '이태원동',
       postalCode: '04350',
       formattedAddress: '대한민국 서울특별시 용산구 이태원동',
+    }),
+  },
+  {
+    lat: 37.7599,
+    lng: 126.78,
+    count: 1,
+    label: '파주',
+    address: iosAddr({
+      region: '경기도',
+      city: '파주시',
+      street: '금촌동',
+      name: '금촌동',
+      postalCode: '10895',
+      formattedAddress: '대한민국 경기도 파주시 금촌동',
     }),
   },
   {
@@ -144,6 +158,34 @@ const HUBS: DummyHub[] = [
       name: '송도동',
       postalCode: '21984',
       formattedAddress: '대한민국 인천광역시 연수구 송도동',
+    }),
+  },
+  {
+    lat: 37.885,
+    lng: 127.74,
+    count: 1,
+    label: '춘천',
+    address: iosAddr({
+      region: '강원특별자치도',
+      city: '춘천시',
+      street: '후평동',
+      name: '후평동',
+      postalCode: '24226',
+      formattedAddress: '대한민국 강원특별자치도 춘천시 후평동',
+    }),
+  },
+  {
+    lat: 38.207,
+    lng: 128.5918,
+    count: 1,
+    label: '속초',
+    address: iosAddr({
+      region: '강원특별자치도',
+      city: '속초시',
+      street: '조양동',
+      name: '조양동',
+      postalCode: '24872',
+      formattedAddress: '대한민국 강원특별자치도 속초시 조양동',
     }),
   },
   {
@@ -206,6 +248,21 @@ const HUBS: DummyHub[] = [
     }),
   },
   {
+    lat: 36.019,
+    lng: 129.3435,
+    count: 1,
+    label: '포항',
+    address: iosAddr({
+      region: '경상북도',
+      city: '포항시',
+      subregion: '북구',
+      street: '중앙동',
+      name: '중앙동',
+      postalCode: '37688',
+      formattedAddress: '대한민국 경상북도 포항시 북구 중앙동',
+    }),
+  },
+  {
     lat: 35.815,
     lng: 127.153,
     count: 1,
@@ -233,6 +290,20 @@ const HUBS: DummyHub[] = [
       name: '충장동',
       postalCode: '61475',
       formattedAddress: '대한민국 광주광역시 동구 충장동',
+    }),
+  },
+  {
+    lat: 34.8118,
+    lng: 126.3922,
+    count: 1,
+    label: '목포',
+    address: iosAddr({
+      region: '전라남도',
+      city: '목포시',
+      street: '용해동',
+      name: '용해동',
+      postalCode: '58698',
+      formattedAddress: '대한민국 전라남도 목포시 용해동',
     }),
   },
   {
@@ -418,7 +489,11 @@ export function buildDummyMonthSummaries(): MonthSummary[] {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const month =
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` as MonthKey;
-    out.push({ month, totalCount: total });
+    out.push({
+      month,
+      totalCount: total,
+      coverAssetId: `${DUMMY_ASSET_PREFIX}${month}:0`,
+    });
   }
   return out;
 }
@@ -438,12 +513,18 @@ export function dummyAssetImageUri(
   assetId: string,
   _size: DummyImageSize = 256,
 ): string {
-  // Hash full id so the same index across months doesn't reuse one still.
-  let h = 0;
-  for (let i = 0; i < assetId.length; i += 1) {
-    h = (Math.imul(h, 31) + assetId.charCodeAt(i)) >>> 0;
+  // Prefer sequential hub index so neighboring pins don't share a still.
+  const seq = /^dummy:[^:]+:(\d+)$/.exec(assetId);
+  let pool: number;
+  if (seq) {
+    pool = Number(seq[1]) % DEMO_IMAGE_MODULES.length;
+  } else {
+    let h = 0;
+    for (let i = 0; i < assetId.length; i += 1) {
+      h = (Math.imul(h, 31) + assetId.charCodeAt(i)) >>> 0;
+    }
+    pool = h % DEMO_IMAGE_MODULES.length;
   }
-  const pool = h % DEMO_IMAGE_MODULES.length;
   const resolved = Image.resolveAssetSource(DEMO_IMAGE_MODULES[pool]!);
   return resolved.uri;
 }

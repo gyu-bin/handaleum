@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import {
   Image,
   Pressable,
@@ -7,7 +7,6 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Svg, { Path } from 'react-native-svg';
 
 import { strings } from '@/shared/constants/strings';
@@ -58,6 +57,7 @@ const DAY_GAP_X = 5;
 const CAPTION_GAP = 4;
 const CAPTION_LINE = 16;
 const CELL_PAD_BOTTOM = 14;
+const RAIL_MAX_NODES = 8;
 
 function canRenamePlace(id: string): boolean {
   return id.length > 0 && !id.startsWith('pending:');
@@ -152,7 +152,8 @@ export interface RecapBoardProps {
   month: MonthKey;
   photos: PhotoRef[];
   visitPlaces: VisitPlace[];
-  initialMode?: RecapBoardMode;
+  /** Parent recap tab is the only mode navigation. */
+  mode: RecapBoardMode;
 }
 
 const NodeCell = memo(function NodeCell({
@@ -264,7 +265,7 @@ function BoardPage({
     mode === 'day' ? chunkRows(pageNodes, cols) : snakeRows(pageNodes, cols);
   const gridH = rows.length * rowH;
   const rail =
-    mode === 'place'
+    mode === 'place' && pageNodes.length <= RAIL_MAX_NODES
       ? snakeRailPath(pageNodes.length, cols, size, rowH, inner / 2, gapX)
       : '';
 
@@ -334,7 +335,7 @@ export function RecapBoard({
   month,
   photos,
   visitPlaces,
-  initialMode = 'place',
+  mode,
 }: RecapBoardProps) {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
@@ -343,31 +344,8 @@ export function RecapBoard({
   const { covers: pinCovers, setCover: setPinCover } = usePinCovers(month);
   const { hide: hidePhoto } = useHiddenPhotos(month);
   const streak = usePhotoStreak(month, photos);
-  const [mode, setMode] = useState<RecapBoardMode>(initialMode);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [viewerNodeId, setViewerNodeId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (initialMode === 'day') {
-      setMode('day');
-    }
-  }, [initialMode]);
-
-  const swipeMode = useMemo(
-    () =>
-      Gesture.Pan()
-        .runOnJS(true)
-        .activeOffsetX([-28, 28])
-        .failOffsetY([-24, 24])
-        .onEnd((e) => {
-          if (e.translationX < -48) {
-            setMode('day');
-          } else if (e.translationX > 48) {
-            setMode('place');
-          }
-        }),
-    [],
-  );
 
   const placeBase = useMemo(
     () => recapPlaceNodes(photos, visitPlaces),
@@ -460,39 +438,6 @@ export function RecapBoard({
             {formatMonthDot(month)}
           </Text>
         </View>
-        <View style={styles.modes}>
-          {(['place', 'day'] as const).map((value) => {
-            const on = mode === value;
-            return (
-              <Pressable
-                key={value}
-                onPress={() => setMode(value)}
-                style={[
-                  styles.modeChip,
-                  { borderColor: colors.hairline },
-                  on && {
-                    backgroundColor: colors.shellInk,
-                    borderColor: colors.shellInk,
-                  },
-                ]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on }}
-              >
-                <Text
-                  style={[
-                    styles.modeText,
-                    { color: colors.shellInkSoft },
-                    on && { color: colors.canvas },
-                  ]}
-                >
-                  {value === 'place'
-                    ? strings.cards.boardPlace
-                    : strings.cards.boardDay}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
         <View style={styles.monthSlotEnd}>
           {showStreak && streak ? (
             <PhotoStreakLine
@@ -530,23 +475,21 @@ export function RecapBoard({
     <View style={styles.wrap}>
       {toolbar}
 
-      <GestureDetector gesture={swipeMode}>
-        <View style={styles.board}>
-          <BoardPage
-            pageNodes={nodes}
-            mode={mode}
-            cols={cols}
-            size={size}
-            inset={inset}
-            inner={inner}
-            rowH={rowH}
-            gridW={gridW}
-            gapX={gapX}
-            onOpen={onOpen}
-            onRename={onRename}
-          />
-        </View>
-      </GestureDetector>
+      <View style={styles.board}>
+        <BoardPage
+          pageNodes={nodes}
+          mode={mode}
+          cols={cols}
+          size={size}
+          inset={inset}
+          inner={inner}
+          rowH={rowH}
+          gridW={gridW}
+          gapX={gapX}
+          onOpen={onOpen}
+          onRename={onRename}
+        />
+      </View>
       <RecapPhotosModal
         photos={viewerPhotos && viewerPhotos.length > 0 ? viewerPhotos : null}
         coverAssetId={viewerCover}
@@ -597,25 +540,6 @@ const styles = StyleSheet.create({
     color: theme.colors.ink,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
-  },
-  modes: {
-    flexDirection: 'row',
-    flexShrink: 0,
-    gap: 8,
-  },
-  modeChip: {
-    minWidth: 52,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: theme.radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.border,
-    alignItems: 'center',
-  },
-  modeText: {
-    ...theme.type.label,
-    color: theme.colors.inkSoft,
-    fontWeight: '700',
   },
   hint: {
     ...theme.type.micro,

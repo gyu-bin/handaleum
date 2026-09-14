@@ -1,478 +1,331 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
-import {
-  InteractionManager,
-  Platform,
-  type ListRenderItemInfo,
+  FlatList,
+  Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
-import { Image } from 'expo-image';
-import { useLocalSearchParams } from 'expo-router';
-import Animated from 'react-native-reanimated';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Path, Rect } from 'react-native-svg';
 
 import { LoadingView } from '@/shared/components/LoadingView';
-import { ScreenHeader } from '@/shared/components/ScreenHeader';
 import { StateView } from '@/shared/components/StateView';
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
-import { useCollapseOnScroll } from '@/shared/hooks/useCollapseOnScroll';
 import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 import { useShellBackground, useShellInk } from '@/shared/hooks/useShellBackground';
 
 import { AssetThumbImage } from '../components/AssetThumbImage';
+import { HomeNavBar } from '../components/HomeNavBar';
+import { PhotoPreviewSheet } from '../components/PhotoPreviewSheet';
+import { APP_NAV_ITEMS } from '../constants/appNav';
 import { useCurrentMonth } from '../hooks/useCurrentMonth';
 import { useMonthlyPhotos } from '../hooks/useMonthlyPhotos';
-import { usePauseGridThumbWarmOnScroll } from '../hooks/usePauseGridThumbWarmOnScroll';
-import { useHiddenPhotos } from '../hooks/useHiddenPhotos';
 import { usePinCovers } from '../hooks/usePinCovers';
-import { clusterPhotos } from '../services/cluster';
-import {
-  peekAssetFileUri,
-  resolveAssetUri,
-  syncAssetDisplayUri,
-  warmGridThumbs,
-} from '../services/mediaLibrary';
 import { startMonthThumbPrewarm } from '../services/monthImageWarmup';
-import type { PhotoRef, PlaceCluster } from '../types';
+import type { PlaceCluster } from '../types';
 import {
-  placeBucketKey,
-  resolveClusterDetailLabel,
-} from '../utils/placeJourney';
+  buildDayTimeline,
+  type DayPlaceBlock,
+  type DayTimelineSection,
+} from '../utils/dayTimeline';
+import { resolveClusterDetailLabel } from '../utils/placeJourney';
 
-const GRID_COLS = 3;
-/** Ask past pin-thumb size so syncAssetDisplayUri returns full ph:// / localUri. */
-const HERO_SIZE = 1080;
-const ROW_GAP = theme.spacing.sm;
+const RADIUS = 8;
+/** Tight gutters — collage, not equal gallery tiles. */
+const GUTTER = 4;
+const SINGLE_PHOTO_MIN_HEIGHT = 180;
+const SINGLE_PHOTO_MAX_HEIGHT = 220;
+const JUMP_THUMB = 44;
 
-type ThumbRow = { key: string; photos: PhotoRef[] };
-
-function chunkThumbs(photos: PhotoRef[]): ThumbRow[] {
-  const rows: ThumbRow[] = [];
-  for (let i = 0; i < photos.length; i += GRID_COLS) {
-    const slice = photos.slice(i, i + GRID_COLS);
-    rows.push({
-      key: `r-${slice[0]?.assetId ?? i}`,
-      photos: slice,
-    });
+function monthHeading(month: string): string {
+  const [y, m] = month.split('-');
+  if (!y || !m) {
+    return month;
   }
-  return rows;
+  return `${y}년 ${Number(m)}월`;
 }
 
-const GridThumb = memo(function GridThumb({
-  assetId,
-  size,
-  selected,
-  isCover,
-  onSelectPhoto,
-}: {
-  assetId: string;
-  size: number;
-  selected: boolean;
-  isCover: boolean;
-  onSelectPhoto: (assetId: string) => void;
-}) {
-  const onPress = useCallback(() => {
-    onSelectPhoto(assetId);
-  }, [assetId, onSelectPhoto]);
+function dayOfMonth(dayKey: string): number | null {
+  const day = Number(dayKey.slice(-2));
+  return Number.isInteger(day) && day > 0 ? day : null;
+}
 
+function CalendarIcon({ color }: { color: string }) {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+      <Rect
+        x={3.5}
+        y={5}
+        width={17}
+        height={15}
+        rx={2.5}
+        stroke={color}
+        strokeWidth={2}
+      />
+      <Path
+        d="M3.5 10h17M8 3.5v3M16 3.5v3"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
+type DayThumb = {
+  assetId: string;
+  block: DayPlaceBlock;
+};
+
+function Thumb({
+  item,
+  style,
+  onOpen,
+  decode,
+  overlay,
+}: {
+  item: DayThumb;
+  style: object;
+  onOpen: (cluster: PlaceCluster, assetId: string) => void;
+  decode: number;
+  overlay?: string;
+}) {
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => onOpen(item.block.cluster, item.assetId)}
+      style={[styles.thumb, style]}
       accessibilityRole="button"
-      accessibilityLabel={
-        isCover ? strings.map.coverSelected : strings.map.setAsCover
-      }
-      style={[
-        styles.gridThumb,
-        { width: size, height: size },
-        selected && styles.gridThumbSelected,
-        isCover && styles.gridThumbCover,
-      ]}
     >
-      <AssetThumbImage assetId={assetId} size={size} style={styles.gridImage} />
-      {isCover ? (
-        <View style={styles.gridBadge}>
-          <Text style={styles.gridBadgeText}>{strings.map.coverBadge}</Text>
+      <AssetThumbImage
+        assetId={item.assetId}
+        size={decode}
+        style={styles.thumbFill}
+      />
+      {overlay ? (
+        <View style={styles.overflow}>
+          <Text style={styles.overflowText}>{overlay}</Text>
         </View>
       ) : null}
     </Pressable>
   );
-});
-
-const ThumbRowView = memo(function ThumbRowView({
-  row,
-  cell,
-  activeId,
-  coverId,
-  onSelectPhoto,
-}: {
-  row: ThumbRow;
-  cell: number;
-  activeId: string;
-  coverId: string;
-  onSelectPhoto: (assetId: string) => void;
-}) {
-  return (
-    <View style={[styles.gridRowWrap, { gap: ROW_GAP, marginBottom: ROW_GAP }]}>
-      {row.photos.map((photo) => (
-        <GridThumb
-          key={photo.assetId}
-          assetId={photo.assetId}
-          size={cell}
-          selected={photo.assetId === activeId}
-          isCover={photo.assetId === coverId}
-          onSelectPhoto={onSelectPhoto}
-        />
-      ))}
-    </View>
-  );
-});
+}
 
 /**
- * One place chapter — vertical FlatList of every photo (not nested in a pager).
+ * Editorial collage from the UI guide — a quiet day stays compact, while a
+ * photo-rich day earns a larger hero and supporting grid.
  */
-const ClusterSlide = memo(function ClusterSlide({
-  cluster,
+function DayCollage({
+  thumbs,
   width,
-  coverAssetId,
-  initialAssetId,
-  onSetCover,
-  onHidePhoto,
+  onOpen,
 }: {
-  cluster: PlaceCluster;
+  thumbs: DayThumb[];
   width: number;
-  coverAssetId?: string | null;
-  /** Prefer this photo in the hero when present in the cluster. */
-  initialAssetId?: string | null;
-  onSetCover: (placeKey: string, assetId: string) => void;
-  onHidePhoto: (assetId: string) => void;
+  onOpen: (cluster: PlaceCluster, assetId: string) => void;
+}) {
+  const n = thumbs.length;
+  if (n === 0) {
+    return null;
+  }
+
+  if (n === 1) {
+    const h = Math.max(
+      SINGLE_PHOTO_MIN_HEIGHT,
+      Math.min(SINGLE_PHOTO_MAX_HEIGHT, Math.round(width * 0.62)),
+    );
+    return (
+      <Thumb
+        item={thumbs[0]!}
+        style={{ width, height: h, borderRadius: RADIUS }}
+        decode={Math.ceil(width * 2)}
+        onOpen={onOpen}
+      />
+    );
+  }
+
+  if (n === 2) {
+    const w = (width - GUTTER) / 2;
+    const h = Math.round(w * 0.8);
+    return (
+      <View style={[styles.row, { gap: GUTTER }]}>
+        {thumbs.slice(0, 2).map((item) => (
+          <Thumb
+            key={`${item.block.key}-${item.assetId}`}
+            item={item}
+            style={{ width: w, height: h, borderRadius: RADIUS }}
+            decode={Math.ceil(w * 2)}
+            onOpen={onOpen}
+          />
+        ))}
+      </View>
+    );
+  }
+
+  if (n === 3) {
+    const w = (width - GUTTER * 2) / 3;
+    const h = Math.round(w * 1.02);
+    return (
+      <View style={[styles.row, { gap: GUTTER }]}>
+        {thumbs.map((item) => (
+          <Thumb
+            key={`${item.block.key}-${item.assetId}`}
+            item={item}
+            style={{ width: w, height: h, borderRadius: RADIUS }}
+            decode={Math.ceil(w * 2)}
+            onOpen={onOpen}
+          />
+        ))}
+      </View>
+    );
+  }
+
+  // 4+: featured left + two stacked support; last cell shows +remaining.
+  const leftW = Math.round((width - GUTTER) * 0.62);
+  const rightW = width - GUTTER - leftW;
+  const leftH = Math.round(leftW * 0.92);
+  const featured = thumbs[0]!;
+  const side = thumbs.slice(1, 3);
+  const overflow = Math.max(0, thumbs.length - 3);
+  const sideH = (leftH - GUTTER) / 2;
+
+  return (
+    <View style={[styles.row, { gap: GUTTER, height: leftH }]}>
+      <Thumb
+        item={featured}
+        style={{ width: leftW, height: leftH, borderRadius: RADIUS }}
+        decode={Math.ceil(leftW * 2)}
+        onOpen={onOpen}
+      />
+      <View style={[styles.sideStack, { width: rightW, gap: GUTTER }]}>
+        {side.map((item, index) => (
+          <Thumb
+            key={`${item.block.key}-${item.assetId}`}
+            item={item}
+            style={{ width: rightW, height: sideH, borderRadius: RADIUS }}
+            decode={Math.ceil(rightW * 2)}
+            onOpen={onOpen}
+            overlay={
+              index === side.length - 1 && overflow > 0
+                ? `+${overflow}`
+                : undefined
+            }
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function placeLineFor(
+  section: DayTimelineSection,
+  labels: Record<string, string>,
+): string {
+  const names = section.places
+    .map((block) => labels[block.placeKey])
+    .filter(Boolean) as string[];
+  if (names.length === 0) {
+    return strings.playback.placeLoading;
+  }
+  return names.length === 1
+    ? names[0]!
+    : `${names[0]} 외 ${names.length - 1}곳`;
+}
+
+function DaySection({
+  section,
+  width,
+  labels,
+  onOpen,
+}: {
+  section: DayTimelineSection;
+  width: number;
+  covers: Record<string, string>;
+  labels: Record<string, string>;
+  onOpen: (cluster: PlaceCluster, assetId: string) => void;
 }) {
   const shell = useShellInk();
-  const placeKey = placeBucketKey(cluster.centerLat, cluster.centerLng);
-  const [activeId, setActiveId] = useState(() => {
-    if (
-      initialAssetId &&
-      cluster.photos.some((p) => p.assetId === initialAssetId)
-    ) {
-      return initialAssetId;
-    }
-    return coverAssetId ?? cluster.photos[0]?.assetId ?? '';
-  });
-  const deepLinkAppliedRef = useRef(
-    Boolean(
-      initialAssetId &&
-        cluster.photos.some((p) => p.assetId === initialAssetId),
-    ),
-  );
-  const [asyncHero, setAsyncHero] = useState<{
-    id: string;
-    uri: string;
-  } | null>(null);
-  const [placeLabel, setPlaceLabel] = useState<string | null>(null);
-  const [labelLoading, setLabelLoading] = useState(true);
-  const scrollingRef = useRef(false);
-  const pendingLabelRef = useRef<{
-    label: string | null;
-    loading: boolean;
-  } | null>(null);
-  const thumbWarmScroll = usePauseGridThumbWarmOnScroll();
-  const {
-    resetScroll,
-    setExpandedHeight,
-    onScroll,
-    collapseStyle,
-    mediaScaleStyle,
-  } = useCollapseOnScroll({ minRatio: 0.55, range: 160 });
+  const contentW = width - theme.spacing.lg * 2;
 
-  const pad = theme.spacing.lg;
-  const contentW = width - pad * 2;
-  /** Square hero edge — collapse only this, not the title row. */
-  const heroEdge = contentW;
-  const cell = (contentW - ROW_GAP * (GRID_COLS - 1)) / GRID_COLS;
-  const rowHeight = cell + ROW_GAP;
-
-  useEffect(() => {
-    resetScroll();
-  }, [cluster.id, resetScroll]);
-
-  useEffect(() => {
-    setExpandedHeight(heroEdge);
-  }, [heroEdge, setExpandedHeight]);
-
-  useEffect(() => {
-    // Deep-link focus wins for this mount; don't snap back when cover updates.
-    if (deepLinkAppliedRef.current) {
-      return;
-    }
-    const next =
-      (coverAssetId &&
-      cluster.photos.some((p) => p.assetId === coverAssetId)
-        ? coverAssetId
-        : null) ??
-      cluster.photos[0]?.assetId ??
-      '';
-    setActiveId(next);
-  }, [cluster, coverAssetId]);
-
-  // Pre-bake small file thumbs after mount — recycle uses file://, not ph://.
-  useEffect(() => {
-    const handle = InteractionManager.runAfterInteractions(() => {
-      warmGridThumbs(
-        cluster.photos.map((p) => p.assetId),
-        64,
-      );
-    });
-    return () => handle.cancel();
-  }, [cluster]);
-
-  const activePhoto =
-    cluster.photos.find((p) => p.assetId === activeId) ?? cluster.photos[0];
-
-  const thumbRows = useMemo(
-    () => chunkThumbs(cluster.photos),
-    [cluster.photos],
+  const thumbs: DayThumb[] = useMemo(
+    () =>
+      section.places.flatMap((block) =>
+        block.photos.map((photo) => ({ assetId: photo.assetId, block })),
+      ),
+    [section.places],
   );
 
-  const syncHeroUri = activePhoto
-    ? syncAssetDisplayUri(activePhoto.assetId, HERO_SIZE)
-    : null;
-  // Interim 128 thumb while full hero resolves — avoids blank flash.
-  const interimHeroUri = activePhoto
-    ? (peekAssetFileUri(activePhoto.assetId) ??
-      syncAssetDisplayUri(activePhoto.assetId, 128))
-    : null;
-  const uri =
-    syncHeroUri ??
-    (asyncHero?.id === activePhoto?.assetId ? asyncHero.uri : null) ??
-    interimHeroUri;
-
-  useEffect(() => {
-    if (!activePhoto || syncHeroUri) {
-      return;
-    }
-    let cancelled = false;
-    // Keep interim URI until the next one lands (no blank clear).
-    void resolveAssetUri(activePhoto.assetId, { imageSize: HERO_SIZE })
-      .then((next) => {
-        if (!cancelled && next) {
-          setAsyncHero({ id: activePhoto.assetId, uri: next });
-        }
-      })
-      .catch((error) => {
-        console.warn('ClusterSlide uri failed', activePhoto.assetId, error);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [activePhoto, syncHeroUri]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const t = setTimeout(() => {
-      const pin = activePhoto ?? cluster.photos[0];
-      const lat = pin?.lat ?? cluster.centerLat;
-      const lng = pin?.lng ?? cluster.centerLng;
-      const apply = (label: string | null, loading: boolean) => {
-        if (scrollingRef.current) {
-          pendingLabelRef.current = { label, loading };
-          return;
-        }
-        setPlaceLabel(label);
-        setLabelLoading(loading);
-      };
-      if (!scrollingRef.current) {
-        setLabelLoading(true);
-      }
-      void resolveClusterDetailLabel(lat, lng)
-        .then((label) => {
-          if (!cancelled) {
-            apply(label, false);
-          }
-        })
-        .catch((error) => {
-          console.warn('ClusterSlide label failed', error);
-          if (!cancelled) {
-            apply(null, false);
-          }
-        });
-    }, 280);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [activePhoto, cluster.centerLat, cluster.centerLng, cluster.photos]);
-
-  const flushPendingLabel = useCallback(() => {
-    const pending = pendingLabelRef.current;
-    if (!pending) {
-      return;
-    }
-    pendingLabelRef.current = null;
-    setPlaceLabel(pending.label);
-    setLabelLoading(pending.loading);
-  }, []);
-
-  const onSelectPhoto = useCallback(
-    (assetId: string) => {
-      setActiveId(assetId);
-      onSetCover(placeKey, assetId);
-    },
-    [onSetCover, placeKey],
-  );
-
-  const placeText = labelLoading
-    ? strings.playback.placeLoading
-    : (placeLabel ?? strings.playback.placeUnknown);
-
-  const chapterDay = cluster.photos[0]?.takenAt
-    ? strings.playback.chapterDay(cluster.photos[0].takenAt)
-    : '';
-
-  const coverId = coverAssetId ?? activeId;
-
-  const renderRow = useCallback(
-    ({ item }: ListRenderItemInfo<ThumbRow>) => (
-      <ThumbRowView
-        row={item}
-        cell={cell}
-        activeId={activeId}
-        coverId={coverId}
-        onSelectPhoto={onSelectPhoto}
-      />
-    ),
-    [activeId, cell, coverId, onSelectPhoto],
-  );
-
-  const getItemLayout = useCallback(
-    (_: ArrayLike<ThumbRow> | null | undefined, index: number) => ({
-      length: rowHeight,
-      offset: rowHeight * index,
-      index,
-    }),
-    [rowHeight],
-  );
+  const placeLine = placeLineFor(section, labels);
 
   return (
-    <View style={styles.list}>
-      {/* Title stays put — only the square hero scales on scroll. */}
-      <View style={styles.chapterHead}>
-        <View style={styles.titleRow}>
-          <Text style={[styles.place, shell.ink]} numberOfLines={2}>
-            {placeText}
-          </Text>
-          <View style={styles.metaCol}>
-            {chapterDay ? (
-              <Text style={[styles.meta, shell.soft]} numberOfLines={1}>
-                {chapterDay}
-              </Text>
-            ) : null}
-            <Text style={[styles.meta, shell.soft]} numberOfLines={1}>
-              {strings.map.clusterCount(cluster.photos.length)}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Hero slot height shrinks; list stays in normal flow so bottom pager isn't clipped. */}
-      <Animated.View style={[styles.heroSlot, collapseStyle]}>
-        <Animated.View
-          style={[
-            styles.heroSquare,
-            { width: heroEdge, height: heroEdge },
-            mediaScaleStyle,
-          ]}
-        >
-          {uri ? (
-            <Image
-              source={{ uri }}
-              style={{ width: heroEdge, height: heroEdge }}
-              contentFit="cover"
-              cachePolicy="memory-disk"
-              recyclingKey={`${activeId}-${HERO_SIZE}`}
-              priority="high"
-              transition={0}
-              allowDownscaling
-            />
-          ) : (
-            <View
-              style={[
-                styles.placeholder,
-                { width: heroEdge, height: heroEdge },
-              ]}
-            />
-          )}
-        </Animated.View>
-      </Animated.View>
-
-      {cluster.photos.length > 1 ? (
-        <Text style={[styles.gridHint, shell.subtle]}>
-          {strings.playback.gridHint}
+    <View style={styles.section}>
+      <View style={styles.dateRow}>
+        <Text style={[styles.dateLabel, shell.ink]}>{section.dateLabel}</Text>
+        <Text style={[styles.placeCount, shell.subtle]}>
+          {strings.months.photoCount(thumbs.length)}
         </Text>
-      ) : null}
-      {activeId ? (
-        <Pressable
-          onPress={() => onHidePhoto(activeId)}
-          accessibilityRole="button"
-          accessibilityLabel={strings.map.hidePhoto}
-          hitSlop={8}
-          style={styles.hideBtn}
-        >
-          <Text style={[styles.hideBtnText, shell.soft]}>
-            {strings.map.hidePhoto}
-          </Text>
-        </Pressable>
-      ) : null}
-
-      <Animated.FlatList
-        style={styles.thumbList}
-        data={thumbRows}
-        keyExtractor={(row) => row.key}
-        contentContainerStyle={styles.gridContent}
-        showsVerticalScrollIndicator={false}
-        initialNumToRender={8}
-        maxToRenderPerBatch={4}
-        windowSize={7}
-        updateCellsBatchingPeriod={40}
-        removeClippedSubviews={Platform.OS === 'android'}
-        getItemLayout={getItemLayout}
-        renderItem={renderRow}
-        extraData={`${activeId}:${coverId}`}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        onScrollBeginDrag={() => {
-          scrollingRef.current = true;
-          thumbWarmScroll.onScrollBeginDrag();
-        }}
-        onMomentumScrollBegin={thumbWarmScroll.onMomentumScrollBegin}
-        onScrollEndDrag={() => {
-          thumbWarmScroll.onScrollEndDrag();
-        }}
-        onMomentumScrollEnd={() => {
-          scrollingRef.current = false;
-          thumbWarmScroll.onMomentumScrollEnd();
-          flushPendingLabel();
-        }}
-      />
+      </View>
+      <Text style={[styles.placeLabel, shell.soft]} numberOfLines={1}>
+        {`📍 ${placeLine}`}
+      </Text>
+      <DayCollage thumbs={thumbs} width={contentW} onOpen={onOpen} />
     </View>
   );
-});
+}
+
+function PlaybackChrome({
+  month,
+  onOpenMonths,
+  onOpenDateJump,
+}: {
+  month: string;
+  onOpenMonths: () => void;
+  onOpenDateJump: () => void;
+}) {
+  const shell = useShellInk();
+  return (
+    <View style={styles.chrome}>
+      <Text style={[styles.screenTitle, shell.ink]}>{strings.playback.title}</Text>
+      <View style={styles.chromeRow}>
+        <Pressable
+          onPress={onOpenMonths}
+          accessibilityRole="button"
+          accessibilityLabel={strings.months.title}
+          style={({ pressed }) => [
+            styles.monthButton,
+            pressed && styles.chromePressed,
+          ]}
+        >
+          <Text style={[styles.monthTitle, shell.ink]}>{monthHeading(month)}</Text>
+          <Text style={[styles.monthCaret, shell.soft]}>▼</Text>
+        </Pressable>
+        <Pressable
+          onPress={onOpenDateJump}
+          accessibilityRole="button"
+          accessibilityLabel={strings.playback.openDateJump}
+          style={({ pressed }) => [
+            styles.calendarBtn,
+            pressed && styles.chromePressed,
+          ]}
+        >
+          <CalendarIcon color={theme.colors.ink} />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
 
 /**
- * Place-chapter view: one place at a time; ‹ › changes place.
- * Vertical list is never nested in a horizontal pager.
+ * Photo timeline — days top-to-bottom; quiet days stay compact, rich days grow.
+ * Detail / hide / cover still go through PhotoPreviewSheet.
  */
 export function PlaybackScreen() {
+  const router = useRouter();
   const shellBg = useShellBackground();
   const shell = useShellInk();
   const { width } = useWindowDimensions();
@@ -484,51 +337,38 @@ export function PlaybackScreen() {
   const { data, isPending, isError, refetch } = useMonthlyPhotos(month);
   const showLoading = useHeldBusy(isPending);
   const { covers, setCover } = usePinCovers(month);
-  const { hide: hidePhoto } = useHiddenPhotos(month);
-  const [index, setIndex] = useState(0);
-  const focusedAssetRef = useRef<string | null>(null);
+  const [selected, setSelected] = useState<PlaceCluster | null>(null);
+  const [labels, setLabels] = useState<Record<string, string>>({});
+  const [dateJumpOpen, setDateJumpOpen] = useState(false);
+  const listRef = useRef<FlatList<DayTimelineSection>>(null);
+  const didFocusScroll = useRef<string | null>(null);
 
-  const clusters = useMemo(() => {
-    if (!data) {
-      return [];
-    }
-    return clusterPhotos(data.photos, 14).sort((a, b) => {
-      const a0 = a.photos[0]?.takenAt ?? '';
-      const b0 = b.photos[0]?.takenAt ?? '';
-      return a0.localeCompare(b0);
-    });
-  }, [data]);
+  const sections = useMemo(
+    () => (data ? buildDayTimeline(data.photos) : []),
+    [data],
+  );
 
-  useEffect(() => {
-    setIndex(0);
-    focusedAssetRef.current = null;
-  }, [month]);
+  const photoDays = useMemo(
+    () =>
+      new Set(
+        sections
+          .map((section) => dayOfMonth(section.dayKey))
+          .filter((day): day is number => day != null),
+      ),
+    [sections],
+  );
+  const [year, monthNumber] = month.split('-').map(Number);
+  const daysInMonth = new Date(year, monthNumber, 0).getDate();
+  const firstWeekday = new Date(year, monthNumber - 1, 1).getDay();
+  const calendarSlots = Array.from(
+    { length: firstWeekday + daysInMonth },
+    (_, index) => index - firstWeekday + 1,
+  );
 
-  useEffect(() => {
-    if (index >= clusters.length) {
-      setIndex(Math.max(0, clusters.length - 1));
-    }
-  }, [clusters.length, index]);
+  const openMonths = useCallback(() => {
+    router.push('/months');
+  }, [router]);
 
-  // Open from memory notification: jump to the place that owns the asset.
-  useEffect(() => {
-    if (!focusAssetId || clusters.length === 0) {
-      return;
-    }
-    if (focusedAssetRef.current === focusAssetId) {
-      return;
-    }
-    const next = clusters.findIndex((c) =>
-      c.photos.some((p) => p.assetId === focusAssetId),
-    );
-    if (next >= 0) {
-      setIndex(next);
-      focusedAssetRef.current = focusAssetId;
-    }
-  }, [clusters, focusAssetId]);
-
-  // Same middle-path prewarm if user opens playback without visiting the map first.
-  // Wait until the bike leaves — bake during LoadingView hitchs the spin.
   useEffect(() => {
     if (!data || showLoading) {
       return;
@@ -537,19 +377,95 @@ export function PlaybackScreen() {
       month,
       priorityIds: Object.values(covers),
       monthAssetIds: data.photos.map((p) => p.assetId),
-      // Grid scroll owns warm; keep month fill light on this screen.
-      maxMonthFill: 48,
+      maxMonthFill: 64,
     });
   }, [covers, data, month, showLoading]);
 
-  const goTo = useCallback(
-    (next: number) => {
-      if (next < 0 || next >= clusters.length) {
+  useEffect(() => {
+    let cancelled = false;
+    const blocks = sections.flatMap((s) => s.places);
+    void (async () => {
+      const next: Record<string, string> = {};
+      for (const block of blocks) {
+        if (cancelled) {
+          return;
+        }
+        if (labels[block.placeKey]) {
+          next[block.placeKey] = labels[block.placeKey]!;
+          continue;
+        }
+        const label = await resolveClusterDetailLabel(
+          block.centerLat,
+          block.centerLng,
+        );
+        if (label) {
+          next[block.placeKey] = label;
+        }
+      }
+      if (!cancelled && Object.keys(next).length > 0) {
+        setLabels((prev) => ({ ...prev, ...next }));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Resolve labels when sections change; intentionally skip labels dep.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sections]);
+
+  const jumpToDay = useCallback(
+    (dayKey: string) => {
+      const index = sections.findIndex((section) => section.dayKey === dayKey);
+      setDateJumpOpen(false);
+      if (index < 0) {
         return;
       }
-      setIndex(next);
+      requestAnimationFrame(() => {
+        listRef.current?.scrollToIndex({
+          index,
+          animated: true,
+          viewPosition: 0,
+        });
+      });
     },
-    [clusters.length],
+    [sections],
+  );
+
+  useEffect(() => {
+    if (!focusAssetId || sections.length === 0) {
+      return;
+    }
+    if (didFocusScroll.current === focusAssetId) {
+      return;
+    }
+    for (const section of sections) {
+      for (const place of section.places) {
+        if (place.photos.some((p) => p.assetId === focusAssetId)) {
+          didFocusScroll.current = focusAssetId;
+          setSelected(place.cluster);
+          jumpToDay(section.dayKey);
+          return;
+        }
+      }
+    }
+  }, [focusAssetId, jumpToDay, sections]);
+
+  const onOpen = useCallback((cluster: PlaceCluster, _assetId: string) => {
+    setSelected(cluster);
+  }, []);
+
+  const selectedCoverKey = selected
+    ? sections
+        .flatMap((s) => s.places)
+        .find((p) => p.cluster.id === selected.id)?.placeKey
+    : null;
+
+  const chrome = (
+    <PlaybackChrome
+      month={month}
+      onOpenMonths={openMonths}
+      onOpenDateJump={() => setDateJumpOpen(true)}
+    />
   );
 
   if (showLoading) {
@@ -559,85 +475,176 @@ export function PlaybackScreen() {
   if (isError || !data) {
     return (
       <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
-        <ScreenHeader title={strings.playback.title} />
+        {chrome}
         <StateView
-          icon="⚠️"
           title={strings.common.error}
           actionLabel={strings.common.retry}
           onAction={() => void refetch()}
         />
+        <HomeNavBar items={APP_NAV_ITEMS} />
       </SafeAreaView>
     );
   }
 
-  if (clusters.length === 0) {
+  if (sections.length === 0) {
     return (
       <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
-        <ScreenHeader title={strings.playback.title} />
-        <StateView icon="🎞️" title={strings.playback.empty} />
+        {chrome}
+        <StateView title={strings.playback.empty} />
+        <HomeNavBar items={APP_NAV_ITEMS} />
       </SafeAreaView>
     );
   }
-
-  const cluster = clusters[index]!;
-  const placeKey = placeBucketKey(cluster.centerLat, cluster.centerLng);
-  const canPrev = index > 0;
-  const canNext = index < clusters.length - 1;
 
   return (
     <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
-      <ScreenHeader title={strings.playback.title} />
-      <View style={styles.list}>
-        <ClusterSlide
-          key={cluster.id}
-          cluster={cluster}
-          width={width}
-          coverAssetId={covers[placeKey] ?? null}
-          initialAssetId={
-            focusAssetId &&
-            cluster.photos.some((p) => p.assetId === focusAssetId)
-              ? focusAssetId
-              : null
-          }
-          onSetCover={setCover}
-          onHidePhoto={hidePhoto}
-        />
-      </View>
-      {clusters.length > 1 ? (
-        <View style={styles.pager}>
+      {chrome}
+      <FlatList
+        ref={listRef}
+        data={sections}
+        keyExtractor={(item) => item.dayKey}
+        contentContainerStyle={styles.list}
+        showsVerticalScrollIndicator={false}
+        renderItem={({ item }) => (
+          <DaySection
+            section={item}
+            width={width}
+            covers={covers}
+            labels={labels}
+            onOpen={onOpen}
+          />
+        )}
+        onScrollToIndexFailed={({ index }) => {
+          setTimeout(() => {
+            listRef.current?.scrollToIndex({
+              index,
+              animated: true,
+              viewPosition: 0,
+            });
+          }, 120);
+        }}
+      />
+      <HomeNavBar items={APP_NAV_ITEMS} />
+      <PhotoPreviewSheet
+        cluster={selected}
+        onClose={() => setSelected(null)}
+        coverAssetId={selectedCoverKey ? covers[selectedCoverKey] : null}
+        onSetCover={setCover}
+      />
+      <Modal
+        visible={dateJumpOpen}
+        animationType="slide"
+        transparent
+        presentationStyle="overFullScreen"
+        onRequestClose={() => setDateJumpOpen(false)}
+      >
+        <View style={styles.jumpBackdrop}>
           <Pressable
-            onPress={() => goTo(index - 1)}
-            disabled={!canPrev}
-            hitSlop={8}
+            style={StyleSheet.absoluteFill}
+            onPress={() => setDateJumpOpen(false)}
             accessibilityRole="button"
-            accessibilityLabel={strings.playback.prevPlace}
-            style={({ pressed }) => [
-              styles.arrowBtn,
-              !canPrev && styles.arrowBtnDisabled,
-              pressed && canPrev && styles.arrowBtnPressed,
-            ]}
-          >
-            <Text style={[styles.arrowGlyph, shell.ink]}>‹</Text>
-          </Pressable>
-          <Text style={[styles.pagerCount, shell.soft]}>
-            {index + 1} / {clusters.length}
-          </Text>
-          <Pressable
-            onPress={() => goTo(index + 1)}
-            disabled={!canNext}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={strings.playback.nextPlace}
-            style={({ pressed }) => [
-              styles.arrowBtn,
-              !canNext && styles.arrowBtnDisabled,
-              pressed && canNext && styles.arrowBtnPressed,
-            ]}
-          >
-            <Text style={[styles.arrowGlyph, shell.ink]}>›</Text>
-          </Pressable>
+            accessibilityLabel={strings.common.cancel}
+          />
+          <View style={styles.jumpSheet}>
+            <View style={styles.jumpHandle} />
+            <View style={styles.jumpHeader}>
+              <Text style={[styles.jumpTitle, shell.ink]}>{monthHeading(month)}</Text>
+              <Pressable onPress={() => setDateJumpOpen(false)} hitSlop={8}>
+                <Text style={[styles.jumpClose, shell.soft]}>{strings.common.confirm}</Text>
+              </Pressable>
+            </View>
+            <View style={styles.weekdayRow}>
+              {['일', '월', '화', '수', '목', '금', '토'].map((weekday) => (
+                <Text key={weekday} style={[styles.weekday, shell.subtle]}>
+                  {weekday}
+                </Text>
+              ))}
+            </View>
+            <View style={styles.calendarGrid}>
+              {calendarSlots.map((day, index) => {
+                const hasPhotos = photoDays.has(day);
+                return day < 1 ? (
+                  <View key={`blank-${index}`} style={styles.calendarCell} />
+                ) : (
+                  <Pressable
+                    key={day}
+                    disabled={!hasPhotos}
+                    onPress={() => {
+                      const target = sections.find(
+                        (section) => dayOfMonth(section.dayKey) === day,
+                      );
+                      if (target) {
+                        jumpToDay(target.dayKey);
+                      }
+                    }}
+                    style={[
+                      styles.calendarCell,
+                      hasPhotos && styles.calendarCellOn,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: !hasPhotos }}
+                  >
+                    <Text
+                      style={[
+                        styles.calendarDay,
+                        shell.soft,
+                        hasPhotos && styles.calendarDayOn,
+                      ]}
+                    >
+                      {day}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Text style={[styles.jumpListTitle, shell.ink]}>
+              {strings.playback.datesWithPhotos}
+            </Text>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.jumpList}
+            >
+              {sections.map((section) => {
+                const coverId = section.photos[0]?.assetId;
+                return (
+                  <Pressable
+                    key={section.dayKey}
+                    onPress={() => jumpToDay(section.dayKey)}
+                    style={({ pressed }) => [
+                      styles.jumpRow,
+                      pressed && styles.jumpRowPressed,
+                    ]}
+                  >
+                    {coverId ? (
+                      <AssetThumbImage
+                        assetId={coverId}
+                        size={JUMP_THUMB * 2}
+                        style={styles.jumpThumb}
+                      />
+                    ) : (
+                      <View style={styles.jumpThumb} />
+                    )}
+                    <View style={styles.jumpRowCopy}>
+                      <Text style={[styles.jumpRowDate, shell.ink]}>
+                        {section.dateLabel}
+                      </Text>
+                      <Text
+                        style={[styles.jumpRowPlace, shell.soft]}
+                        numberOfLines={1}
+                      >
+                        {placeLineFor(section, labels)}
+                      </Text>
+                    </View>
+                    <Text style={[styles.jumpRowCount, shell.soft]}>
+                      {strings.months.photoCount(section.photos.length)} ›
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
         </View>
-      ) : null}
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -646,157 +653,232 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
   },
-  list: {
-    flex: 1,
-  },
-  pager: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: theme.spacing.lg,
+  chrome: {
+    paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.sm,
-    paddingBottom: theme.spacing.md,
-    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: theme.spacing.sm,
+    gap: 6,
   },
-  arrowBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.line,
-    backgroundColor: theme.colors.surface,
-  },
-  arrowBtnPressed: {
-    backgroundColor: theme.tint.faint,
-  },
-  arrowBtnDisabled: {
-    opacity: 0.28,
-  },
-  arrowGlyph: {
-    fontSize: 28,
-    lineHeight: 30,
-    color: theme.colors.ink,
-    fontWeight: '300',
-    marginTop: -2,
-  },
-  pagerCount: {
-    ...theme.type.label,
+  screenTitle: {
     fontFamily: theme.fonts.sans,
-    color: theme.colors.inkSoft,
-    fontWeight: '600',
-    minWidth: 64,
-    textAlign: 'center',
-  },
-  chapterHead: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.md,
-    flexShrink: 0,
-  },
-  heroSlot: {
-    overflow: 'hidden',
-    alignSelf: 'center',
-    marginTop: theme.spacing.md,
-  },
-  heroSquare: {
-    borderRadius: theme.radius.card,
-    overflow: 'hidden',
-    backgroundColor: theme.colors.surfaceAlt,
-  },
-  thumbList: {
-    flex: 1,
-    minHeight: 0,
-  },
-  gridContent: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.xs,
-    paddingBottom: theme.spacing.lg,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: theme.spacing.md,
-  },
-  place: {
-    ...theme.type.title,
-    flex: 1,
-    fontSize: 24,
-    lineHeight: 30,
-    fontFamily: theme.fonts.sans,
-    color: theme.colors.ink,
-    fontWeight: '800',
+    fontSize: 26,
+    lineHeight: 32,
+    fontWeight: '700',
     letterSpacing: -0.4,
   },
-  metaCol: {
-    alignItems: 'flex-end',
-    paddingTop: 4,
-    maxWidth: '42%',
+  chromeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  meta: {
-    ...theme.type.micro,
+  chromePressed: {
+    opacity: 0.55,
+  },
+  monthButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 2,
+  },
+  monthTitle: {
     fontFamily: theme.fonts.sans,
-    color: theme.colors.inkSoft,
-    fontWeight: '500',
-    textAlign: 'right',
-  },
-  placeholder: {
-    backgroundColor: theme.colors.surfaceAlt,
-    borderRadius: theme.radius.card,
-  },
-  gridHint: {
-    ...theme.type.micro,
-    marginTop: theme.spacing.sm,
-    marginHorizontal: theme.spacing.lg,
-    flexShrink: 0,
-    color: theme.colors.subtle,
-  },
-  hideBtn: {
-    alignSelf: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: theme.spacing.md,
-    flexShrink: 0,
-  },
-  hideBtnText: {
-    ...theme.type.micro,
-    fontFamily: theme.fonts.sans,
-    color: theme.colors.inkSoft,
+    fontSize: 16,
+    lineHeight: 22,
     fontWeight: '600',
   },
-  gridRowWrap: {
+  monthCaret: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 10,
+    lineHeight: 14,
+    marginTop: 1,
+  },
+  list: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: theme.spacing.xl,
+  },
+  section: {
+    marginBottom: 36,
+  },
+  dateRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    width: '100%',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: theme.spacing.sm,
+    marginBottom: 4,
   },
-  gridThumb: {
-    borderRadius: theme.radius.sm,
+  dateLabel: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: '700',
+  },
+  placeLabel: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  placeCount: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  sideStack: {
+    flexDirection: 'column',
+  },
+  thumb: {
     overflow: 'hidden',
-    borderWidth: 1.5,
-    borderColor: theme.colors.line,
+    backgroundColor: theme.colors.surfaceAlt,
   },
-  gridThumbSelected: {
-    borderColor: theme.colors.ink,
-  },
-  gridThumbCover: {
-    borderColor: theme.colors.ink,
-  },
-  gridImage: {
+  thumbFill: {
     width: '100%',
     height: '100%',
   },
-  gridBadge: {
-    position: 'absolute',
-    left: 4,
-    bottom: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.tint.full,
+  overflow: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(51,71,91,0.48)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  gridBadgeText: {
-    ...theme.type.micro,
+  overflowText: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.colors.white,
+  },
+  calendarBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  jumpBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(51,71,91,0.24)',
+  },
+  jumpSheet: {
+    maxHeight: '78%',
+    borderTopLeftRadius: theme.radius.lg,
+    borderTopRightRadius: theme.radius.lg,
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.lg,
+  },
+  jumpHandle: {
+    alignSelf: 'center',
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: theme.colors.hairline,
+    marginBottom: theme.spacing.md,
+  },
+  jumpHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: theme.spacing.md,
+  },
+  jumpTitle: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: '700',
+  },
+  jumpClose: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600',
+  },
+  weekdayRow: {
+    flexDirection: 'row',
+    marginBottom: 5,
+  },
+  weekday: {
+    width: '14.2857%',
+    textAlign: 'center',
+    fontFamily: theme.fonts.sans,
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: '600',
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: theme.spacing.lg,
+  },
+  calendarCell: {
+    width: '14.2857%',
+    aspectRatio: 1,
+    borderRadius: theme.radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarCellOn: {
+    backgroundColor: theme.colors.ink,
+  },
+  calendarDay: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  calendarDayOn: {
     color: theme.colors.surface,
     fontWeight: '700',
-    fontSize: 9,
+  },
+  jumpListTitle: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '700',
+    marginBottom: theme.spacing.sm,
+  },
+  jumpList: {
+    paddingBottom: theme.spacing.xl,
+  },
+  jumpRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+    minHeight: 58,
+    paddingVertical: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.hairline,
+  },
+  jumpRowPressed: {
+    opacity: 0.58,
+  },
+  jumpThumb: {
+    width: JUMP_THUMB,
+    height: JUMP_THUMB,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: theme.colors.surfaceAlt,
+  },
+  jumpRowCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  jumpRowDate: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: '600',
+  },
+  jumpRowPlace: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  jumpRowCount: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 12,
+    lineHeight: 16,
   },
 });

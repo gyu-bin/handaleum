@@ -11,7 +11,7 @@ export interface RegionChipsProps {
   onSelect: (sido: string) => void;
 }
 
-const CHIP_H = 40;
+const CHIP_H = 30;
 
 /**
  * Horizontal 시·도 chip row. Selected chip fills with ink (Plan A).
@@ -54,6 +54,7 @@ export function RegionChips({ sidos, selected, onSelect }: RegionChipsProps) {
               }}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
+              hitSlop={{ top: 6, right: 4, bottom: 6, left: 4 }}
               style={[
                 styles.chip,
                 {
@@ -88,7 +89,7 @@ export function RegionChips({ sidos, selected, onSelect }: RegionChipsProps) {
 const styles = StyleSheet.create({
   wrap: {
     // Isolate scroll clipping from neighbors.
-    height: CHIP_H + 16,
+    height: CHIP_H + 10,
     justifyContent: 'center',
   },
   scroll: {
@@ -96,18 +97,17 @@ const styles = StyleSheet.create({
   },
   row: {
     paddingHorizontal: theme.spacing.lg,
-    paddingVertical: 8,
+    paddingVertical: 5,
     alignItems: 'center',
     flexDirection: 'row',
   },
   chip: {
     height: CHIP_H,
-    paddingHorizontal: 14,
-    marginRight: theme.spacing.sm,
-    borderRadius: 4,
-    backgroundColor: theme.colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.panelBorder,
+    paddingHorizontal: 10,
+    marginRight: 5,
+    borderRadius: theme.radius.pill,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -117,9 +117,9 @@ const styles = StyleSheet.create({
   },
   label: {
     fontFamily: theme.fonts.sans,
-    fontSize: 14,
+    fontSize: theme.type.label.fontSize,
     // Match chip inner box — avoid theme.label lineHeight which clips Hangul.
-    lineHeight: 20,
+    lineHeight: 16,
     includeFontPadding: false,
     color: theme.colors.inkSoft,
     fontWeight: '600',
@@ -129,4 +129,3 @@ const styles = StyleSheet.create({
     color: theme.colors.surface,
   },
 });
-

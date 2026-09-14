@@ -14,7 +14,6 @@ import Animated, {
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
-import { MascotPin } from './MascotPin';
 import { StampBadge } from './StampBadge';
 
 export interface StampEarnOverlayProps {
@@ -23,20 +22,21 @@ export interface StampEarnOverlayProps {
   onDone: () => void;
 }
 
-const DROP_FROM = 88;
-const SLAM_MS = 320;
-const SETTLE_MS = 120;
-const HOLD_MS = 520;
+const DROP_FROM = 72;
+const SLAM_MS = 300;
+const SETTLE_MS = 110;
+const HOLD_MS = 560;
 const never = { reduceMotion: ReduceMotion.Never as const };
 
 /**
- * Earn overlay — rubber seal drops and slams with ink bloom.
+ * Earn overlay — seal drops onto cream paper, soft ink bloom, short copy.
+ * Intentionally not a game-reward popup.
  */
 export function StampEarnOverlay({ names, onDone }: StampEarnOverlayProps) {
   const [index, setIndex] = useState(0);
   const progress = useSharedValue(0);
-  const squash = useSharedValue(1.25);
-  const flash = useSharedValue(0);
+  const squash = useSharedValue(1.15);
+  const bloom = useSharedValue(0);
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
 
@@ -49,15 +49,15 @@ export function StampEarnOverlay({ names, onDone }: StampEarnOverlayProps) {
       return;
     }
     progress.value = 0;
-    squash.value = 1.28;
-    flash.value = 0;
+    squash.value = 1.15;
+    bloom.value = 0;
     progress.value = withTiming(1, {
       duration: SLAM_MS,
       easing: Easing.in(Easing.poly(3)),
       ...never,
     });
     squash.value = withSequence(
-      withTiming(0.88, {
+      withTiming(0.95, {
         duration: SLAM_MS,
         easing: Easing.in(Easing.poly(3)),
         ...never,
@@ -68,18 +68,19 @@ export function StampEarnOverlay({ names, onDone }: StampEarnOverlayProps) {
         ...never,
       }),
     );
-    flash.value = withDelay(
-      SLAM_MS - 30,
-      withSequence(
-        withTiming(0.35, { duration: 60, ...never }),
-        withTiming(0, { duration: 280, easing: Easing.out(Easing.quad), ...never }),
-      ),
+    bloom.value = withDelay(
+      SLAM_MS - 40,
+      withTiming(1, {
+        duration: 400,
+        easing: Easing.out(Easing.cubic),
+        ...never,
+      }),
     );
     const t = setTimeout(() => {
       setIndex((i) => i + 1);
     }, SLAM_MS + SETTLE_MS + HOLD_MS);
     return () => clearTimeout(t);
-  }, [finished, flash, index, name, progress, squash]);
+  }, [bloom, finished, index, name, progress, squash]);
 
   const stampStyle = useAnimatedStyle(() => ({
     opacity: Math.min(1, progress.value * 5),
@@ -87,13 +88,14 @@ export function StampEarnOverlay({ names, onDone }: StampEarnOverlayProps) {
       { translateY: (1 - progress.value) * -DROP_FROM },
       { scale: squash.value },
       {
-        rotate: `${interpolate(progress.value, [0, 1], [-12, -4])}deg`,
+        rotate: `${interpolate(progress.value, [0, 1], [-10, -3])}deg`,
       },
     ],
   }));
 
-  const flashStyle = useAnimatedStyle(() => ({
-    opacity: flash.value,
+  const bloomStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(bloom.value, [0, 0.2, 1], [0, 0.4, 0]),
+    transform: [{ scale: interpolate(bloom.value, [0, 1], [0.5, 1.7]) }],
   }));
 
   if (finished || !name) {
@@ -104,14 +106,13 @@ export function StampEarnOverlay({ names, onDone }: StampEarnOverlayProps) {
     <Modal transparent animationType="fade" visible onRequestClose={onDone}>
       <Pressable style={styles.backdrop} onPress={onDone}>
         <View style={styles.card}>
-          <MascotPin size={44} />
-          <Text style={styles.title}>{strings.stamps.earned(name)}</Text>
           <View style={styles.stage}>
-            <Animated.View style={[styles.flash, flashStyle]} />
+            <Animated.View style={[styles.bloomRing, bloomStyle]} />
             <Animated.View style={stampStyle}>
-              <StampBadge name={name} collected size="hero" tiltDeg={-4} />
+              <StampBadge name={name} collected size="hero" tiltDeg={-3} />
             </Animated.View>
           </View>
+          <Text style={styles.title}>{strings.stamps.earned(name)}</Text>
         </View>
       </Pressable>
     </Modal>
@@ -121,26 +122,28 @@ export function StampEarnOverlay({ names, onDone }: StampEarnOverlayProps) {
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: theme.colors.overlayDark,
+    backgroundColor: theme.colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
     padding: theme.spacing.lg,
   },
   card: {
     width: '100%',
-    maxWidth: 320,
-    backgroundColor: theme.colors.background,
-    borderRadius: theme.radius.card,
+    maxWidth: 280,
     paddingVertical: theme.spacing.xl,
     paddingHorizontal: theme.spacing.lg,
     alignItems: 'center',
     gap: theme.spacing.md,
-    ...theme.shadows.raised,
+    backgroundColor: theme.colors.background,
+    borderRadius: theme.radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.stampInkSoft,
   },
   title: {
-    ...theme.type.title,
-    fontFamily: theme.fonts.serif,
-    color: theme.colors.ink,
+    ...theme.type.body,
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.stampInk,
+    fontWeight: '700',
     textAlign: 'center',
   },
   stage: {
@@ -149,10 +152,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  flash: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.terracottaSoft,
+  bloomRing: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: theme.radius.pill,
+    borderWidth: 2,
+    borderColor: theme.colors.stampInkMuted,
   },
 });
-

@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   NaverMapView,
+  type CameraChangeReason,
   type NaverMapViewRef,
 } from '@mj-studio/react-native-naver-map';
 
@@ -19,7 +20,7 @@ export function zoomFromLatitudeDelta(latitudeDelta: number): number {
   return Math.max(5, Math.min(18, Math.log2(180 / delta)));
 }
 
-/** Naver zoom ≈ mid-Korea overview. */
+/** Naver zoom ≈ mid-Korea overview (empty month fallback only). */
 export const DEFAULT_MAP_ZOOM = 7;
 
 /** @deprecated Prefer zoomFromLatitudeDelta — kept for call-site compatibility. */
@@ -29,46 +30,113 @@ export function zoomFromScale(scale: number): number {
 
 export const DEFAULT_MAP_SCALE = 1.6;
 
-const KOREA_CAMERA = {
-  latitude: 36.45,
-  longitude: 127.85,
-  zoom: 7,
+/** Empty-month fallback only — never used when the month has photo markers. */
+const EMPTY_CAMERA = {
+  latitude: 36.4,
+  longitude: 127.8,
+  zoom: 6.8,
 } as const;
 
+/** Single-photo zoom after fit (marker fills the padded content area). */
+const SINGLE_PHOTO_ZOOM = 14;
+
+/**
+ * Content insets so fitBounds keeps pins clear of floating chrome.
+ * Keep modest — oversized insets force a wide zoom that shows NK/sea.
+ */
+const MAP_PADDING = {
+  top: 120,
+  right: 20,
+  bottom: 72,
+  left: 20,
+} as const;
+
+const LOGO_MARGIN = {
+  bottom: 10,
+  left: 10,
+} as const;
+
+/** South Korea frame clamp — never fit-zoom past the peninsula. */
+const KOREA_FRAME = {
+  minLat: 33.05,
+  maxLat: 38.65,
+  minLng: 125.05,
+  maxLng: 131.95,
+} as const;
+
+type PhotoBounds = {
+  minLat: number;
+  maxLat: number;
+  minLng: number;
+  maxLng: number;
+  /** Mean of photo coords — denser mainland clusters outweigh Jeju outliers. */
+  meanLat: number;
+  meanLng: number;
+};
+
+/** Bounds + mean from every photo coordinate in the visible clusters. */
+function boundsForClusters(clusters: PlaceCluster[]): PhotoBounds | null {
+  let minLat = Infinity;
+  let maxLat = -Infinity;
+  let minLng = Infinity;
+  let maxLng = -Infinity;
+  let sumLat = 0;
+  let sumLng = 0;
+  let count = 0;
+  for (const cluster of clusters) {
+    for (const photo of cluster.photos) {
+      count += 1;
+      minLat = Math.min(minLat, photo.lat);
+      maxLat = Math.max(maxLat, photo.lat);
+      minLng = Math.min(minLng, photo.lng);
+      maxLng = Math.max(maxLng, photo.lng);
+      sumLat += photo.lat;
+      sumLng += photo.lng;
+    }
+  }
+  if (count === 0) {
+    return null;
+  }
+  return {
+    minLat,
+    maxLat,
+    minLng,
+    maxLng,
+    meanLat: sumLat / count,
+    meanLng: sumLng / count,
+  };
+}
+
+/**
+ * First-paint estimate only — real fit uses animateCameraWithTwoCoords.
+ */
 function cameraForClusters(clusters: PlaceCluster[]): {
   latitude: number;
   longitude: number;
   zoom: number;
 } {
-  if (clusters.length === 0) {
-    return { ...KOREA_CAMERA };
+  const bounds = boundsForClusters(clusters);
+  if (!bounds) {
+    return { ...EMPTY_CAMERA };
   }
-  if (clusters.length === 1) {
-    const only = clusters[0]!;
+  const latSpan = Math.max(bounds.maxLat - bounds.minLat, 0.004);
+  const lngSpan = Math.max(bounds.maxLng - bounds.minLng, 0.004);
+  if (latSpan < 0.00015 && lngSpan < 0.00015) {
     return {
-      latitude: only.centerLat,
-      longitude: only.centerLng,
-      zoom: 13,
+      latitude: bounds.meanLat,
+      longitude: bounds.meanLng,
+      zoom: SINGLE_PHOTO_ZOOM,
     };
   }
-
-  let minLat = Infinity;
-  let maxLat = -Infinity;
-  let minLng = Infinity;
-  let maxLng = -Infinity;
-  for (const cluster of clusters) {
-    minLat = Math.min(minLat, cluster.centerLat);
-    maxLat = Math.max(maxLat, cluster.centerLat);
-    minLng = Math.min(minLng, cluster.centerLng);
-    maxLng = Math.max(maxLng, cluster.centerLng);
-  }
-  const latDelta = Math.max((maxLat - minLat) * 1.45, 0.08);
-  const lngDelta = Math.max((maxLng - minLng) * 1.45, 0.08);
-  const span = Math.max(latDelta, lngDelta);
+  const span = Math.max(latSpan * 1.08, lngSpan * 1.08, 0.2);
   return {
-    latitude: (minLat + maxLat) / 2,
-    longitude: (minLng + maxLng) / 2,
-    zoom: Math.round(zoomFromLatitudeDelta(span)),
+    latitude: (bounds.minLat + bounds.maxLat) / 2,
+    longitude: (bounds.minLng + bounds.maxLng) / 2,
+    // Native TwoCoords sets the real zoom; this is only the first paint guess.
+    zoom: Math.min(
+      SINGLE_PHOTO_ZOOM,
+      Math.max(6.4, Math.round(zoomFromLatitudeDelta(span))),
+    ),
   };
 }
 
@@ -124,8 +192,15 @@ export const MapCanvas = memo(function MapCanvas({
 
   const reportedZoomRef = useRef(DEFAULT_MAP_ZOOM);
   const mapReadyRef = useRef(false);
+  /** Last frameKey we ran an auto/forced fit for. */
   const fittedKeyRef = useRef<string>('');
+  /** True once that fit included at least one pin (allows empty→pins follow-up). */
   const fittedWithPinsRef = useRef(false);
+  /**
+   * User pan / pinch (or native control). Blocks further auto-fit until month
+   * changes — progressive GPS / recluster must not yank the camera.
+   */
+  const userMovedCameraRef = useRef(false);
 
   const [zoom, setZoom] = useState(DEFAULT_MAP_ZOOM);
   const initialCamera = cameraForClusters(clusters);
@@ -144,78 +219,92 @@ export const MapCanvas = memo(function MapCanvas({
     [onScaleChange, onZoomChange],
   );
 
+  /**
+   * Fit all photo markers into the padded content area (max zoom that still
+   * shows every pin). `force` bypasses the user-moved gate (⌂ / month entry).
+   */
   const fitToPhotos = useCallback(
-    (animated: boolean) => {
+    (animated: boolean, force = false) => {
       const map = mapRef.current;
       if (!map || !mapReadyRef.current) {
         return false;
       }
+      if (!force && userMovedCameraRef.current) {
+        return false;
+      }
       const list = clustersRef.current;
       const duration = animated ? 320 : 0;
-      if (list.length === 0) {
-        map.animateCameraTo({ ...KOREA_CAMERA, duration, easing: 'EaseOut' });
-        reportZoom(KOREA_CAMERA.zoom, true);
-        return true;
-      }
-      if (list.length === 1) {
-        const only = list[0]!;
-        map.animateCameraTo({
-          latitude: only.centerLat,
-          longitude: only.centerLng,
-          zoom: 13,
-          duration,
-          easing: 'EaseOut',
-        });
-        reportZoom(13, true);
+      const bounds = boundsForClusters(list);
+      if (!bounds) {
+        map.animateCameraTo({ ...EMPTY_CAMERA, duration, easing: 'EaseOut' });
+        reportZoom(EMPTY_CAMERA.zoom, true);
         return true;
       }
 
-      let minLat = Infinity;
-      let maxLat = -Infinity;
-      let minLng = Infinity;
-      let maxLng = -Infinity;
-      for (const c of list) {
-        minLat = Math.min(minLat, c.centerLat);
-        maxLat = Math.max(maxLat, c.centerLat);
-        minLng = Math.min(minLng, c.centerLng);
-        maxLng = Math.max(maxLng, c.centerLng);
+      const latSpan = bounds.maxLat - bounds.minLat;
+      const lngSpan = bounds.maxLng - bounds.minLng;
+
+      // One pin (or stacked same GPS): center + comfortable zoom.
+      if (latSpan < 0.00015 && lngSpan < 0.00015) {
+        map.animateCameraTo({
+          latitude: bounds.meanLat,
+          longitude: bounds.meanLng,
+          zoom: SINGLE_PHOTO_ZOOM,
+          duration,
+          easing: 'EaseOut',
+        });
+        reportZoom(SINGLE_PHOTO_ZOOM, true);
+        return true;
       }
-      const padLat = Math.max((maxLat - minLat) * 0.2, 0.02);
-      const padLng = Math.max((maxLng - minLng) * 0.2, 0.02);
+
+      // Tight pad on pin bbox; clamp to South Korea so NK/Japan/sea don't dominate.
+      const padLat = Math.max(latSpan * 0.06, 0.04);
+      const padLng = Math.max(lngSpan * 0.06, 0.04);
+      const south = Math.max(bounds.minLat - padLat, KOREA_FRAME.minLat);
+      const north = Math.min(bounds.maxLat + padLat, KOREA_FRAME.maxLat);
+      const west = Math.max(bounds.minLng - padLng, KOREA_FRAME.minLng);
+      const east = Math.min(bounds.maxLng + padLng, KOREA_FRAME.maxLng);
       map.animateCameraWithTwoCoords({
-        coord1: { latitude: minLat - padLat, longitude: minLng - padLng },
-        coord2: { latitude: maxLat + padLat, longitude: maxLng + padLng },
+        coord1: { latitude: south, longitude: west },
+        coord2: { latitude: north, longitude: east },
         duration,
         easing: 'EaseOut',
       });
+      reportZoom(
+        Math.max(6.4, zoomFromLatitudeDelta(Math.max(north - south, east - west))),
+        true,
+      );
       return true;
     },
     [reportZoom],
   );
 
+  // Month / frame change → allow auto-fit again and snap to photo bounds.
   useEffect(() => {
-    // Do not clear mapReady — NaverMap no longer remounts on month change.
     fittedKeyRef.current = '';
     fittedWithPinsRef.current = false;
+    userMovedCameraRef.current = false;
     if (!mapReadyRef.current) {
       return;
     }
-    // Instant snap — rapid ‹ › must not queue 320ms camera animations.
-    if (fitToPhotos(false)) {
+    if (fitToPhotos(false, true)) {
       fittedKeyRef.current = frameKey;
       fittedWithPinsRef.current = clustersRef.current.length > 0;
     }
   }, [fitToPhotos, frameKey]);
 
+  // Pins can arrive after an empty first fit — one follow-up, unless user moved.
   useEffect(() => {
     if (!mapReadyRef.current) {
+      return;
+    }
+    if (userMovedCameraRef.current) {
       return;
     }
     if (fittedKeyRef.current === frameKey && fittedWithPinsRef.current) {
       return;
     }
-    // Pins can arrive after an empty/stale fit — pull camera to the full set.
-    if (fitToPhotos(fittedKeyRef.current === frameKey)) {
+    if (fitToPhotos(fittedKeyRef.current === frameKey, false)) {
       fittedKeyRef.current = frameKey;
       fittedWithPinsRef.current = clustersRef.current.length > 0;
     }
@@ -223,7 +312,8 @@ export const MapCanvas = memo(function MapCanvas({
 
   const onInitialized = useCallback(() => {
     mapReadyRef.current = true;
-    if (fitToPhotos(false)) {
+    userMovedCameraRef.current = false;
+    if (fitToPhotos(false, true)) {
       fittedKeyRef.current = frameKey;
       fittedWithPinsRef.current = clustersRef.current.length > 0;
     }
@@ -233,6 +323,15 @@ export const MapCanvas = memo(function MapCanvas({
     latitude: initialCamera.latitude,
     longitude: initialCamera.longitude,
   });
+
+  const onCameraChanged = useCallback(
+    (params: { reason: CameraChangeReason }) => {
+      if (params.reason === 'Gesture' || params.reason === 'Control') {
+        userMovedCameraRef.current = true;
+      }
+    },
+    [],
+  );
 
   const onCameraIdle = useCallback(
     (params: { zoom?: number; latitude: number; longitude: number }) => {
@@ -253,6 +352,8 @@ export const MapCanvas = memo(function MapCanvas({
       if (!map) {
         return;
       }
+      // Manual zoom control — treat as user intent (no further auto-fit).
+      userMovedCameraRef.current = true;
       const next = Math.max(5, Math.min(18, zoom + Math.log2(factor)));
       map.animateCameraTo({
         ...cameraCenterRef.current,
@@ -274,6 +375,14 @@ export const MapCanvas = memo(function MapCanvas({
         locale="ko"
         isExtentBoundedInKorea
         initialCamera={initialCamera}
+        mapPadding={MAP_PADDING}
+        logoAlign="BottomLeft"
+        logoMargin={LOGO_MARGIN}
+        // Keep the map as quiet context; photo markers stay visually primary.
+        // Naver does not expose per-POI styling, so the supported lightness and
+        // symbol scale controls carry the decluttering work without masking pins.
+        lightness={0.24}
+        symbolScale={0.76}
         // Declutter: hide building footprints/address glyphs. Base POI names
         // (parks, temples) cannot be filtered by Naver SDK — pin collision helps.
         layerGroups={{
@@ -291,6 +400,7 @@ export const MapCanvas = memo(function MapCanvas({
         isRotateGesturesEnabled={false}
         isTiltGesturesEnabled={false}
         onInitialized={onInitialized}
+        onCameraChanged={onCameraChanged}
         onCameraIdle={onCameraIdle}
       >
         {clusters.map((cluster) => {
@@ -312,25 +422,27 @@ export const MapCanvas = memo(function MapCanvas({
 
       <View style={styles.zoomCtl} pointerEvents="box-none">
         <Pressable
-          style={styles.zoomBtn}
+          style={({ pressed }) => [styles.zoomBtn, pressed && styles.zoomBtnPressed]}
           onPress={() => zoomByFactorCentered(1.6)}
           accessibilityLabel={strings.map.zoomIn}
         >
           <Text style={styles.zoomBtnText}>+</Text>
         </Pressable>
         <Pressable
-          style={styles.zoomBtn}
+          style={({ pressed }) => [styles.zoomBtn, pressed && styles.zoomBtnPressed]}
           onPress={() => zoomByFactorCentered(1 / 1.6)}
           accessibilityLabel={strings.map.zoomOut}
         >
           <Text style={styles.zoomBtnText}>−</Text>
         </Pressable>
         <Pressable
-          style={styles.zoomBtn}
+          style={({ pressed }) => [styles.zoomBtn, pressed && styles.zoomBtnPressed]}
           onPress={() => {
-            fitToPhotos(true);
-            fittedKeyRef.current = frameKey;
-            fittedWithPinsRef.current = clustersRef.current.length > 0;
+            // Explicit reset — always allowed; does not re-open auto-fit gate.
+            if (fitToPhotos(true, true)) {
+              fittedKeyRef.current = frameKey;
+              fittedWithPinsRef.current = clustersRef.current.length > 0;
+            }
           }}
           accessibilityLabel={strings.map.resetView}
         >
@@ -354,31 +466,39 @@ const styles = StyleSheet.create({
   },
   zoomCtl: {
     position: 'absolute',
-    right: 12,
+    right: 14,
     // Sit above create chip (~44 tall + pad).
     bottom: 84,
-    gap: 8,
+    gap: 10,
     zIndex: 2,
   },
   zoomBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: theme.radius.pill,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.colors.panelBorder,
-    backgroundColor: theme.colors.overlay,
+    backgroundColor: theme.colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    ...theme.shadows.card,
+    shadowColor: theme.colors.ink,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  zoomBtnPressed: {
+    opacity: 0.7,
   },
   zoomBtnText: {
-    fontSize: 18,
+    fontSize: 20,
     color: theme.colors.ink,
-    lineHeight: 20,
+    lineHeight: 22,
     fontWeight: '500',
   },
   zoomBtnHome: {
-    fontSize: 14,
-    color: theme.colors.inkSoft,
+    fontSize: 16,
+    color: theme.colors.ink,
+    fontWeight: '500',
   },
 });

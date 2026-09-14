@@ -1,6 +1,6 @@
 /**
  * Design tokens — dual system:
- * - UI chrome: Dawn Survey (cream paper + single slate ink). Plan A 2026-08-05.
+ * - UI chrome: cream paper + design-sheet slate navy (2026-09-13 sheet).
  * - Map canvas / pins: dawn-blue paper map (land / water / accent) — do not retint for UI.
  * - Dark mode: settings switch (not system). Shell only; surface + map stay light.
  * All colors in the app must come from this file. No hardcoded colors elsewhere.
@@ -13,15 +13,15 @@ export const theme = {
     surfaceAlt: '#EFE6DA',
     canvas: '#EFEAE2',
 
-    // Ink / type — the only UI accent (philosophy: no second accent)
-    ink: '#2C3E50',
-    inkSoft: '#5A6B7A',
-    subtle: '#93A1AD',
+    // Ink / type — design sheet slate navy + muted blue ladder
+    ink: '#33475B',
+    inkSoft: '#5A7188',
+    subtle: '#8AA3BB',
 
     /** Text/icons on the shell background (light = ink; dark mode flips via resolveTheme). */
-    shellInk: '#2C3E50',
-    shellInkSoft: '#5A6B7A',
-    shellSubtle: '#93A1AD',
+    shellInk: '#33475B',
+    shellInkSoft: '#5A7188',
+    shellSubtle: '#8AA3BB',
     /** Chips/buttons that sit on the shell (back control). */
     shellChip: '#EFE6DA',
     /** Grouped-list card that sits on the shell (settings). Lifts off `background`. */
@@ -31,13 +31,23 @@ export const theme = {
      * near-white, which swallows the light thumb and leaves a blank pill.
      * Stays a filled ink that reads against a light thumb in both themes.
      */
-    shellSwitchOn: '#2C3E50',
+    shellSwitchOn: '#33475B',
 
     /**
-     * Splash / loading brand mark — slate navy from the stamp splash reference.
-     * Map silhouette + wordmark share this; keep separate from UI ink.
+     * Splash / loading brand mark — same slate navy as UI ink (sheet).
      */
     splashMark: '#33475B',
+    /** 발도장 seal ink (passport stamp). */
+    stampInk: '#33475B',
+    stampInkMuted: '#8AA3BB',
+    stampInkWash: 'rgba(51,71,91,0.10)',
+    stampInkSoft: 'rgba(138,163,187,0.35)',
+
+    /**
+     * Design-sheet point color — sparse highlights only (not a second chrome accent).
+     */
+    point: '#E8C4A9',
+    pointSoft: 'rgba(232,196,169,0.35)',
 
     /**
      * Map land/water system only — journal UI uses `ink`, not this.
@@ -53,12 +63,12 @@ export const theme = {
     water: '#CBE0EF',
     waterLight: '#DCEAF4',
     waterDeep: '#B5D2E6',
-    landShadow: 'rgba(44,62,80,0.06)',
-    mapLabel: '#5A6B7A',
+    landShadow: 'rgba(51,71,91,0.06)',
+    mapLabel: '#5A7188',
     labelHalo: 'rgba(251,249,244,0.95)',
     border: '#D5DCE2',
     hairline: '#E8E4DC',
-    panelBorder: 'rgba(44,62,80,0.12)',
+    panelBorder: 'rgba(51,71,91,0.12)',
 
     /** Stamp glance-map pastel washes (mockup option 2). */
     stampWashCapital: '#C5DCCF',
@@ -70,67 +80,55 @@ export const theme = {
 
     white: '#FFFFFF',
     /**
-     * Legacy warm tokens — Plan A / single navy theme: alias to ink.
-     * Prefer `ink` / `tint.*` in new code.
+     * Legacy warm tokens — prefer `ink` / `point` / `stampInk` in new code.
+     * `sand` → point (sheet highlight). `terracotta` → stampInk.
      */
-    sand: '#2C3E50',
-    terracotta: '#2C3E50',
-    terracottaSoft: 'rgba(44,62,80,0.10)',
+    sand: '#E8C4A9',
+    terracotta: '#33475B',
+    terracottaSoft: 'rgba(51,71,91,0.10)',
     /** Unseen tab dot — notification red so it reads against navy icons. */
     notify: '#E24B4A',
     /** Progress track / empty stamp outline. */
     line: '#E8E4DC',
     overlay: 'rgba(251,249,244,0.88)',
-    overlayDark: 'rgba(44,62,80,0.45)',
+    overlayDark: 'rgba(51,71,91,0.45)',
     labelBg: 'rgba(251,249,244,0.9)',
-    selectedGlow: 'rgba(44,62,80,0.18)',
-    shadow: 'rgba(44,62,80,0.10)',
+    selectedGlow: 'rgba(51,71,91,0.18)',
+    shadow: 'rgba(51,71,91,0.10)',
   },
   /**
-   * Graduated ink ladder — the single ink at fixed fractions of strength.
-   * Structure is drawn with these, never with a new hue. Full strength is
-   * reserved for the one element that matters most in a given view.
+   * Graduated ink ladder — slate navy at fixed fractions of strength.
    */
   tint: {
-    full: 'rgba(44,62,80,0.92)',
-    strong: 'rgba(44,62,80,0.62)',
-    mid: 'rgba(44,62,80,0.30)',
-    soft: 'rgba(44,62,80,0.16)',
-    faint: 'rgba(44,62,80,0.10)',
+    full: 'rgba(51,71,91,0.92)',
+    strong: 'rgba(51,71,91,0.62)',
+    mid: 'rgba(51,71,91,0.30)',
+    soft: 'rgba(51,71,91,0.16)',
+    faint: 'rgba(51,71,91,0.10)',
   },
   fonts: {
-    // Single clean system sans for all UI (Plan A follow-up).
-    // `serif` kept as an alias so old call sites stay valid.
+    // System until Pretendard assets are approved/bundled (sheet: Pretendard KR).
     serif: 'System',
     sans: 'System',
   },
   /**
-   * Type scale — decisive steps, nothing hedging in between. One display per
-   * screen carries the voice; everything else is evidence. Any size not in
-   * this ladder is a bug, with three deliberate exemptions:
-   *
-   * 1. Card export templates (CardTemplateFeed/Story) compose against a fixed
-   *    pixel canvas, so their type is locked to that composition, not to UI.
-   * 2. Glyphs inside fixed-size controls — pin counts, swatch checks, zoom
-   *    buttons, thumbnail badges — are graphics sized to their container.
-   * 3. TextInput takes `type.<step>.fontSize` only. Spreading the whole token
-   *    adds lineHeight, which mis-centers input text vertically on Android.
-   *
-   * Prefer `theme.fonts.sans`. `serif` is an alias of System (no Georgia).
+   * Type scale — aligned toward sheet H1 28 / H2 20 / H3 16 / Body 15 / Caption 13.
+   * Exemptions: card export templates, fixed-size control glyphs, TextInput fontSize-only.
    */
   type: {
-    /** The single loud thing on a screen. */
-    display: { fontSize: 34, lineHeight: 40, letterSpacing: -0.9 },
+    /** The single loud thing on a screen (sheet H1 ≈ 28). */
+    display: { fontSize: 28, lineHeight: 36, letterSpacing: -0.6 },
     /**
-     * Two-line opening statement. `display` overflows to three lines at this
-     * length in Korean; this step keeps the break where the writing intends it.
+     * Two-line opening statement.
      */
-    lede: { fontSize: 27, lineHeight: 38, letterSpacing: -1.1 },
-    /** Screen and section titles. */
+    lede: { fontSize: 24, lineHeight: 34, letterSpacing: -0.8 },
+    /** Screen and section titles (sheet H2). */
     title: { fontSize: 20, lineHeight: 26, letterSpacing: -0.4 },
-    /** Running text. */
+    /** Subsection (sheet H3). */
+    subtitle: { fontSize: 16, lineHeight: 22, letterSpacing: -0.2 },
+    /** Running text (sheet Body). */
     body: { fontSize: 15, lineHeight: 21, letterSpacing: -0.1 },
-    /** Chips, buttons, list rows. */
+    /** Chips, buttons, list rows (sheet Caption). */
     label: { fontSize: 13, lineHeight: 17, letterSpacing: 0.1 },
     /** Notices, captions, units. Smallest legible grade. */
     micro: { fontSize: 11, lineHeight: 15, letterSpacing: 0.3 },
@@ -151,14 +149,14 @@ export const theme = {
   },
   shadows: {
     card: {
-      shadowColor: '#2C3E50',
+      shadowColor: '#33475B',
       shadowOpacity: 0.06,
       shadowRadius: 16,
       shadowOffset: { width: 0, height: 6 },
       elevation: 2,
     },
     raised: {
-      shadowColor: '#2C3E50',
+      shadowColor: '#33475B',
       shadowOpacity: 0.1,
       shadowRadius: 18,
       shadowOffset: { width: 0, height: 8 },

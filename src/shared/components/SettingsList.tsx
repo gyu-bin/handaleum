@@ -5,11 +5,8 @@ import { theme } from '@/shared/constants/theme';
 import { useTheme } from '@/shared/theme/ThemeProvider';
 
 /**
- * Grouped-list primitives for settings-shaped screens: a grey section label
- * above one paper card, rows separated by an inset hairline.
- *
- * Rows sit on `shellSurface`, so these belong on the shell background — not on
- * the map or on a paper sheet.
+ * Flat, paper-like settings sections. Rows are separated only by an inset
+ * hairline so settings stay quiet beside the photo-led screens.
  */
 
 const CARD_PAD = theme.spacing.md;
@@ -26,14 +23,7 @@ export function SettingsSection({ label, children }: SettingsSectionProps) {
       <Text style={[styles.sectionLabel, { color: colors.shellSubtle }]}>
         {label}
       </Text>
-      <View
-        style={[
-          styles.card,
-          { backgroundColor: colors.shellSurface, borderColor: colors.hairline },
-        ]}
-      >
-        {children}
-      </View>
+      <View>{children}</View>
     </View>
   );
 }
@@ -142,11 +132,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     marginLeft: theme.spacing.xs,
     marginBottom: theme.spacing.sm,
-  },
-  card: {
-    borderRadius: theme.radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
   },
   divider: {
     height: StyleSheet.hairlineWidth,

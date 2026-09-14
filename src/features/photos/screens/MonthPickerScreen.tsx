@@ -11,7 +11,9 @@ import { theme } from '@/shared/constants/theme';
 import { useShellBackground, useShellInk } from '@/shared/hooks/useShellBackground';
 import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
 
+import { HomeNavBar } from '../components/HomeNavBar';
 import { MonthPickerList } from '../components/MonthPickerList';
+import { APP_NAV_ITEMS } from '../constants/appNav';
 import { useCurrentMonth } from '../hooks/useCurrentMonth';
 import {
   prefetchMonthlyPhotos,
@@ -55,6 +57,7 @@ export function MonthPickerScreen() {
           }
           onAction={() => void refetch()}
         />
+        <HomeNavBar items={APP_NAV_ITEMS} />
       </SafeAreaView>
     );
   }
@@ -65,6 +68,7 @@ export function MonthPickerScreen() {
         <PaperGrain style={styles.grain} />
         <BackLink onPress={() => router.back()} />
         <StateView title={strings.months.empty} />
+        <HomeNavBar items={APP_NAV_ITEMS} />
       </SafeAreaView>
     );
   }
@@ -79,6 +83,7 @@ export function MonthPickerScreen() {
         onSelect={setMonth}
         canOpenMonth={canOpenMonth}
       />
+      <HomeNavBar items={APP_NAV_ITEMS} />
     </SafeAreaView>
   );
 }

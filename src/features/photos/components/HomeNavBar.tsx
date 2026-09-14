@@ -11,7 +11,7 @@ import { useTheme } from '@/shared/theme/ThemeProvider';
 export interface HomeNavItem {
   href: Href;
   label: string;
-  icon: 'calendar' | 'play' | 'card' | 'chart' | 'stamp';
+  icon: 'map' | 'calendar' | 'play' | 'card' | 'chart' | 'stamp';
   /** Red notify dot (e.g. unseen 발도장). */
   badge?: boolean;
 }
@@ -36,9 +36,22 @@ function NavIcon({
   active: boolean;
 }) {
   const { colors } = useTheme();
-  const color = active ? colors.shellInk : colors.shellInkSoft;
+  const color = active ? colors.shellInk : colors.shellSubtle;
   const stroke = 2.2;
   const size = 20;
+  if (name === 'map') {
+    return (
+      <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <Path
+          d="M3.5 6.5l5-2.5 7 3 5-2.5v13l-5 2.5-7-3-5 2.5v-13zM8.5 4v13M15.5 7v13"
+          stroke={color}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </Svg>
+    );
+  }
   if (name === 'calendar') {
     return (
       <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -149,7 +162,7 @@ export function HomeNavBar({ items }: HomeNavBarProps) {
           return (
             <Pressable
               key={String(item.href)}
-              onPress={() => router.push(item.href)}
+              onPress={() => router.replace(item.href)}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
               accessibilityLabel={item.label}
@@ -175,7 +188,7 @@ export function HomeNavBar({ items }: HomeNavBarProps) {
                 <Text
                   style={[
                     styles.label,
-                    { color: colors.shellInkSoft },
+                    { color: colors.shellSubtle },
                     active && styles.labelActive,
                     active && { color: colors.shellInk },
                   ]}
@@ -183,14 +196,6 @@ export function HomeNavBar({ items }: HomeNavBarProps) {
                 >
                   {item.label}
                 </Text>
-                {active ? (
-                  <View
-                    style={[
-                      styles.activeTick,
-                      { backgroundColor: colors.shellInk },
-                    ]}
-                  />
-                ) : null}
               </View>
             </Pressable>
           );
@@ -254,11 +259,5 @@ const styles = StyleSheet.create({
   },
   labelActive: {
     fontWeight: '700',
-  },
-  activeTick: {
-    width: 14,
-    height: 2,
-    borderRadius: 1,
-    marginTop: 1,
   },
 });

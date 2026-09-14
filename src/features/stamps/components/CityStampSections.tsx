@@ -69,7 +69,9 @@ export function CityStampSections({
               <View style={styles.header}>
                 <Text style={[styles.headerTitle, shell.ink]}>{section.city}</Text>
                 <Text style={[styles.headerCount, shell.subtle]}>
-                  {section.collected}/{section.total}
+                  {section.collected === 0
+                    ? '아직 없음'
+                    : `${section.collected} / ${section.total}`}
                 </Text>
               </View>
             ) : null}
@@ -133,10 +135,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   headerCount: {
-    ...theme.type.micro,
     fontFamily: theme.fonts.sans,
-    color: theme.colors.subtle,
-    fontWeight: '600',
+    fontSize: 11,
+    lineHeight: 14,
+    color: theme.colors.stampInkMuted,
+    fontWeight: '500',
   },
 
   row: {

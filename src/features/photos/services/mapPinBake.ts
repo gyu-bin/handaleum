@@ -8,6 +8,9 @@ export type MapPinBakeJob = {
   photoUri: string;
   selected: boolean;
   cardSize: number;
+  count: number;
+  /** photo = framed thumb; dot = slate-navy count circle (cluster). */
+  kind: 'photo' | 'dot';
 };
 
 type Pending = MapPinBakeJob & {
@@ -43,9 +46,15 @@ function emit() {
   listeners.forEach((l) => l());
 }
 
-function bakeKey(photoUri: string, selected: boolean, cardSize: number): string {
-  // v2: softer inkSoft frame (invalidate prior dark-ink PNGs).
-  return `v2|${photoUri}|${selected ? 1 : 0}|${cardSize}`;
+function bakeKey(
+  photoUri: string,
+  selected: boolean,
+  cardSize: number,
+  count: number,
+  kind: 'photo' | 'dot' = 'photo',
+): string {
+  // v4: larger photo pins + navy count-only cluster dots.
+  return `v4|${kind}|${photoUri}|${selected ? 1 : 0}|${cardSize}|${count}`;
 }
 
 function trimQueue() {
@@ -128,8 +137,9 @@ export function requestMapPinBake(
   photoUri: string,
   selected: boolean,
   cardSize: number,
+  count: number,
 ): Promise<string | null> {
-  const key = bakeKey(photoUri, selected, cardSize);
+  const key = bakeKey(photoUri, selected, cardSize, count);
   const hit = cache.get(key);
   if (hit) {
     return Promise.resolve(hit);
@@ -145,6 +155,8 @@ export function requestMapPinBake(
       photoUri,
       selected,
       cardSize,
+      count,
+      kind: 'photo',
       resolve: (uri) => {
         inflight.delete(key);
         resolve(uri);
@@ -155,6 +167,47 @@ export function requestMapPinBake(
       queue.unshift(pending);
     } else {
       queue.push(pending);
+    }
+    trimQueue();
+    pump();
+  });
+  inflight.set(key, work);
+  return work;
+}
+
+/** Navy count circle for multi-photo clusters (no thumbnail). */
+export function requestClusterDotBake(
+  count: number,
+  selected: boolean,
+  cardSize = 40,
+): Promise<string | null> {
+  const key = bakeKey('dot', selected, cardSize, count, 'dot');
+  const hit = cache.get(key);
+  if (hit) {
+    return Promise.resolve(hit);
+  }
+  const pending = inflight.get(key);
+  if (pending) {
+    return pending;
+  }
+
+  const work = new Promise<string | null>((resolve) => {
+    const job: Pending = {
+      key,
+      photoUri: '',
+      selected,
+      cardSize,
+      count,
+      kind: 'dot',
+      resolve: (uri) => {
+        inflight.delete(key);
+        resolve(uri);
+      },
+    };
+    if (selected) {
+      queue.unshift(job);
+    } else {
+      queue.push(job);
     }
     trimQueue();
     pump();

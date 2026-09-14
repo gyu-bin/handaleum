@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Path } from 'react-native-svg';
 import Animated, {
   Easing,
   ReduceMotion,
@@ -14,8 +13,8 @@ import Animated, {
 
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
-import { useShellInk } from '@/shared/hooks/useShellBackground';
-import { useTheme } from '@/shared/theme/ThemeProvider';
+
+import { TravelStamp, stampInkForKey } from './TravelStamp';
 
 export interface StampBadgeProps {
   name: string;
@@ -29,6 +28,7 @@ export interface StampBadgeProps {
   onPress?: () => void;
   /** Larger seal for earn overlay. */
   size?: 'grid' | 'hero';
+  nameEn?: string;
 }
 
 const DROP_FROM = 42;
@@ -37,8 +37,8 @@ const SETTLE_MS = 110;
 const never = { reduceMotion: ReduceMotion.Never as const };
 
 /**
- * Rubber-stamp seal: double ring + serif name. Slam drops from above with
- * ink bloom — no spring bounce.
+ * Rubber-stamp seal on cream paper — slate navy / muted blue ink.
+ * Slam drops from above with a short ink bloom (no game-y bounce).
  */
 export function StampBadge({
   name,
@@ -48,9 +48,8 @@ export function StampBadge({
   tiltDeg = 0,
   onPress,
   size = 'grid',
+  nameEn,
 }: StampBadgeProps) {
-  const shell = useShellInk();
-  const { colors } = useTheme();
   const hero = size === 'hero';
   const ty = useSharedValue(animateIn && collected ? -DROP_FROM : 0);
   const scale = useSharedValue(animateIn && collected ? 1.2 : 1);
@@ -99,7 +98,11 @@ export function StampBadge({
       }),
     );
     shadow.value = withSequence(
-      withTiming(0.28, { duration: SLAM_MS, easing: Easing.in(Easing.quad), ...never }),
+      withTiming(0.28, {
+        duration: SLAM_MS,
+        easing: Easing.in(Easing.quad),
+        ...never,
+      }),
       withTiming(0.1, { duration: SETTLE_MS, ...never }),
     );
   }, [
@@ -124,12 +127,12 @@ export function StampBadge({
   }));
 
   const bloomStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(bloom.value, [0, 0.15, 1], [0, 0.4, 0]),
+    opacity: interpolate(bloom.value, [0, 0.15, 1], [0, 0.35, 0]),
     transform: [{ scale: interpolate(bloom.value, [0, 1], [0.55, 1.55]) }],
   }));
 
   const bloom2Style = useAnimatedStyle(() => ({
-    opacity: interpolate(bloom.value, [0, 0.2, 1], [0, 0.22, 0]),
+    opacity: interpolate(bloom.value, [0, 0.2, 1], [0, 0.18, 0]),
     transform: [{ scale: interpolate(bloom.value, [0, 1], [0.45, 1.85]) }],
   }));
 
@@ -144,15 +147,34 @@ export function StampBadge({
 
   const body = collected ? (
     <View style={[styles.slot, hero && styles.slotHero]}>
-      <Animated.View style={[styles.shadow, shadowStyle]} />
       {animateIn ? (
         <>
-          <Animated.View style={[styles.bloom, bloom2Style]} />
-          <Animated.View style={[styles.bloom, bloomStyle]} />
+          <Animated.View style={[styles.shadow, shadowStyle]} />
+          <Animated.View
+            style={[
+              styles.bloom,
+              { borderColor: theme.colors.stampInkMuted },
+              bloom2Style,
+            ]}
+          />
+          <Animated.View
+            style={[
+              styles.bloom,
+              { borderColor: theme.colors.stampInk },
+              bloomStyle,
+            ]}
+          />
         </>
       ) : null}
       <Animated.View style={[styles.sealWrap, sealStyle]}>
-        <SealFace name={name} hero={hero} />
+        <TravelStamp
+          name={name}
+          nameEn={nameEn}
+          collected
+          size={hero ? 'hero' : 'grid'}
+          ink={stampInkForKey(name)}
+          brand={Boolean(nameEn) || hero}
+        />
       </Animated.View>
       {isNew && !hero ? (
         <View
@@ -165,20 +187,16 @@ export function StampBadge({
     </View>
   ) : (
     <View
-      style={[
-        styles.slot,
-        styles.emptySlot,
-        {
-          borderColor: colors.line,
-          backgroundColor: colors.shellChip,
-        },
-      ]}
+      style={[styles.slot, hero && styles.slotHero]}
       accessibilityLabel={strings.stamps.uncollected}
     >
-      <Text style={[styles.question, shell.subtle]}>{strings.stamps.slotUnknown}</Text>
-      <Text style={[styles.emptyName, shell.soft]} numberOfLines={1}>
-        {name}
-      </Text>
+      <TravelStamp
+        name={name}
+        nameEn={nameEn}
+        collected={false}
+        size={hero ? 'hero' : 'grid'}
+        brand={false}
+      />
     </View>
   );
 
@@ -190,62 +208,6 @@ export function StampBadge({
     );
   }
   return <View style={styles.press}>{body}</View>;
-}
-
-function SealFace({ name, hero }: { name: string; hero: boolean }) {
-  const dim = hero ? 120 : 96;
-  const short = name.length > 4 ? name.slice(0, 4) : name;
-  return (
-    <View style={{ width: dim, height: dim, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={dim} height={dim} viewBox="0 0 100 100">
-        <Circle cx={50} cy={50} r={46} fill={theme.colors.terracottaSoft} />
-        <Circle
-          cx={50}
-          cy={50}
-          r={44}
-          stroke={theme.colors.terracotta}
-          strokeWidth={3.2}
-          fill="none"
-        />
-        <Circle
-          cx={50}
-          cy={50}
-          r={37}
-          stroke={theme.colors.terracotta}
-          strokeWidth={1.4}
-          fill="none"
-          strokeDasharray="2.5 3.5"
-          opacity={0.85}
-        />
-        {/* Small tick marks like a wax seal edge */}
-        {[0, 45, 90, 135, 180, 225, 270, 315].map((deg) => {
-          const rad = (deg * Math.PI) / 180;
-          const x1 = 50 + Math.cos(rad) * 40;
-          const y1 = 50 + Math.sin(rad) * 40;
-          const x2 = 50 + Math.cos(rad) * 43.5;
-          const y2 = 50 + Math.sin(rad) * 43.5;
-          return (
-            <Path
-              key={deg}
-              d={`M ${x1} ${y1} L ${x2} ${y2}`}
-              stroke={theme.colors.terracotta}
-              strokeWidth={1.6}
-              strokeLinecap="round"
-              opacity={0.7}
-            />
-          );
-        })}
-      </Svg>
-      <View style={styles.nameOverlay} pointerEvents="none">
-        <Text
-          style={[styles.sealText, hero && styles.sealTextHero]}
-          numberOfLines={2}
-        >
-          {short}
-        </Text>
-      </View>
-    </View>
-  );
 }
 
 const styles = StyleSheet.create({
@@ -265,60 +227,24 @@ const styles = StyleSheet.create({
     height: 140,
     aspectRatio: undefined,
   },
-  emptySlot: {
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: theme.colors.line,
-    borderRadius: theme.radius.lg,
-    backgroundColor: theme.colors.surfaceAlt,
-  },
   sealWrap: {
     alignItems: 'center',
     justifyContent: 'center',
   },
   shadow: {
     position: 'absolute',
-    width: '55%',
-    height: '55%',
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.ink,
+    width: '48%',
+    height: '18%',
+    bottom: '18%',
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.colors.stampInk,
   },
   bloom: {
     position: 'absolute',
     width: '78%',
     height: '78%',
-    borderRadius: theme.radius.md,
+    borderRadius: theme.radius.pill,
     borderWidth: 2,
-    borderColor: theme.colors.terracotta,
-  },
-  nameOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 14,
-  },
-  sealText: {
-    fontFamily: theme.fonts.sans,
-    fontSize: 13,
-    lineHeight: 16,
-    color: theme.colors.terracotta,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-
-  sealTextHero: {
-    fontSize: 18,
-    lineHeight: 22,
-  },
-  question: {
-    ...theme.type.title,
-    color: theme.colors.subtle,
-    fontWeight: '300',
-  },
-  emptyName: {
-    ...theme.type.micro,
-    color: theme.colors.subtle,
-    marginTop: 2,
   },
   newBadge: {
     position: 'absolute',
@@ -327,7 +253,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 2,
     borderRadius: 4,
-    backgroundColor: theme.colors.ink,
+    backgroundColor: theme.colors.stampInk,
   },
   newBadgeText: {
     fontFamily: theme.fonts.sans,

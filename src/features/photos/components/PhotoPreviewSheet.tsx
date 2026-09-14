@@ -4,6 +4,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -24,6 +25,9 @@ import { peekResolvedPlace } from '../services/placeResolve';
 
 /** Photos appended per scroll page in the pin sheet grid. */
 const PAGE_SIZE = 18;
+const COMPACT_HERO = 72;
+const COMPACT_STRIP = 36;
+const COMPACT_STRIP_MAX = 8;
 
 export interface PhotoPreviewSheetProps {
   /** null closes the sheet */
@@ -33,6 +37,33 @@ export interface PhotoPreviewSheetProps {
   coverAssetId?: string | null;
   /** Set cover for the cluster's place bucket. */
   onSetCover?: (placeKey: string, assetId: string) => void;
+  /**
+   * `compact` — floating card above bottom nav (map home).
+   * Tap expands to the existing detail sheet.
+   * `sheet` — full place sheet (몰아보기).
+   */
+  variant?: 'compact' | 'sheet';
+  /** Extra bottom inset so compact card clears HomeNavBar. */
+  bottomOffset?: number;
+}
+
+function formatTakenAt(iso: string | undefined): string | null {
+  if (!iso) {
+    return null;
+  }
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) {
+    return null;
+  }
+  return d.toLocaleString('ko-KR', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
 }
 
 const PhotoThumb = memo(function PhotoThumb({
@@ -80,6 +111,8 @@ export function PhotoPreviewSheet({
   onClose,
   coverAssetId,
   onSetCover,
+  variant = 'sheet',
+  bottomOffset = 0,
 }: PhotoPreviewSheetProps) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -90,11 +123,26 @@ export function PhotoPreviewSheet({
   const [placeLabel, setPlaceLabel] = useState<string | null>(null);
   const [labelLoading, setLabelLoading] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [expanded, setExpanded] = useState(variant === 'sheet');
   const cell = (width - theme.spacing.md * 2 - theme.spacing.sm * 2) / 3;
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [cluster?.id]);
+    setExpanded(variant === 'sheet');
+  }, [cluster?.id, variant]);
+
+  const heroPhoto = useMemo(() => {
+    if (!cluster) {
+      return null;
+    }
+    if (coverAssetId) {
+      const hit = cluster.photos.find((p) => p.assetId === coverAssetId);
+      if (hit) {
+        return hit;
+      }
+    }
+    return cluster.photos[0] ?? null;
+  }, [cluster, coverAssetId]);
 
   const pagePhotos = useMemo(() => {
     if (!cluster) {
@@ -102,6 +150,13 @@ export function PhotoPreviewSheet({
     }
     return cluster.photos.slice(0, visibleCount);
   }, [cluster, visibleCount]);
+
+  const stripPhotos = useMemo(() => {
+    if (!cluster) {
+      return [];
+    }
+    return cluster.photos.slice(0, COMPACT_STRIP_MAX);
+  }, [cluster]);
 
   // Idle file thumbs — same path as playback/cards (not per-cell getAssetInfo).
   useEffect(() => {
@@ -113,6 +168,18 @@ export function PhotoPreviewSheet({
       PAGE_SIZE,
     );
   }, [pagePhotos]);
+
+  useEffect(() => {
+    if (!cluster || !heroPhoto) {
+      return;
+    }
+    if (variant === 'compact' && !expanded) {
+      warmGridThumbs(
+        stripPhotos.map((p) => p.assetId),
+        COMPACT_STRIP_MAX,
+      );
+    }
+  }, [cluster, expanded, heroPhoto, stripPhotos, variant]);
 
   useEffect(() => {
     if (!cluster) {
@@ -184,63 +251,262 @@ export function PhotoPreviewSheet({
     ? strings.map.placeLoading
     : (placeLabel ??
       (cluster ? strings.map.clusterCount(cluster.photos.length) : ''));
+  const takenLabel = formatTakenAt(heroPhoto?.takenAt);
+
+  const showCompact = variant === 'compact' && cluster != null && !expanded;
+  const showSheet =
+    cluster != null && (variant === 'sheet' || expanded);
 
   return (
-    <Modal
-      visible={cluster != null}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
-    >
-      <View style={[styles.sheet, { paddingTop: insets.top + theme.spacing.md }]}>
-        <View style={styles.header}>
-          <View style={styles.titleBlock}>
-            <Text style={styles.title} numberOfLines={1}>
-              {titleText}
-            </Text>
-            {cluster && !labelLoading && placeLabel ? (
-              <Text style={styles.meta} numberOfLines={1}>
-                {strings.map.clusterCount(cluster.photos.length)}
-              </Text>
-            ) : null}
-            {onSetCover ? (
-              <Text style={styles.meta}>{strings.map.coverHint}</Text>
-            ) : null}
-          </View>
-          <Pressable onPress={onClose} accessibilityRole="button">
-            <Text style={styles.close}>{strings.common.confirm}</Text>
+    <>
+      {showCompact && heroPhoto ? (
+        <View
+          pointerEvents="box-none"
+          style={[
+            styles.compactWrap,
+            { bottom: bottomOffset + theme.spacing.sm },
+          ]}
+        >
+          <Pressable
+            onPress={() => setExpanded(true)}
+            accessibilityRole="button"
+            accessibilityLabel={titleText}
+            style={({ pressed }) => [
+              styles.compactCard,
+              pressed && styles.compactCardPressed,
+            ]}
+          >
+            <AssetThumbImage
+              assetId={heroPhoto.assetId}
+              size={COMPACT_HERO}
+              style={styles.compactHero}
+            />
+            <View style={styles.compactBody}>
+              <View style={styles.compactTitleRow}>
+                <Text style={styles.compactTitle} numberOfLines={1}>
+                  {titleText}
+                </Text>
+                <Text style={styles.compactChevron}>›</Text>
+              </View>
+              {takenLabel ? (
+                <Text style={styles.compactMeta} numberOfLines={1}>
+                  {takenLabel}
+                </Text>
+              ) : cluster.photos.length > 1 ? (
+                <Text style={styles.compactMeta} numberOfLines={1}>
+                  {strings.map.clusterCount(cluster.photos.length)}
+                </Text>
+              ) : null}
+              {stripPhotos.length > 1 ? (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.compactStrip}
+                >
+                  {stripPhotos.map((p) => (
+                    <AssetThumbImage
+                      key={p.assetId}
+                      assetId={p.assetId}
+                      size={COMPACT_STRIP}
+                      style={styles.compactStripThumb}
+                    />
+                  ))}
+                </ScrollView>
+              ) : null}
+            </View>
           </Pressable>
         </View>
-        {cluster ? (
-          <FlatList
-            data={pagePhotos}
-            keyExtractor={(item) => item.assetId}
-            numColumns={3}
-            contentContainerStyle={styles.list}
-            initialNumToRender={12}
-            maxToRenderPerBatch={6}
-            windowSize={6}
-            updateCellsBatchingPeriod={40}
-            removeClippedSubviews={Platform.OS === 'android'}
-            onEndReached={loadMore}
-            onEndReachedThreshold={0.4}
-            renderItem={renderItem}
-            extraData={coverAssetId}
-            onScrollBeginDrag={thumbWarmScroll.onScrollBeginDrag}
-            onMomentumScrollBegin={thumbWarmScroll.onMomentumScrollBegin}
-            onScrollEndDrag={thumbWarmScroll.onScrollEndDrag}
-            onMomentumScrollEnd={thumbWarmScroll.onMomentumScrollEnd}
+      ) : null}
+
+      <Modal
+        visible={showSheet}
+        animationType="slide"
+        transparent
+        presentationStyle="overFullScreen"
+        onRequestClose={() => {
+          if (variant === 'compact') {
+            setExpanded(false);
+            onClose();
+            return;
+          }
+          onClose();
+        }}
+      >
+        <View style={styles.backdrop}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => {
+              if (variant === 'compact') {
+                setExpanded(false);
+                onClose();
+                return;
+              }
+              onClose();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={strings.common.cancel}
           />
-        ) : null}
-      </View>
-    </Modal>
+          <View
+            style={[
+              styles.sheet,
+              { paddingBottom: Math.max(insets.bottom, theme.spacing.sm) },
+            ]}
+          >
+            <View style={styles.handle} />
+            <View style={styles.header}>
+              <View style={styles.titleBlock}>
+                <Text style={styles.title} numberOfLines={1}>
+                  {titleText}
+                </Text>
+                {cluster && !labelLoading && placeLabel ? (
+                  <Text style={styles.meta} numberOfLines={1}>
+                    {strings.map.clusterCount(cluster.photos.length)}
+                  </Text>
+                ) : null}
+                {takenLabel ? (
+                  <Text style={styles.meta} numberOfLines={1}>
+                    {takenLabel}
+                  </Text>
+                ) : null}
+                {onSetCover ? (
+                  <Text style={styles.meta}>{strings.map.coverHint}</Text>
+                ) : null}
+              </View>
+              <Pressable
+                onPress={() => {
+                  if (variant === 'compact') {
+                    setExpanded(false);
+                    onClose();
+                    return;
+                  }
+                  onClose();
+                }}
+                accessibilityRole="button"
+              >
+                <Text style={styles.close}>{strings.common.confirm}</Text>
+              </Pressable>
+            </View>
+            {cluster ? (
+              <FlatList
+                data={pagePhotos}
+                keyExtractor={(item) => item.assetId}
+                numColumns={3}
+                contentContainerStyle={styles.list}
+                initialNumToRender={12}
+                maxToRenderPerBatch={6}
+                windowSize={6}
+                updateCellsBatchingPeriod={40}
+                removeClippedSubviews={Platform.OS === 'android'}
+                onEndReached={loadMore}
+                onEndReachedThreshold={0.4}
+                renderItem={renderItem}
+                extraData={coverAssetId}
+                onScrollBeginDrag={thumbWarmScroll.onScrollBeginDrag}
+                onMomentumScrollBegin={thumbWarmScroll.onMomentumScrollBegin}
+                onScrollEndDrag={thumbWarmScroll.onScrollEndDrag}
+                onMomentumScrollEnd={thumbWarmScroll.onMomentumScrollEnd}
+              />
+            ) : null}
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  sheet: {
+  compactWrap: {
+    position: 'absolute',
+    left: theme.spacing.md,
+    right: theme.spacing.md,
+    zIndex: 20,
+  },
+  compactCard: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 12,
+    padding: 10,
+    borderRadius: 14,
+    backgroundColor: theme.colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.panelBorder,
+    shadowColor: theme.colors.ink,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  compactCardPressed: {
+    opacity: 0.92,
+  },
+  compactHero: {
+    width: COMPACT_HERO,
+    height: COMPACT_HERO,
+    borderRadius: 10,
+  },
+  compactBody: {
     flex: 1,
+    minWidth: 0,
+    justifyContent: 'center',
+    gap: 3,
+  },
+  compactTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  compactTitle: {
+    flex: 1,
+    fontFamily: theme.fonts.sans,
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: '600',
+    color: theme.colors.ink,
+    letterSpacing: -0.2,
+  },
+  compactChevron: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 18,
+    lineHeight: 20,
+    color: theme.colors.subtle,
+    fontWeight: '400',
+  },
+  compactMeta: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 12,
+    lineHeight: 16,
+    color: theme.colors.inkSoft,
+  },
+  compactStrip: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingTop: 4,
+  },
+  compactStripThumb: {
+    width: COMPACT_STRIP,
+    height: COMPACT_STRIP,
+    borderRadius: 6,
+  },
+  backdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(44,62,80,0.18)',
+  },
+  sheet: {
     backgroundColor: theme.colors.background,
+    borderTopLeftRadius: theme.radius.card,
+    borderTopRightRadius: theme.radius.card,
+    maxHeight: '62%',
+    overflow: 'hidden',
+  },
+  handle: {
+    alignSelf: 'center',
+    width: 34,
+    height: 3,
+    borderRadius: theme.radius.pill,
+    backgroundColor: theme.tint.mid,
+    marginTop: theme.spacing.sm,
+    marginBottom: theme.spacing.xs,
   },
   header: {
     flexDirection: 'row',
@@ -274,6 +540,7 @@ const styles = StyleSheet.create({
   },
 
   list: {
+    flexGrow: 0,
     paddingHorizontal: theme.spacing.md - theme.spacing.sm / 2,
     paddingBottom: theme.spacing.xl,
   },

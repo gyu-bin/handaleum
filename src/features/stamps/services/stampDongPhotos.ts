@@ -1,6 +1,7 @@
 import type { PhotoRef } from '@/features/photos/types';
 import { isKoreaLatLng } from '@/features/photos/utils/koreaBounds';
 
+import type { StampsCollected } from '../types';
 import { stampId } from './dongIndex';
 import { lookupDong } from './dongLookup';
 import { forEachPipChunk } from './pipChunk';
@@ -185,4 +186,44 @@ export function peekPhotosForStampLeaf(
 /** Test helper. */
 export function stampDongPhotoIndexBuiltAt(): number {
   return indexedAt;
+}
+
+export function peekCoverAssetIdForSido(
+  collected: StampsCollected,
+  sido: string,
+): string | null {
+  if (!indexByStampId) {
+    return null;
+  }
+  let best: { assetId: string; takenAt: string } | null = null;
+  for (const [id, entry] of Object.entries(collected)) {
+    if (entry?.sido !== sido) {
+      continue;
+    }
+    const photos = indexByStampId.get(id);
+    const top = photos?.[0];
+    if (!top) {
+      continue;
+    }
+    if (!best || top.takenAt > best.takenAt) {
+      best = { assetId: top.assetId, takenAt: top.takenAt };
+    }
+  }
+  return best?.assetId ?? null;
+}
+
+/** Ensure index then resolve cover assetIds for visited 시·도. */
+export async function loadSidoCoverAssetIds(
+  collected: StampsCollected,
+  sidos: string[],
+): Promise<Record<string, string>> {
+  await ensureIndex();
+  const out: Record<string, string> = {};
+  for (const sido of sidos) {
+    const id = peekCoverAssetIdForSido(collected, sido);
+    if (id) {
+      out[sido] = id;
+    }
+  }
+  return out;
 }

@@ -1,5 +1,4 @@
-# Loading assets — attribution
+# Loading assets
 
-| Asset / animation | Source | License |
-| --- | --- | --- |
-| Bike stroke loader (`BikeLoader`) | [Uiverse.io](https://uiverse.io) by [fanishah](https://uiverse.io/profile/fanishah) | Check Uiverse terms; SVG/CSS adapted to React Native |
+In-app loading uses `PaperMapLoader` (SVG + `react-native-reanimated`).
+No GIF/video. The former bike stroke loader is removed.

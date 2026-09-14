@@ -110,7 +110,8 @@ export const strings = {
     close: '닫기',
   },
   map: {
-    emptyMonth: '이 달에는 위치가 있는 사진이 없습니다',
+    home: '지도',
+    emptyMonth: '이 달에는 지도에 남길 사진이 없어요.',
     emptyAllHome: '이 달은 집에서 찍은 사진만 있습니다. 카드는 만들 수 있어요',
     noLocationNotice: (count: number) =>
       `위치 정보가 있는 사진만 표시됩니다 (제외 ${count}장)`,
@@ -262,6 +263,7 @@ export const strings = {
       `지난 달 전체와 인사이트. ${priceLabel} · 일회.`,
     /** __DEV__ only */
     devToggle: '개발',
+    devDetails: '진단 보기',
     devDummyOn: '샘플 켜짐',
     devDummyOff: '샘플 꺼짐',
     devDummyEnable: '샘플 켜기',
@@ -293,6 +295,8 @@ export const strings = {
     journalTitle: '사진 일기',
     journalSubtitle: '한 달의 사진을 지도로 모아요',
     photoCount: (count: number) => `${count}장`,
+    photoCountLong: (count: number) => `${count}장의 사진`,
+    noRecord: '기록 없음',
     empty: '표시할 월이 없습니다',
     freeWindowHint: (priceLabel: string) =>
       `무료는 최근 3개월만 볼 수 있어요. 더 지난 달은 프로(${priceLabel}·일회)에서 열려요.`,
@@ -307,6 +311,9 @@ export const strings = {
   playback: {
     title: '몰아보기',
     empty: '이 달에는 보여줄 사진이 없습니다',
+    jumpToDate: '날짜 바로가기',
+    datesWithPhotos: '사진이 있는 날짜',
+    openDateJump: '날짜 바로가기 열기',
     placeLoading: '위치 확인 중…',
     placeUnknown: '위치 없음',
     stripHint: '같은 장소 · 탭하면 대표 사진',
@@ -324,6 +331,8 @@ export const strings = {
         weekday: 'short',
       });
     },
+    monthMeta: (photos: number, places: number) =>
+      `${photos.toLocaleString('ko-KR')}장의 사진 · ${places.toLocaleString('ko-KR')}곳`,
   },
   cards: {
     listTitle: '내 회고',
@@ -359,8 +368,23 @@ export const strings = {
     loadingAlbum: '앨범 읽는 중',
     loadingPhotos: (done: number, total: number) =>
       `사진 ${done.toLocaleString('ko-KR')}/${total.toLocaleString('ko-KR')}`,
-    boardPlace: '위치',
-    boardDay: '월',
+    boardPlace: '장소',
+    boardDay: '사진',
+    boardMemo: '메모',
+    boardSummary: '요약',
+    journeyTitle: (monthNum: number) => `${monthNum}월의 여정`,
+    leaveMonth: '+ 이번 달도 기록하기',
+    memoEmpty: '아직 남긴 메모가 없어요',
+    momentsTitle: '이번 달의 순간',
+    placesTitle: '이번 달의 장소',
+    topPlacesTitle: '이번 달 많이 남긴 곳',
+    topPlacesHint: '가장 많은 추억을 남긴 장소들이에요.',
+    topPlacesViewAll: '전체보기',
+    topPlaceMeta: (monthNum: number, day: number, count: number) =>
+      `${monthNum}월 ${day}일 · ${count}장`,
+    expandPhoto: '사진 확대',
+    statPlaces: '방문한 장소',
+    statPhotos: '찍은 사진',
     boardWeekdays: ['일', '월', '화', '수', '목', '금', '토'] as const,
     boardEmpty: '이번 달 위치 사진이 없습니다',
     boardRenameTitle: '이 위치 이름',
@@ -429,12 +453,37 @@ export const strings = {
   },
   stamps: {
     title: '발도장',
-    progress: (a: number, b: number) => `${a}/${b}`,
-    progressLabel: (sido: string) => `${sido} · `,
+    progress: (a: number, b: number) =>
+      a === 0 ? '아직 없음' : `${a} / ${b}`,
+    progressLabel: (sido: string) => `${sido}에서 `,
     cityProgressLabel: (city: string) => `${city} · `,
+    bookTitle: (sido: string) => `${sido} 도장판`,
+    nationBoard: '전국 도장판',
+    myBookTitle: '나의 발도장',
+    footprintCount: (n: number) =>
+      n === 0
+        ? '아직 발자국이 없어요'
+        : `${n}개의 지역에 발자국을 남겼어요`,
+    sidoProgress: (a: number, b: number) => `${a} / ${b}`,
+    bookFooter: '다녀온 곳마다 하나씩.',
+    regionStampCount: (n: number) =>
+      n === 0
+        ? '아직 찍은 도장이 없어요'
+        : `${n}개의 지역에 도장을 찍었어요`,
+    regionDistricts: (sido: string) => `${sido}의 시군구`,
+    regionMoments: (sido: string) => `${sido}에서 남긴 순간`,
+    totalCollected: (count: number) =>
+      count === 0 ? '아직 없음' : `${count}`,
+    scopeDomestic: '국내',
+    scopeOverseas: '해외',
+    nationProgress: (a: number, b: number) => `${a} / ${b} ›`,
+    boardMapA11y: '시·도 도장이 찍힌 대한민국 지도',
+    nextTripNote: '아직 가보지 못한 곳이 더 많아요. 다음엔 어디로 떠날까요?',
+    overseasEmptyTitle: '해외 도장은 준비 중이에요',
+    overseasEmpty: '지금은 국내 동네 도장만 모을 수 있어요',
     newBadge: 'NEW',
     newBadgeA11y: '이번 달에 새로 모은 도장',
-    earned: (name: string) => `${name} 도장!`,
+    earned: (name: string) => `${name} 도장을 찍었어요!`,
     emptyTitle: '아직 모은 동네가 없어요',
     empty: '위치가 있는 사진이 있으면 동 단위로 도장이 생겨요',
     uncollected: '미수집',
@@ -451,15 +500,16 @@ export const strings = {
     scanIntroBody:
       '앨범 속 위치 사진으로 동 도장을 모아요. 확인을 눌러도 백그라운드에서 이어지고, 홈의 이번 달 지도는 그대로 쓸 수 있어요.',
     scanIntroConfirm: '확인',
-    mapA11y: '방문한 동네가 색 방울로 표시된 대한민국 지도',
+    mapA11y: '방문한 동네가 점으로 표시된 대한민국 지도',
     mapEyebrow: '동네 도장',
-    mapTitle: '모은 동네',
+    mapTitle: '방문 지도',
     mapHint: '한눈에 보는 발자취',
     mapClose: '닫기',
     mapOpen: '모은 동네 보기',
-    mapPinchHint: '두 손가락으로 확대 · 드래그로 이동',
+    mapPinchHint: '점을 눌러 장소를 보고, 두 손가락으로 확대해요',
     mapVisitCount: (dongs: number, sidos: number) =>
       `${dongs}개 동 · ${sidos}개 시·도`,
+    mapFirstVisit: (label: string) => `${label} 첫 발자국`,
     mapLegendDong: (n: number) => `동 ${n}`,
     mapEmpty: '아직 모은 동이 없어요',
     leafListEmpty: '동네 목록이 없어요',

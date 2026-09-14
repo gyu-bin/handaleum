@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BackHandler,
   InteractionManager,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,7 +10,6 @@ import {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useNavigation, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Path } from 'react-native-svg';
 
 import {
   getStampsScanIntroSeen,
@@ -25,25 +23,25 @@ import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 import { useShellBackground, useShellInk } from '@/shared/hooks/useShellBackground';
 import { useHeldBusy } from '@/shared/hooks/useHeldBusy';
-import { useTheme } from '@/shared/theme/ThemeProvider';
 
 import { currentMonthKey } from '@/features/photos/utils/month';
 import { usePhotoPermission } from '@/features/photos/hooks/usePhotoPermission';
 
-import { CityList, type CityRow } from '../components/CityList';
+import { type CityRow } from '../components/CityList';
 import {
   CityStampSections,
   type CityStampSection,
   type CityStampUnit,
 } from '../components/CityStampSections';
-import { MascotPin } from '../components/MascotPin';
-import { RegionChips } from '../components/RegionChips';
+import { StampBookHome } from '../components/StampBookHome';
 import { StampDongPhotosModal } from '../components/StampDongPhotosModal';
 import { StampEarnOverlay } from '../components/StampEarnOverlay';
 import { StampIndexingGate } from '../components/StampIndexingGate';
-import { StampMapModal } from '../components/StampMapModal';
 import { StampPager } from '../components/StampPager';
+import { StampRegionDetail } from '../components/StampRegionDetail';
 import { StampScanIntroModal } from '../components/StampScanIntroModal';
+import { HomeNavBar } from '@/features/photos/components/HomeNavBar';
+import { APP_NAV_ITEMS } from '@/features/photos/constants/appNav';
 import { useStampLibraryProgress } from '../hooks/useStampLibraryProgress';
 import { useStampLibrarySync } from '../hooks/useStampLibrarySync';
 import { useStamps } from '../hooks/useStamps';
@@ -62,6 +60,7 @@ import {
   prebuildStampDongPhotoIndex,
   type StampDongPhotosQuery,
 } from '../services/stampDongPhotos';
+import { sidoFormal } from '../utils/sidoLabels';
 import type { StampsCollected } from '../types';
 
 function tiltForName(name: string): number {
@@ -72,16 +71,12 @@ function tiltForName(name: string): number {
   return h - 8;
 }
 
-const CITY_SORTS: { id: CityListSort; label: string }[] = [
-  { id: 'most', label: strings.stamps.sortMost },
-  { id: 'least', label: strings.stamps.sortLeast },
-  { id: 'name', label: strings.stamps.sortName },
-];
+const CITY_SORT: CityListSort = 'name';
 
 function cityRowsForSido(
   sido: string,
   collected: StampsCollected,
-  sort: CityListSort,
+  sort: CityListSort = CITY_SORT,
 ): CityRow[] {
   const rows = l1UnitsForSido(sido).map((unit) => {
     const leaves = l2LeavesForUnit(sido, unit);
@@ -136,32 +131,12 @@ function leafSectionForUnit(
   };
 }
 
-function MapIcon({ color }: { color: string }) {
-  return (
-    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M9 4.5l-5.2 1.7A1 1 0 003 7.1v11.3a1 1 0 001.3.95L9 17.5l6 2 5.2-1.7A1 1 0 0021 16.9V5.6a1 1 0 00-1.3-.95L15 6.5l-6-2z"
-        stroke={color}
-        strokeWidth={1.7}
-        strokeLinejoin="round"
-      />
-      <Path
-        d="M9 4.5v13M15 6.5v13"
-        stroke={color}
-        strokeWidth={1.7}
-        strokeLinecap="round"
-      />
-    </Svg>
-  );
-}
-
 /**
- * 발도장 — 시·도 → L1(구·시·군) → L2(동 / 읍·면).
+ * 발도장 — 시·도 스탬프북 → L1(구·시·군) → L2(동 / 읍·면).
  */
 export function StampScreen() {
   const shellBg = useShellBackground();
   const shell = useShellInk();
-  const { colors } = useTheme();
   const navigation = useNavigation();
   const router = useRouter();
   const { isReady, status: permissionStatus } = usePhotoPermission();
@@ -172,7 +147,7 @@ export function StampScreen() {
   const indexing = useStampLibraryProgress();
   const gateOpen = syncing;
 
-  const { collected, unseen, collectedCount, markAllSeen } = useStamps();
+  const { collected, unseen, markAllSeen } = useStamps();
   const [sido, setSido] = useState(SIDO_ORDER[0] ?? '서울');
   const [l1Key, setL1Key] = useState<string | null>(null);
   const [celebrate, setCelebrate] = useState<string[] | null>(null);
@@ -180,8 +155,8 @@ export function StampScreen() {
   const [showScanIntro, setShowScanIntro] = useState(
     () => !getStampsScanIntroSeen(),
   );
-  const [citySort, setCitySort] = useState<CityListSort>('most');
-  const [mapOpen, setMapOpen] = useState(false);
+  /** Stamp book → 시·도 detail (L1 grid). */
+  const [sidoListOpen, setSidoListOpen] = useState(false);
   const [dongPhotos, setDongPhotos] = useState<StampDongPhotosQuery | null>(
     null,
   );
@@ -191,11 +166,20 @@ export function StampScreen() {
     null,
   );
 
+  const visitedSidoCount = useMemo(() => {
+    const set = new Set<string>();
+    for (const entry of Object.values(collected)) {
+      if (entry?.sido) {
+        set.add(entry.sido);
+      }
+    }
+    return set.size;
+  }, [collected]);
+
   useEffect(() => {
     if (!gateOpen) {
       return;
     }
-    setMapOpen(false);
     setDongPhotos(null);
   }, [gateOpen]);
 
@@ -221,20 +205,29 @@ export function StampScreen() {
       setDongPhotos(null);
       return true;
     }
-    if (mapOpen) {
-      setMapOpen(false);
-      return true;
-    }
     if (l1Key) {
       setL1Key(null);
       return true;
     }
+    if (sidoListOpen) {
+      setSidoListOpen(false);
+      return true;
+    }
     return false;
-  }, [dongPhotos, l1Key, mapOpen]);
+  }, [dongPhotos, l1Key, sidoListOpen]);
 
   const popStampLayerRef = useRef(popStampLayer);
   popStampLayerRef.current = popStampLayer;
-  const nestedBack = Boolean(l1Key) || mapOpen || dongPhotos != null;
+  const nestedBack = Boolean(l1Key) || dongPhotos != null || sidoListOpen;
+
+  /** Deep link / cold open of /stamps has no stack — bare GO_BACK warns in dev. */
+  const leaveStampScreen = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace('/');
+  }, [router]);
 
   useEffect(() => {
     // Horizontal pager owns in-content swipes; left-edge back is custom.
@@ -274,11 +267,9 @@ export function StampScreen() {
           if (popStampLayerRef.current()) {
             return;
           }
-          if (router.canGoBack()) {
-            router.back();
-          }
+          leaveStampScreen();
         }),
-    [router],
+    [leaveStampScreen],
   );
 
   useEffect(() => {
@@ -340,6 +331,7 @@ export function StampScreen() {
       setCelebrate(names.slice(0, 5));
     } else if (focus) {
       setSido(focus.sido);
+      setSidoListOpen(true);
       setL1Key(focus.l1Key);
       celebrating.current = false;
     } else {
@@ -352,10 +344,16 @@ export function StampScreen() {
     pendingFocusRef.current = null;
     if (focus) {
       setSido(focus.sido);
+      setSidoListOpen(true);
       setL1Key(focus.l1Key);
     }
     setCelebrate(null);
     celebrating.current = false;
+  }, []);
+
+  const openSidoList = useCallback((next: string) => {
+    setSido(next);
+    setSidoListOpen(true);
   }, []);
 
   const onReplayStamp = useCallback((id: string) => {
@@ -375,8 +373,8 @@ export function StampScreen() {
   );
 
   const l1Rows = useMemo(
-    () => cityRowsForSido(sido, collected, citySort),
-    [citySort, collected, sido],
+    () => cityRowsForSido(sido, collected),
+    [collected, sido],
   );
   const l1UnitByKey = useMemo(() => {
     const map = new Map<string, StampL1Unit>();
@@ -385,21 +383,11 @@ export function StampScreen() {
     }
     return map;
   }, [l1Units]);
-  const sidoIndex = Math.max(0, SIDO_ORDER.indexOf(sido));
   const l1Index = Math.max(
     0,
     l1Rows.findIndex((row) => row.key === l1Key),
   );
 
-  const onSidoPage = useCallback(
-    (index: number) => {
-      const next = SIDO_ORDER[index];
-      if (next) {
-        setSido(next);
-      }
-    },
-    [],
-  );
   const onL1Page = useCallback(
     (index: number) => {
       const next = l1Rows[index];
@@ -408,20 +396,6 @@ export function StampScreen() {
       }
     },
     [l1Rows],
-  );
-  const renderSidoPage = useCallback(
-    (pageSido: string) => (
-      <ScrollView style={styles.pageScroll} nestedScrollEnabled directionalLockEnabled>
-        <CityList
-          cities={cityRowsForSido(pageSido, collected, citySort)}
-          onSelect={(key) => {
-            setSido(pageSido);
-            setL1Key(key);
-          }}
-        />
-      </ScrollView>
-    ),
-    [citySort, collected],
   );
   const renderL1Page = useCallback(
     (row: CityRow) => {
@@ -455,16 +429,10 @@ export function StampScreen() {
     [collected, l1UnitByKey, openDongPhotos, replayNonce, sido],
   );
 
-  const sidoCollected = useMemo(
-    () => l1Rows.reduce((n, r) => n + r.collected, 0),
+  const visitedL1Count = useMemo(
+    () => l1Rows.filter((r) => r.collected > 0).length,
     [l1Rows],
   );
-  const sidoTotal = useMemo(
-    () => l1Rows.reduce((n, r) => n + r.total, 0),
-    [l1Rows],
-  );
-  const progressPct =
-    sidoTotal === 0 ? 0 : Math.min(100, (sidoCollected / sidoTotal) * 100);
 
   const leafSection: CityStampSection | null = useMemo(() => {
     if (!selectedL1) {
@@ -474,10 +442,16 @@ export function StampScreen() {
   }, [collected, selectedL1, sido]);
 
   const pagerTick = useMemo(
-    () => [collected, replayNonce, citySort] as const,
-    [citySort, collected, replayNonce],
+    () => [collected, replayNonce] as const,
+    [collected, replayNonce],
   );
   const showBootLoading = useHeldBusy(!isReady, 1500);
+
+  const headerTitle = l1Key
+    ? selectedL1?.label ?? strings.stamps.title
+    : sidoListOpen
+      ? sidoFormal(sido)
+      : strings.stamps.title;
 
   if (showBootLoading) {
     return (
@@ -486,8 +460,6 @@ export function StampScreen() {
       </SafeAreaView>
     );
   }
-
-  const empty = collectedCount === 0;
 
   return (
     <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
@@ -502,29 +474,9 @@ export function StampScreen() {
       ) : null}
 
       <ScreenHeader
-        title={strings.stamps.title}
+        title={headerTitle}
         onBack={
-          gateOpen ? undefined : nestedBack ? popStampLayer : undefined
-        }
-        trailing={
-          gateOpen ? null : (
-            <Pressable
-              onPress={() => setMapOpen(true)}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel={strings.stamps.mapOpen}
-              style={({ pressed }) => [
-                styles.mapBtn,
-                {
-                  borderColor: colors.shellInk,
-                  backgroundColor: colors.shellChip,
-                },
-                pressed && styles.mapBtnPressed,
-              ]}
-            >
-              <MapIcon color={colors.shellInk} />
-            </Pressable>
-          )
+          nestedBack && !gateOpen ? popStampLayer : leaveStampScreen
         }
       />
 
@@ -537,120 +489,58 @@ export function StampScreen() {
             onClose={() => setDongPhotos(null)}
           />
 
-          <StampMapModal
-            visible={mapOpen}
-            collected={collected}
-            onClose={() => setMapOpen(false)}
-          />
-
-          {!l1Key ? (
-            <RegionChips sidos={SIDO_ORDER} selected={sido} onSelect={setSido} />
-          ) : null}
-
-          <View style={styles.progressBlock}>
-            <View style={styles.progressRow}>
-              <Text
-                style={[styles.progressLabel, shell.soft]}
-                numberOfLines={1}
-              >
-                {selectedL1
-                  ? strings.stamps.cityProgressLabel(selectedL1.label)
-                  : strings.stamps.progressLabel(sido)}
-                {selectedL1 && leafSection
-                  ? strings.stamps.progress(
+          {!sidoListOpen && !l1Key ? (
+            <ScrollView
+              style={styles.pageScroll}
+              contentContainerStyle={styles.homeScroll}
+              showsVerticalScrollIndicator={false}
+            >
+              <StampBookHome
+                sidos={SIDO_ORDER}
+                collected={collected}
+                visitedSidoCount={visitedSidoCount}
+                onSelectSido={openSidoList}
+              />
+            </ScrollView>
+          ) : l1Key ? (
+            <>
+              {leafSection ? (
+                <View style={styles.leafHint}>
+                  <Text style={[styles.leafHintText, shell.soft]} numberOfLines={1}>
+                    {strings.stamps.progress(
                       leafSection.collected,
                       leafSection.total,
-                    )
-                  : strings.stamps.progress(sidoCollected, sidoTotal)}
-              </Text>
-              {!l1Key ? (
-                <View style={styles.sortRow}>
-                  {CITY_SORTS.map((opt, i) => (
-                    <View key={opt.id} style={styles.sortItem}>
-                      {i > 0 ? (
-                        <Text style={[styles.sortDot, shell.subtle]}>·</Text>
-                      ) : null}
-                      <Pressable
-                        onPress={() => setCitySort(opt.id)}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: citySort === opt.id }}
-                        accessibilityLabel={opt.label}
-                        hitSlop={8}
-                        style={({ pressed }) => pressed && styles.sortPressed}
-                      >
-                        <Text
-                          style={[
-                            styles.sortText,
-                            shell.subtle,
-                            citySort === opt.id && styles.sortTextOn,
-                            citySort === opt.id && shell.ink,
-                          ]}
-                        >
-                          {opt.label}
-                        </Text>
-                      </Pressable>
-                    </View>
-                  ))}
+                    )}
+                  </Text>
                 </View>
               ) : null}
-            </View>
-            <View style={[styles.track, { backgroundColor: shell.line }]}>
-              <View
-                style={[
-                  styles.fill,
-                  {
-                    backgroundColor: shell.fill,
-                    width: `${
-                      selectedL1 && leafSection
-                        ? leafSection.total === 0
-                          ? 0
-                          : Math.min(
-                              100,
-                              (leafSection.collected / leafSection.total) * 100,
-                            )
-                        : progressPct
-                    }%`,
-                  },
-                ]}
+              <StampPager
+                data={l1Rows}
+                index={l1Index}
+                onIndexChange={onL1Page}
+                keyExtractor={(row) => row.key}
+                renderPage={renderL1Page}
+                extraData={pagerTick}
               />
-            </View>
-          </View>
-
-          {empty && !l1Key ? (
-            <View style={styles.emptyWrap}>
-              <MascotPin size={48} />
-              <StateView
-                title={strings.stamps.emptyTitle}
-                description={strings.stamps.empty}
-              />
-            </View>
-          ) : l1Key ? (
-            <StampPager
-              data={l1Rows}
-              index={l1Index}
-              onIndexChange={onL1Page}
-              keyExtractor={(row) => row.key}
-              renderPage={renderL1Page}
-              extraData={pagerTick}
-            />
+            </>
           ) : (
-            <StampPager
-              data={SIDO_ORDER}
-              index={sidoIndex}
-              onIndexChange={onSidoPage}
-              keyExtractor={(name) => name}
-              renderPage={renderSidoPage}
-              extraData={pagerTick}
+            <StampRegionDetail
+              sido={sido}
+              collected={collected}
+              cities={l1Rows}
+              visitedL1={visitedL1Count}
+              onSelectCity={setL1Key}
             />
           )}
         </>
       )}
 
-      {!gateOpen && !mapOpen && !dongPhotos ? (
+      {!gateOpen && !dongPhotos ? (
         <GestureDetector gesture={edgeBack}>
           <View style={styles.edgeBack} />
         </GestureDetector>
       ) : null}
+      {!gateOpen ? <HomeNavBar items={APP_NAV_ITEMS} /> : null}
     </SafeAreaView>
   );
 }
@@ -660,71 +550,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   grain: {
-    opacity: 0.3,
+    opacity: 0.28,
   },
-  mapBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 4,
-    borderWidth: 1.5,
-    borderColor: theme.colors.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.surface,
+  homeScroll: {
+    paddingBottom: 96,
   },
-  mapBtnPressed: {
-    opacity: 0.7,
-  },
-  progressBlock: {
+  leafHint: {
     paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
-    gap: 6,
+    paddingBottom: theme.spacing.xs,
   },
-  progressRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    gap: theme.spacing.sm,
-  },
-  progressLabel: {
-    ...theme.type.micro,
+  leafHintText: {
     fontFamily: theme.fonts.sans,
-    color: theme.colors.inkSoft,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '500',
-    flexShrink: 1,
-  },
-  sortRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    flexShrink: 0,
-  },
-  sortItem: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-  },
-  sortText: {
-    ...theme.type.micro,
-    fontFamily: theme.fonts.sans,
-    fontWeight: '500',
-  },
-  sortTextOn: {
-    fontWeight: '700',
-  },
-  sortDot: {
-    ...theme.type.micro,
-    marginHorizontal: 5,
-  },
-  sortPressed: {
-    opacity: 0.5,
-  },
-  track: {
-    height: 1,
-    backgroundColor: theme.colors.line,
-    overflow: 'hidden',
-  },
-  fill: {
-    height: '100%',
-    backgroundColor: theme.colors.ink,
   },
   emptyWrap: {
     flex: 1,

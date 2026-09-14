@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   BackHandler,
@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Path } from 'react-native-svg';
 
 import { Button } from '@/shared/components/Button';
 import { CreateCardFab } from '@/shared/components/CreateCardFab';
@@ -26,12 +27,84 @@ import { useShellBackground, useShellInk } from '@/shared/hooks/useShellBackgrou
 import { useDarkMode, useTheme } from '@/shared/theme/ThemeProvider';
 
 import { RecapBoard } from '../components/RecapBoard';
+import { RecapPhotosModal } from '../components/RecapPhotosModal';
 import { useCards, useDeleteCards } from '../hooks/useCards';
 import type { RecapCard } from '../types';
+import { summaryTopPlaces } from '../utils/summaryTopPlaces';
+import { AssetThumbImage } from '../../photos/components/AssetThumbImage';
+import { HomeNavBar } from '../../photos/components/HomeNavBar';
+import { APP_NAV_ITEMS } from '../../photos/constants/appNav';
 import { useCurrentMonth } from '../../photos/hooks/useCurrentMonth';
 import { useMonthJourney } from '../../photos/hooks/useMonthJourney';
 import { useMonthLoadProgress } from '../../photos/hooks/useMonthLoadProgress';
 import { useMonthlyPhotos } from '../../photos/hooks/useMonthlyPhotos';
+import { usePinCovers } from '../../photos/hooks/usePinCovers';
+import type { PhotoRef } from '../../photos/types';
+
+type RecapTab = 'summary' | 'place' | 'photo';
+
+const TABS: { id: RecapTab; label: string }[] = [
+  { id: 'summary', label: strings.cards.boardSummary },
+  { id: 'place', label: strings.cards.boardPlace },
+  { id: 'photo', label: strings.cards.boardDay },
+];
+
+const TOP_PLACE_LIMIT = 4;
+const PLACE_CARD_SIZE = 132;
+
+function monthNumOf(month: string): number {
+  return Number(month.slice(5, 7)) || 1;
+}
+
+function monthHeading(month: string): string {
+  const [y, m] = month.split('-');
+  if (!y || !m) {
+    return month;
+  }
+  return `${y}년 ${Number(m)}월`;
+}
+
+function localMonthDay(iso: string): { monthNum: number; day: number } {
+  const d = new Date(iso);
+  return { monthNum: d.getMonth() + 1, day: d.getDate() };
+}
+
+function StatPinIcon({ color }: { color: string }) {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24" accessibilityElementsHidden>
+      <Path
+        d="M12 2c-3.3 0-6 2.6-6 5.9 0 4.4 6 11.1 6 11.1s6-6.7 6-11.1C18 4.6 15.3 2 12 2zm0 8.1a2.2 2.2 0 1 1 0-4.4 2.2 2.2 0 0 1 0 4.4z"
+        fill={color}
+      />
+    </Svg>
+  );
+}
+
+function StatPhotoIcon({ color }: { color: string }) {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24" accessibilityElementsHidden>
+      <Path
+        d="M20 5h-3.2l-1.4-1.8A2 2 0 0 0 13.8 2h-3.6a2 2 0 0 0-1.6.8L7.2 5H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm-8 12.2A4.2 4.2 0 1 1 16.2 13 4.2 4.2 0 0 1 12 17.2z"
+        fill={color}
+      />
+    </Svg>
+  );
+}
+
+function ExpandIcon({ color }: { color: string }) {
+  return (
+    <Svg width={14} height={14} viewBox="0 0 24 24" accessibilityElementsHidden>
+      <Path
+        d="M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </Svg>
+  );
+}
 
 export function CardListScreen() {
   const router = useRouter();
@@ -52,10 +125,36 @@ export function CardListScreen() {
   const { visitPlaces } = useMonthJourney(monthPhotos, {
     resetKey: month,
   });
+  const { covers: pinCovers } = usePinCovers(month);
 
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [tab, setTab] = useState<RecapTab>(
+    modeParam === 'day' ? 'photo' : 'summary',
+  );
+  const [viewerPhotos, setViewerPhotos] = useState<PhotoRef[] | null>(null);
+  const [viewerCoverId, setViewerCoverId] = useState<string | null>(null);
+
+  const heroId = monthPhotos[0]?.assetId ?? null;
+  const topPlaces = useMemo(
+    () =>
+      summaryTopPlaces(monthPhotos, visitPlaces, pinCovers, TOP_PLACE_LIMIT),
+    [monthPhotos, visitPlaces, pinCovers],
+  );
+
+  const openViewer = useCallback((photos: PhotoRef[], coverAssetId?: string | null) => {
+    if (photos.length === 0) {
+      return;
+    }
+    setViewerPhotos(photos);
+    setViewerCoverId(coverAssetId ?? photos[0]?.assetId ?? null);
+  }, []);
+
+  const closeViewer = useCallback(() => {
+    setViewerPhotos(null);
+    setViewerCoverId(null);
+  }, []);
 
   /**
    * Pop back to home (native back animation). `replace('/')` slides home in
@@ -189,6 +288,7 @@ export function CardListScreen() {
           actionLabel={strings.common.retry}
           onAction={() => void refetch()}
         />
+        <HomeNavBar items={APP_NAV_ITEMS} />
       </SafeAreaView>
     );
   }
@@ -315,30 +415,212 @@ export function CardListScreen() {
           }}
         />
       ) : (
-        <ScrollView contentContainerStyle={styles.boardScroll}>
-          {monthQuery.isPending && monthPhotos.length === 0 ? (
-            <LoadProgressBanner
-              label={
-                loadProgress.total > 0 && loadProgress.month === month
-                  ? strings.cards.loadingPhotos(
-                      loadProgress.done,
-                      loadProgress.total,
-                    )
-                  : strings.cards.loadingAlbum
-              }
-              done={loadProgress.month === month ? loadProgress.done : 0}
-              total={loadProgress.month === month ? loadProgress.total : 0}
-            />
-          ) : (
-            <RecapBoard
-              month={month}
-              photos={monthPhotos}
-              visitPlaces={visitPlaces}
-              initialMode={modeParam === 'day' ? 'day' : 'place'}
-            />
-          )}
-        </ScrollView>
+        <>
+          <Text style={[styles.monthHeading, shell.ink]}>
+            {monthHeading(month)}
+          </Text>
+          <View style={styles.tabs}>
+            {TABS.map((item) => {
+              const on = tab === item.id;
+              return (
+                <Pressable
+                  key={item.id}
+                  onPress={() => setTab(item.id)}
+                  style={styles.tabBtn}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: on }}
+                >
+                  <Text
+                    style={[
+                      styles.tabLabel,
+                      shell.subtle,
+                      on && styles.tabLabelOn,
+                      on && shell.ink,
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                  {on ? <View style={styles.tabUnderline} /> : null}
+                </Pressable>
+              );
+            })}
+          </View>
+          <ScrollView contentContainerStyle={styles.boardScroll}>
+            {monthQuery.isPending && monthPhotos.length === 0 ? (
+              <LoadProgressBanner
+                label={
+                  loadProgress.total > 0 && loadProgress.month === month
+                    ? strings.cards.loadingPhotos(
+                        loadProgress.done,
+                        loadProgress.total,
+                      )
+                    : strings.cards.loadingAlbum
+                }
+                done={loadProgress.month === month ? loadProgress.done : 0}
+                total={loadProgress.month === month ? loadProgress.total : 0}
+              />
+            ) : tab === 'summary' ? (
+              <View style={styles.summary}>
+                <Pressable
+                  onPress={() => openViewer(monthPhotos, heroId)}
+                  disabled={!heroId}
+                  style={styles.hero}
+                  accessibilityRole="button"
+                  accessibilityLabel={strings.cards.expandPhoto}
+                >
+                  {heroId ? (
+                    <AssetThumbImage
+                      assetId={heroId}
+                      size={720}
+                      style={styles.heroImg}
+                    />
+                  ) : (
+                    <View style={styles.heroEmpty} />
+                  )}
+                  <View style={styles.heroCopy} pointerEvents="none">
+                    <Text style={styles.heroTitle}>
+                      {strings.cards.journeyTitle(monthNumOf(month))}
+                    </Text>
+                  </View>
+                  {heroId ? (
+                    <View style={styles.heroExpand} pointerEvents="none">
+                      <ExpandIcon color={theme.colors.white} />
+                    </View>
+                  ) : null}
+                </Pressable>
+
+                <View style={styles.stats}>
+                  <View style={styles.stat}>
+                    <StatPinIcon color={colors.shellSubtle} />
+                    <View style={styles.statText}>
+                      <Text style={[styles.statNum, shell.ink]}>
+                        {visitPlaces.length}
+                      </Text>
+                      <Text style={[styles.statLabel, shell.soft]}>
+                        {strings.cards.statPlaces}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.statDivider} />
+                  <View style={styles.stat}>
+                    <StatPhotoIcon color={colors.shellSubtle} />
+                    <View style={styles.statText}>
+                      <Text style={[styles.statNum, shell.ink]}>
+                        {monthPhotos.length}
+                      </Text>
+                      <Text style={[styles.statLabel, shell.soft]}>
+                        {strings.cards.statPhotos}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.topPlaces}>
+                  <View style={styles.topPlacesHead}>
+                    <Text style={[styles.sectionTitle, shell.ink]}>
+                      {strings.cards.topPlacesTitle}
+                    </Text>
+                    <Pressable
+                      onPress={() => setTab('place')}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel={strings.cards.topPlacesViewAll}
+                    >
+                      <Text style={[styles.viewAll, shell.soft]}>
+                        {strings.cards.topPlacesViewAll} ›
+                      </Text>
+                    </Pressable>
+                  </View>
+                  <Text style={[styles.topPlacesHint, shell.soft]}>
+                    {strings.cards.topPlacesHint}
+                  </Text>
+                  {topPlaces.length > 0 ? (
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.topPlaceRow}
+                    >
+                      {topPlaces.map((place) => {
+                        const { monthNum, day } = localMonthDay(
+                          place.latestTakenAt,
+                        );
+                        return (
+                          <View key={place.identity} style={styles.topPlaceCard}>
+                            <Pressable
+                              onPress={() =>
+                                openViewer(place.photos, place.coverAssetId)
+                              }
+                              style={styles.topPlaceThumb}
+                              accessibilityRole="button"
+                              accessibilityLabel={strings.cards.expandPhoto}
+                            >
+                              <AssetThumbImage
+                                assetId={place.coverAssetId}
+                                size={256}
+                                style={styles.topPlaceImg}
+                              />
+                            </Pressable>
+                            <Pressable
+                              onPress={() => setTab('place')}
+                              accessibilityRole="button"
+                              accessibilityLabel={place.label}
+                            >
+                              <Text
+                                style={[styles.topPlaceLabel, shell.ink]}
+                                numberOfLines={1}
+                              >
+                                {place.label}
+                              </Text>
+                              <Text
+                                style={[styles.topPlaceMeta, shell.soft]}
+                                numberOfLines={1}
+                              >
+                                {strings.cards.topPlaceMeta(
+                                  monthNum,
+                                  day,
+                                  place.photoCount,
+                                )}
+                              </Text>
+                            </Pressable>
+                          </View>
+                        );
+                      })}
+                    </ScrollView>
+                  ) : null}
+                </View>
+
+                <Pressable
+                  onPress={() => router.push('/cards/create')}
+                  style={({ pressed }) => [
+                    styles.leaveCta,
+                    { backgroundColor: colors.shellChip },
+                    pressed && styles.leaveCtaPressed,
+                  ]}
+                  accessibilityRole="button"
+                >
+                  <Text style={[styles.leaveCtaText, shell.ink]}>
+                    {strings.cards.leaveMonth}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : (
+              <RecapBoard
+                key={tab}
+                month={month}
+                photos={monthPhotos}
+                visitPlaces={visitPlaces}
+                mode={tab === 'photo' ? 'day' : 'place'}
+              />
+            )}
+          </ScrollView>
+        </>
       )}
+
+      <RecapPhotosModal
+        photos={viewerPhotos}
+        coverAssetId={viewerCoverId}
+        onClose={closeViewer}
+      />
 
       {editing ? (
         <View style={styles.footer}>
@@ -353,7 +635,7 @@ export function CardListScreen() {
             onPress={() => confirmDelete([...selectedIds])}
           />
         </View>
-      ) : (
+      ) : archiveOpen ? (
         <View
           style={[
             styles.fabWrap,
@@ -363,7 +645,9 @@ export function CardListScreen() {
         >
           <CreateCardFab onPress={() => router.push('/cards/create')} />
         </View>
-      )}
+      ) : null}
+
+      {!archiveOpen && !editing ? <HomeNavBar items={APP_NAV_ITEMS} /> : null}
     </SafeAreaView>
   );
 }
@@ -484,5 +768,191 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     alignItems: 'flex-end',
     paddingRight: theme.spacing.md,
+  },
+  monthHeading: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: '700',
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.xs,
+  },
+  tabs: {
+    flexDirection: 'row',
+    paddingHorizontal: theme.spacing.lg,
+    gap: theme.spacing.md,
+    marginTop: theme.spacing.sm,
+    marginBottom: theme.spacing.sm,
+  },
+  tabBtn: {
+    paddingBottom: 6,
+  },
+  tabLabel: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+  tabLabelOn: {
+    fontWeight: '700',
+  },
+  tabUnderline: {
+    marginTop: 4,
+    height: 2,
+    width: 18,
+    backgroundColor: theme.colors.ink,
+    borderRadius: 1,
+  },
+  summary: {
+    paddingHorizontal: theme.spacing.lg,
+    gap: theme.spacing.lg,
+  },
+  hero: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    height: 220,
+    backgroundColor: theme.colors.surfaceAlt,
+  },
+  heroImg: {
+    width: '100%',
+    height: '100%',
+  },
+  heroEmpty: {
+    flex: 1,
+    backgroundColor: theme.colors.surfaceAlt,
+  },
+  heroCopy: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'flex-end',
+    padding: theme.spacing.md,
+    backgroundColor: 'rgba(51,71,91,0.28)',
+  },
+  heroTitle: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: '700',
+    color: theme.colors.white,
+  },
+  heroExpand: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(51,71,91,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.surface,
+    borderRadius: 10,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.panelBorder,
+  },
+  stat: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  statDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
+    backgroundColor: theme.colors.panelBorder,
+    marginHorizontal: theme.spacing.sm,
+  },
+  statText: {
+    gap: 1,
+  },
+  statNum: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 20,
+    lineHeight: 24,
+    fontWeight: '700',
+  },
+  statLabel: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  topPlaces: {
+    gap: theme.spacing.xs,
+  },
+  topPlacesHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing.sm,
+  },
+  sectionTitle: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '700',
+  },
+  viewAll: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+  topPlacesHint: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 12,
+    lineHeight: 16,
+    marginBottom: theme.spacing.sm,
+  },
+  topPlaceRow: {
+    gap: theme.spacing.sm,
+    paddingRight: theme.spacing.lg,
+  },
+  topPlaceCard: {
+    width: PLACE_CARD_SIZE,
+    gap: 6,
+  },
+  topPlaceThumb: {
+    width: PLACE_CARD_SIZE,
+    height: PLACE_CARD_SIZE,
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: theme.colors.surfaceAlt,
+  },
+  topPlaceImg: {
+    width: '100%',
+    height: '100%',
+  },
+  topPlaceLabel: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
+  topPlaceMeta: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  leaveCta: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.panelBorder,
+  },
+  leaveCtaPressed: {
+    opacity: 0.75,
+  },
+  leaveCtaText: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
   },
 });

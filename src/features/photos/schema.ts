@@ -32,6 +32,8 @@ export const monthlyPhotosSchema = z.object({
 export const monthSummarySchema = z.object({
   month: monthKeySchema,
   totalCount: z.number().int().min(0),
+  /** First album asset in that month — month-picker archive cover (optional). */
+  coverAssetId: z.string().min(1).optional(),
 });
 
 /** Derived at read time only — never persisted (spec A-2) */

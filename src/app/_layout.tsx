@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { LogBox } from 'react-native';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Stack, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -19,8 +20,14 @@ import { consumeOtaJustApplied } from '@/lib/otaUpdateFlag';
 import { queryClient } from '@/lib/queryClient';
 import { ErrorBoundary } from '@/shared/components/ErrorBoundary';
 import { OtaToast } from '@/shared/components/OtaToast';
+import { LaunchSplash } from '@/shared/components/LaunchSplash';
 import { strings } from '@/shared/constants/strings';
 import { ThemeProvider, useDarkMode, useTheme } from '@/shared/theme/ThemeProvider';
+
+// Simulator / LogBox yellow banner ("Open debugger to view warnings").
+if (__DEV__) {
+  LogBox.ignoreAllLogs(true);
+}
 
 configurePurchases();
 configureMonthEndReminder();
@@ -103,6 +110,7 @@ function OtaToasts({
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
+  const [splashVisible, setSplashVisible] = useState(true);
   const [otaToastMessage, setOtaToastMessage] = useState<string | null>(null);
   const [otaToastPersistent, setOtaToastPersistent] = useState(false);
   const [otaDoneToast, setOtaDoneToast] = useState(false);
@@ -119,11 +127,6 @@ export default function RootLayout() {
       }
       if (cold.kind === 'reloading') {
         // Process restarts — keep splash up until then.
-        return;
-      }
-
-      await SplashScreen.hideAsync().catch(() => {});
-      if (cancelled) {
         return;
       }
 
@@ -158,6 +161,7 @@ export default function RootLayout() {
   }, []);
 
   const hideOtaDoneToast = useCallback(() => setOtaDoneToast(false), []);
+  const hideLaunchSplash = useCallback(() => setSplashVisible(false), []);
 
   return (
     <SafeAreaProvider>
@@ -174,6 +178,9 @@ export default function RootLayout() {
                     doneVisible={otaDoneToast}
                     onDoneHidden={hideOtaDoneToast}
                   />
+                  {splashVisible ? (
+                    <LaunchSplash onFinished={hideLaunchSplash} />
+                  ) : null}
                 </>
               ) : null}
             </QueryClientProvider>

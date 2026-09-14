@@ -23,7 +23,7 @@ export { planMonthPrewarmIds } from './monthPrewarmPlan';
  */
 
 const WARM_CONCURRENCY = 2;
-/** After held bike (~1.5s) + first paint — avoid fighting LoadingView spin. */
+/** After the held loader (~1.5s) + first paint — avoid competing with initial render. */
 const START_DELAY_MS = 2000;
 /** Priority (seeds/covers) + month fill headroom. */
 const MAX_QUEUE = 200;

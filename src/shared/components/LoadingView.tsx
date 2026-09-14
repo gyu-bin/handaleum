@@ -6,19 +6,20 @@ import { theme } from '@/shared/constants/theme';
 import { useShellBackground } from '@/shared/hooks/useShellBackground';
 import { useTheme } from '@/shared/theme/ThemeProvider';
 
-import { BikeLoader } from './BikeLoader';
 import { LoadProgressBanner } from './LoadProgressBanner';
+import { PaperMapLoader } from './PaperMapLoader';
 
 export interface LoadingViewProps {
   /** Optional line under the mark. Defaults to the common loading string. */
   message?: string;
-  /** When set, bike + hairline progress. `total === 0` pulses. */
+  /** When set, map loader + hairline progress. `total === 0` pulses. */
   progress?: { done: number; total: number };
 }
 
 /**
- * Brand loading — bike on cream paper (min/max hold is call-site via useHeldBusy).
- * No PaperGrain here: full-bleed grain decode fights the spin under album sync.
+ * Brand loading — folded map on cream paper (min/max hold is call-site via
+ * useHeldBusy). No PaperGrain here: full-bleed grain decode competes with
+ * album sync on first paint.
  */
 export function LoadingView({
   message = strings.common.loading,
@@ -30,13 +31,7 @@ export function LoadingView({
   return (
     <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
       <View style={styles.center} collapsable={false}>
-        <BikeLoader width={132} />
-        <Text
-          style={[styles.brand, { color: colors.splashMark }]}
-          accessibilityRole="header"
-        >
-          {strings.brand}
-        </Text>
+        <PaperMapLoader width={128} />
         {progress ? (
           <View style={styles.progress}>
             <LoadProgressBanner
@@ -66,13 +61,6 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
     paddingHorizontal: theme.spacing.lg,
     marginTop: -24,
-  },
-  brand: {
-    marginTop: theme.spacing.md,
-    fontFamily: theme.fonts.sans,
-    fontSize: 15,
-    fontWeight: '600',
-    letterSpacing: 4,
   },
   message: {
     ...theme.type.micro,

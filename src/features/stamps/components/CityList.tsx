@@ -1,7 +1,8 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { theme } from '@/shared/constants/theme';
-import { useShellInk } from '@/shared/hooks/useShellBackground';
+
+import { StampBadge } from './StampBadge';
 
 export type CityRow = {
   key: string;
@@ -15,60 +16,62 @@ export interface CityListProps {
   onSelect: (key: string) => void;
 }
 
-/** Minimal L1 list (구·시·군) — hairline rows, no cards. */
+function tiltForName(name: string): number {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) {
+    h = (h + name.charCodeAt(i) * (i + 1)) % 17;
+  }
+  return h - 8;
+}
+
+/**
+ * L1 stamp book (구·시·군). Drill-down stays intact; the grid is a seal board.
+ */
 export function CityList({ cities, onSelect }: CityListProps) {
-  const shell = useShellInk();
   return (
-    <View style={styles.list}>
-      {cities.map((row) => (
-        <Pressable
-          key={row.key}
-          onPress={() => onSelect(row.key)}
-          accessibilityRole="button"
-          accessibilityLabel={`${row.label} ${row.collected}/${row.total}`}
-          style={({ pressed }) => [
-            styles.row,
-            { borderBottomColor: shell.hairline },
-            pressed && styles.rowPressed,
-          ]}
-        >
-          <Text style={[styles.title, shell.ink]}>{row.label}</Text>
-          <Text style={[styles.count, shell.subtle]}>
-            {row.collected}/{row.total}
-          </Text>
-        </Pressable>
-      ))}
+    <View style={styles.book}>
+      {cities.map((row) => {
+        const visited = row.collected > 0;
+        return (
+          <Pressable
+            key={row.key}
+            onPress={() => onSelect(row.key)}
+            accessibilityRole="button"
+            accessibilityLabel={`${row.label} ${
+              visited ? `${row.collected}개 동네 도장 수집` : '미수집 도장'
+            }`}
+            style={({ pressed }) => [
+              styles.cell,
+              pressed && styles.cellPressed,
+            ]}
+          >
+            <StampBadge
+              name={row.label}
+              collected={visited}
+              tiltDeg={tiltForName(row.label)}
+            />
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  list: {
+  book: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: theme.spacing.xl,
   },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.hairline,
+  cell: {
+    width: '33.333%',
+    minWidth: 0,
+    alignItems: 'stretch',
+    paddingHorizontal: 4,
+    paddingVertical: theme.spacing.sm,
   },
-  rowPressed: {
-    opacity: 0.55,
-  },
-  title: {
-    ...theme.type.label,
-    fontFamily: theme.fonts.sans,
-    color: theme.colors.ink,
-    fontWeight: '600',
-  },
-  count: {
-    ...theme.type.micro,
-    fontFamily: theme.fonts.sans,
-    color: theme.colors.subtle,
-    fontWeight: '500',
-    fontVariant: ['tabular-nums'],
+  cellPressed: {
+    opacity: 0.58,
   },
 });

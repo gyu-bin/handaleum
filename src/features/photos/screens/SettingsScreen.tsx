@@ -379,14 +379,14 @@ export function SettingsScreen() {
         ) : null}
 
         {__DEV__ ? (
-          <View style={styles.devWrap}>
+          <SettingsSection label={strings.settings.devToggle}>
             <Pressable
               onPress={() => setDevOpen((v) => !v)}
               accessibilityRole="button"
               style={({ pressed }) => [styles.devToggle, pressed && styles.pressed]}
             >
               <Text style={[styles.devLabel, { color: colors.shellSubtle }]}>
-                {strings.settings.devToggle}
+                {strings.settings.devDetails}
                 {devOpen ? ' ▾' : ' ▸'}
               </Text>
             </Pressable>
@@ -418,7 +418,7 @@ export function SettingsScreen() {
                 />
               </View>
             ) : null}
-          </View>
+          </SettingsSection>
         ) : null}
       </ScrollView>
 
@@ -520,14 +520,10 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.5,
   },
-  devWrap: {
-    marginTop: theme.spacing.md,
-    gap: theme.spacing.sm,
-  },
   devToggle: {
     minHeight: 36,
     justifyContent: 'center',
-    paddingHorizontal: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.md,
   },
   devLabel: {
     ...theme.type.label,

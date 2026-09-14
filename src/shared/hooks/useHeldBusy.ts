@@ -22,7 +22,7 @@ export function holdBusyReleaseInMs(
 /**
  * Keep a busy UI visible for at least `minMs` after busy becomes true.
  * If busy never flips on, returns false immediately (no forced wait).
- * Default 1.5s so the bike mark always gets a short, continuous spin.
+ * Default 1.5s so the shared loading mark remains visible long enough to read.
  * Pass `maxMs` to drop the overlay even if work is still running.
  */
 export function useHeldBusy(busy: boolean, minMs = 1500, maxMs?: number): boolean {

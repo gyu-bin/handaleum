@@ -1,5 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 
 import {
@@ -10,9 +17,9 @@ import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 import { useShellInk } from '@/shared/hooks/useShellBackground';
 
+import { AssetThumbImage } from './AssetThumbImage';
 import { prefetchMonthlyPhotos } from '../hooks/useMonthlyPhotos';
 import type { MonthKey, MonthSummary } from '../types';
-import { JournalDottedRule } from './MonthPickerJournalDecor';
 
 export interface MonthPickerListProps {
   summaries: MonthSummary[];
@@ -33,11 +40,15 @@ type MonthCell = {
   month: MonthKey;
   monthNum: number;
   count: number;
+  coverAssetId?: string;
 };
 
+const COLS = 3;
+const GAP = 10;
+const PHOTO_RADIUS = 6;
+
 /**
- * Journal month picker matching the approved sample:
- * hero art + year stepper + two-column 1–12 list (0장 muted).
+ * Month archive — cream canvas with photo covers, not a date-picker list.
  */
 export function MonthPickerList({
   summaries,
@@ -47,11 +58,14 @@ export function MonthPickerList({
 }: MonthPickerListProps) {
   const router = useRouter();
   const shell = useShellInk();
+  const { width } = useWindowDimensions();
+  const cellW = (width - theme.spacing.lg * 2 - GAP * (COLS - 1)) / COLS;
+  const photoH = cellW * 1.15;
 
-  const countByMonth = useMemo(() => {
-    const map = new Map<MonthKey, number>();
+  const byMonth = useMemo(() => {
+    const map = new Map<MonthKey, MonthSummary>();
     for (const s of summaries) {
-      map.set(s.month, s.totalCount);
+      map.set(s.month, s);
     }
     return map;
   }, [summaries]);
@@ -80,17 +94,16 @@ export function MonthPickerList({
     const out: MonthCell[] = [];
     for (let m = 1; m <= 12; m++) {
       const key = monthKey(year, m);
+      const summary = byMonth.get(key);
       out.push({
         month: key,
         monthNum: m,
-        count: countByMonth.get(key) ?? 0,
+        count: summary?.totalCount ?? 0,
+        coverAssetId: summary?.coverAssetId,
       });
     }
     return out;
-  }, [countByMonth, year]);
-
-  const leftCol = cells.slice(0, 6);
-  const rightCol = cells.slice(6, 12);
+  }, [byMonth, year]);
 
   const goYear = (dir: -1 | 1) => {
     const idx = years.indexOf(year);
@@ -103,81 +116,12 @@ export function MonthPickerList({
     }
   };
 
-  const renderCell = (cell: MonthCell) => {
-    const empty = cell.count <= 0;
-    const locked = !empty && !canOpenMonth(cell.month);
-    const isSelected = cell.month === selected;
-    const disabled = empty || locked;
-
-    return (
-      <Pressable
-        key={cell.month}
-        onPress={() => {
-          if (disabled) {
-            return;
-          }
-          prefetchMonthlyPhotos(cell.month);
-          onSelect(cell.month);
-          router.back();
-        }}
-        disabled={disabled}
-        style={({ pressed }) => [
-          styles.monthRow,
-          { borderBottomColor: shell.hairline },
-          pressed && !disabled && styles.monthRowPressed,
-        ]}
-        accessibilityRole="button"
-        accessibilityState={{ disabled, selected: isSelected }}
-        accessibilityLabel={
-          locked
-            ? `${strings.months.monthOnly(cell.monthNum)}, ${strings.months.proOnly}`
-            : `${strings.months.monthOnly(cell.monthNum)}, ${strings.months.photoCount(cell.count)}`
-        }
-      >
-        <Text
-          style={[
-            styles.monthName,
-            shell.ink,
-            empty && shell.subtle,
-            locked && shell.subtle,
-          ]}
-        >
-          {strings.months.monthOnly(cell.monthNum)}
-        </Text>
-        <Text style={[styles.sepDot, empty ? shell.subtle : shell.soft]}> · </Text>
-        {locked ? (
-          <Text style={styles.proInline}>{strings.months.proOnly}</Text>
-        ) : (
-          <Text style={[styles.count, empty && shell.subtle]}>
-            {strings.months.photoCount(cell.count)}
-          </Text>
-        )}
-        {isSelected && !disabled ? <View style={styles.selectedMark} /> : null}
-      </Pressable>
-    );
-  };
-
   return (
     <ScrollView
       style={styles.root}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.hero}>
-        <Text style={[styles.heroTitle, shell.ink]}>
-          {strings.months.journalTitle}
-        </Text>
-        <Text style={[styles.heroSubtitle, shell.soft]}>
-          {strings.months.journalSubtitle}
-        </Text>
-      </View>
-
-      {IS_MONETIZATION_LIVE ? (
-        <Text style={[styles.hint, shell.soft]}>
-          {strings.months.freeWindowHint(formatProPriceKrw())}
-        </Text>
-      ) : null}
-
       <View style={styles.yearRow}>
         <Pressable
           onPress={() => goYear(-1)}
@@ -192,9 +136,7 @@ export function MonthPickerList({
         >
           <Text style={[styles.yearChevron, shell.ink]}>‹</Text>
         </Pressable>
-        <Text style={[styles.yearLabel, shell.ink]}>
-          {strings.months.yearLabel(year)}
-        </Text>
+        <Text style={[styles.yearLabel, shell.ink]}>{year}</Text>
         <Pressable
           onPress={() => goYear(1)}
           disabled={!canNext}
@@ -210,12 +152,93 @@ export function MonthPickerList({
         </Pressable>
       </View>
 
-      <JournalDottedRule />
+      {IS_MONETIZATION_LIVE ? (
+        <Text style={[styles.hint, shell.soft]}>
+          {strings.months.freeWindowHint(formatProPriceKrw())}
+        </Text>
+      ) : null}
 
       <View style={styles.grid}>
-        <View style={styles.col}>{leftCol.map(renderCell)}</View>
-        <View style={styles.colGap} />
-        <View style={styles.col}>{rightCol.map(renderCell)}</View>
+        {cells.map((cell) => {
+          const empty = cell.count <= 0;
+          const locked = !empty && !canOpenMonth(cell.month);
+          const isSelected = cell.month === selected;
+          const disabled = empty || locked;
+
+          return (
+            <Pressable
+              key={cell.month}
+              onPress={() => {
+                if (disabled) {
+                  return;
+                }
+                prefetchMonthlyPhotos(cell.month);
+                onSelect(cell.month);
+                router.back();
+              }}
+              disabled={disabled}
+              style={({ pressed }) => [
+                styles.cell,
+                { width: cellW },
+                pressed && !disabled && styles.cellPressed,
+                empty && styles.cellEmpty,
+              ]}
+              accessibilityRole="button"
+              accessibilityState={{ disabled, selected: isSelected }}
+              accessibilityLabel={
+                locked
+                  ? `${strings.months.monthOnly(cell.monthNum)}, ${strings.months.proOnly}`
+                  : empty
+                    ? `${strings.months.monthOnly(cell.monthNum)}, ${strings.months.noRecord}`
+                    : `${strings.months.monthOnly(cell.monthNum)}, ${strings.months.photoCountLong(cell.count)}`
+              }
+            >
+              <View
+                style={[
+                  styles.photoFrame,
+                  {
+                    width: cellW,
+                    height: photoH,
+                    borderRadius: PHOTO_RADIUS,
+                  },
+                  isSelected && !disabled && styles.photoSelected,
+                ]}
+              >
+                {!empty && cell.coverAssetId ? (
+                  <AssetThumbImage
+                    assetId={cell.coverAssetId}
+                    size={Math.ceil(cellW * 2)}
+                    style={styles.photo}
+                  />
+                ) : (
+                  <View style={styles.photoPlaceholder} />
+                )}
+              </View>
+              <Text
+                style={[
+                  styles.monthName,
+                  shell.ink,
+                  (empty || locked) && styles.monthNameMuted,
+                ]}
+              >
+                {strings.months.monthOnly(cell.monthNum)}
+              </Text>
+              <Text
+                style={[
+                  styles.count,
+                  shell.soft,
+                  (empty || locked) && styles.countMuted,
+                ]}
+              >
+                {locked
+                  ? strings.months.proOnly
+                  : empty
+                    ? strings.months.noRecord
+                    : strings.months.photoCountLong(cell.count)}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
     </ScrollView>
   );
@@ -227,37 +250,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: theme.spacing.lg,
-    paddingBottom: theme.spacing.xl,
-  },
-  hero: {
-    alignItems: 'center',
-    paddingTop: theme.spacing.xs,
-    paddingBottom: theme.spacing.md,
-  },
-  heroTitle: {
-    fontFamily: theme.fonts.serif,
-    fontSize: 32,
-    lineHeight: 38,
-    letterSpacing: -0.6,
-    color: theme.colors.ink,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  heroSubtitle: {
-    fontFamily: theme.fonts.sans,
-    fontSize: 12,
-    lineHeight: 18,
-    color: theme.colors.inkSoft,
-    marginTop: 6,
-    textAlign: 'center',
-  },
-
-  hint: {
-    ...theme.type.micro,
-    color: theme.colors.inkSoft,
-    textAlign: 'center',
-    marginBottom: theme.spacing.md,
-    lineHeight: 16,
+    paddingBottom: theme.spacing.xl + 56,
   },
   yearRow: {
     flexDirection: 'row',
@@ -278,77 +271,74 @@ const styles = StyleSheet.create({
   },
   yearChevron: {
     fontFamily: theme.fonts.sans,
-    fontSize: 30,
-    lineHeight: 34,
-    color: theme.colors.ink,
+    fontSize: 28,
+    lineHeight: 32,
     fontWeight: '400',
   },
   yearLabel: {
-    fontFamily: theme.fonts.serif,
-    fontSize: 24,
-    lineHeight: 30,
-    color: theme.colors.ink,
+    fontFamily: theme.fonts.sans,
+    fontSize: 22,
+    lineHeight: 28,
     fontWeight: '700',
-    minWidth: 110,
+    minWidth: 88,
     textAlign: 'center',
+    letterSpacing: -0.3,
+  },
+  hint: {
+    ...theme.type.micro,
+    textAlign: 'center',
+    marginBottom: theme.spacing.md,
+    lineHeight: 16,
   },
   grid: {
     flexDirection: 'row',
-    marginTop: theme.spacing.md,
+    flexWrap: 'wrap',
+    gap: GAP,
   },
-  col: {
+  cell: {
+    marginBottom: theme.spacing.sm,
+  },
+  cellEmpty: {
+    opacity: 0.42,
+  },
+  cellPressed: {
+    opacity: 0.72,
+  },
+  photoFrame: {
+    overflow: 'hidden',
+    backgroundColor: theme.colors.surfaceAlt,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  photoSelected: {
+    borderColor: theme.colors.ink,
+  },
+  photo: {
+    width: '100%',
+    height: '100%',
+  },
+  photoPlaceholder: {
     flex: 1,
-  },
-  colGap: {
-    width: theme.spacing.lg,
-  },
-  monthRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    paddingVertical: 15,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.hairline,
-  },
-  monthRowPressed: {
-    opacity: 0.65,
+    backgroundColor: theme.colors.surfaceAlt,
   },
   monthName: {
     fontFamily: theme.fonts.sans,
-    fontSize: 18,
-    lineHeight: 24,
-    color: theme.colors.ink,
-    fontWeight: '600',
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '700',
+    marginTop: 8,
   },
-  sepDot: {
-    fontFamily: theme.fonts.sans,
-    fontSize: 18,
-    lineHeight: 24,
-    color: theme.colors.inkSoft,
+  monthNameMuted: {
+    fontWeight: '500',
+    color: theme.colors.subtle,
   },
   count: {
     fontFamily: theme.fonts.sans,
-    fontSize: 18,
-    lineHeight: 24,
-    color: theme.colors.terracotta,
-    fontWeight: '700',
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 2,
   },
-  muted: {
+  countMuted: {
     color: theme.colors.subtle,
-    fontWeight: '500',
-  },
-  proInline: {
-    fontFamily: theme.fonts.sans,
-    fontSize: 16,
-    lineHeight: 24,
-    color: theme.colors.terracotta,
-    fontWeight: '700',
-  },
-
-  selectedMark: {
-    marginLeft: 'auto',
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: theme.colors.terracotta,
   },
 });

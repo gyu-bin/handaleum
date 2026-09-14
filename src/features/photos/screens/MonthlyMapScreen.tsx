@@ -22,6 +22,7 @@ import { scheduleStampLibrarySyncFromMap } from '@/features/stamps/services/stam
 import { DEFAULT_MAP_ZOOM, MapCanvas } from '../components/MapCanvas';
 import { clusterSeedId } from '../components/MapClusterMarker';
 import { HomeNavBar } from '../components/HomeNavBar';
+import { APP_NAV_ITEMS } from '../constants/appNav';
 import { PhotoPreviewSheet } from '../components/PhotoPreviewSheet';
 import { getSharedMonth, useCurrentMonth } from '../hooks/useCurrentMonth';
 import { useMonthEndReminder } from '../hooks/useMonthEndReminder';
@@ -45,14 +46,19 @@ function HomeIndexingBanner() {
   return <IndexingBanner progress={progress} />;
 }
 
-function formatMonthLabel(month: MonthKey): string {
+/** Floating month chip label — caret is a separate glyph beside the text. */
+function formatMonthChip(month: MonthKey): string {
   const [year, mon] = month.split('-');
-  return `${year}. ${mon}`;
+  const monthNumber = Number(mon);
+  if (!year || !Number.isFinite(monthNumber) || monthNumber < 1) {
+    return month;
+  }
+  return `${year}년 ${monthNumber}월`;
 }
 
 function SettingsGear({ color }: { color: string }) {
   return (
-    <Svg width={22} height={22} viewBox="0 0 24 24">
+    <Svg width={20} height={20} viewBox="0 0 24 24">
       <Path
         fill={color}
         fillRule="evenodd"
@@ -66,24 +72,16 @@ function SettingsGear({ color }: { color: string }) {
 }
 
 /** Stable dock items — stamp badge is owned by HomeNavBar. */
-const MAP_NAV_ITEMS = [
-  { href: '/months' as const, label: strings.months.title, icon: 'calendar' as const },
-  { href: '/playback' as const, label: strings.playback.title, icon: 'play' as const },
-  { href: '/cards' as const, label: strings.cards.listTitle, icon: 'card' as const },
-  {
-    href: '/stamps' as Href,
-    label: strings.stamps.title,
-    icon: 'stamp' as const,
-  },
-];
+const MAP_NAV_ITEMS = APP_NAV_ITEMS;
+
+/** Approx HomeNavBar chrome height above home-indicator. */
+const NAV_BAR_CONTENT = 54;
 
 export function MonthlyMapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const shellBg = useShellBackground();
   const { colors } = useTheme();
-  // Pull chrome closer to the status bar — full inset leaves too much empty top.
-  const headerPadTop = Math.max(0, insets.top - 10);
   const { seen: onboardingSeen } = useOnboarding();
   useMonthEndReminder({ promptIfUndetermined: onboardingSeen });
   const { status, isReady } = usePhotoPermission();
@@ -105,7 +103,7 @@ export function MonthlyMapScreen() {
   const [zoom, setZoom] = useState(DEFAULT_MAP_ZOOM);
   const [selected, setSelected] = useState<PlaceCluster | null>(null);
 
-  const monthPhotos = data?.photos ?? [];
+  const monthPhotos = useMemo(() => data?.photos ?? [], [data?.photos]);
 
   const prevMonth = useMemo(() => {
     const next = shiftMonthKey(month, -1);
@@ -135,7 +133,7 @@ export function MonthlyMapScreen() {
     }
   }, [canOpenMonth, setMonth]);
 
-  // Keep ±1 month GPS warm so ‹ › rarely hits a cold MediaLibrary pass.
+  // Keep ±1 month GPS warm so month chip rarely hits a cold MediaLibrary pass.
   useEffect(() => {
     prefetchNeighborMonths(prevMonth, nextMonth);
   }, [nextMonth, prevMonth]);
@@ -148,15 +146,6 @@ export function MonthlyMapScreen() {
     () => clusterPhotos(monthPhotos, zoom),
     [monthPhotos, zoom],
   );
-  // Month fact: distinct ~110m GPS spots. Zoom-independent (map pins merge on
-  // pinch-out; this count does not). Not dong-collapsed — home skips geocode.
-  const placeCount = useMemo(() => {
-    const seen = new Set<string>();
-    for (const photo of monthPhotos) {
-      seen.add(placeBucketKey(photo.lat, photo.lng));
-    }
-    return seen.size;
-  }, [monthPhotos]);
 
   // Debounce zoom→recluster so every camera-idle tick doesn't remount markers.
   const zoomTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -176,8 +165,6 @@ export function MonthlyMapScreen() {
     };
   }, []);
 
-  // Location chips removed from home header — geocode only when opening sheets.
-
   // New 동 in this month → unseen (nav dot + 발도장 overlay). Current month only.
   useStampSync(month, data?.allPhotos, {
     enabled: isReady && hasLibraryAccess && !isFetching && !isStaleMonth,
@@ -195,14 +182,12 @@ export function MonthlyMapScreen() {
     resetClusterCellCache();
   }, [month]);
 
+  // Boot only — keep the map visible while month GPS resolves (pin layer stale).
   const bootBusy = !isReady;
-  // Month ‹ › keeps placeholder data — don't force the 1.5s bike for that path.
-  const dataBusy = isReady && hasAccess && isPending && !data;
-  // Cap at 2s so a long GPS pass doesn't keep the bike up.
-  const showLoading = useHeldBusy(bootBusy || dataBusy, 1500, 2000);
+  const showLoading = useHeldBusy(bootBusy, 1500, 2000);
 
   // Middle-path prewarm after month GPS settles (not on every zoom recluster).
-  // Skip while the bike is up — pin bake steals frames from the spin.
+  // Skip while the loader is visible — pin baking competes for animation frames.
   useEffect(() => {
     if (!data || isFetching || showLoading || isStaleMonth) {
       return;
@@ -291,127 +276,14 @@ export function MonthlyMapScreen() {
     );
   }
 
-  const monthLabel = formatMonthLabel(month);
-  const monthNumber = Number(month.split('-')[1] ?? 0);
-  const calendarMonth = currentMonthKey();
-  const showJumpToCurrent = month !== calendarMonth;
-  const goToCurrentMonth = useCallback(() => {
-    setMonth(calendarMonth);
-  }, [calendarMonth, setMonth]);
-  // Content destinations live in the thumb-reachable bottom bar; settings is a
-  // low-frequency config, so it sits as a quiet link in the header instead.
+  const monthChip = formatMonthChip(month);
+  const previewBottom =
+    NAV_BAR_CONTENT + Math.max(insets.bottom, 4);
+  const chromeTop = Math.max(insets.top, 12) + 8;
 
   return (
     <SafeAreaView style={[styles.safe, shellBg]} edges={['left', 'right']}>
-      <View style={[styles.body, { paddingTop: headerPadTop }]}>
-        <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <Text style={[styles.brandEyebrow, { color: colors.shellInk }]}>
-              {strings.brand}
-            </Text>
-            <View style={styles.headerActions}>
-              <Pressable
-                onPress={() => router.push('/settings')}
-                hitSlop={{ top: 8, bottom: 2, left: 8, right: 8 }}
-                accessibilityRole="button"
-                accessibilityLabel={strings.map.settings}
-                style={({ pressed }) => [
-                  styles.actionBtn,
-                  pressed && styles.actionBtnPressed,
-                ]}
-              >
-                <SettingsGear color={colors.shellInkSoft} />
-              </Pressable>
-            </View>
-          </View>
-
-          <View style={styles.headerTitleRow}>
-            <Pressable
-              onPress={goPrevMonth}
-              disabled={prevMonth == null}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel={strings.map.monthPrev}
-              style={({ pressed }) => [
-                styles.monthEdgeBtn,
-                pressed && prevMonth != null && styles.monthEdgeBtnPressed,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.monthEdgeChevron,
-                  { color: colors.shellInk },
-                  prevMonth == null && styles.monthEdgeChevronOff,
-                ]}
-              >
-                ‹
-              </Text>
-            </Pressable>
-
-            <View style={styles.hero}>
-              {showJumpToCurrent ? (
-                <Pressable
-                  onPress={goToCurrentMonth}
-                  hitSlop={6}
-                  accessibilityRole="button"
-                  accessibilityLabel={strings.map.jumpToCurrentMonth}
-                  style={({ pressed }) => [
-                    styles.jumpCurrentHit,
-                    pressed && styles.jumpCurrentHitPressed,
-                  ]}
-                >
-                  <Text
-                    style={[styles.jumpCurrent, { color: colors.shellSubtle }]}
-                    numberOfLines={1}
-                  >
-                    {strings.map.jumpToCurrentMonth}
-                  </Text>
-                </Pressable>
-              ) : null}
-              <Pressable
-                onPress={() => router.push('/months')}
-                accessibilityRole="button"
-                accessibilityLabel={strings.months.title}
-                hitSlop={4}
-                style={styles.heroTitleHit}
-              >
-                <Text style={[styles.wordmark, { color: colors.shellInk }]} numberOfLines={1}>
-                  {strings.map.monthTitle(monthNumber)}
-                </Text>
-              </Pressable>
-              <Text style={[styles.monthMeta, { color: colors.shellSubtle }]} numberOfLines={1}>
-                {(isFetching || isStaleMonth || !data)
-                  ? strings.map.resolvingLocations
-                  : strings.map.monthMeta(monthLabel, placeCount)}
-              </Text>
-            </View>
-
-            <Pressable
-              onPress={goNextMonth}
-              disabled={nextMonth == null}
-              hitSlop={{ top: 2, bottom: 10, left: 8, right: 6 }}
-              accessibilityRole="button"
-              accessibilityLabel={strings.map.monthNext}
-              style={({ pressed }) => [
-                styles.monthEdgeBtn,
-                pressed && nextMonth != null && styles.monthEdgeBtnPressed,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.monthEdgeChevron,
-                  { color: colors.shellInk },
-                  nextMonth == null && styles.monthEdgeChevronOff,
-                ]}
-              >
-                ›
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-
-        <HomeIndexingBanner />
-
+      <View style={styles.body}>
         <View style={[styles.mapBlock, isStaleMonth && styles.mapBlockStale]}>
           <MapCanvas
             clusters={clusters}
@@ -422,15 +294,116 @@ export function MonthlyMapScreen() {
             selectedClusterId={selectedSeedId}
             pinCovers={covers}
           />
+
+          <View
+            pointerEvents="box-none"
+            style={[styles.chromeTop, { top: chromeTop }]}
+          >
+            <View style={styles.monthChipRow}>
+              <Pressable
+                onPress={goPrevMonth}
+                disabled={prevMonth == null}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={strings.map.monthPrev}
+                style={({ pressed }) => [
+                  styles.edgeChip,
+                  pressed && prevMonth != null && styles.chipPressed,
+                  prevMonth == null && styles.edgeChipOff,
+                ]}
+              >
+                <Text style={[styles.edgeChevron, { color: colors.shellInk }]}>
+                  ‹
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => router.push('/months')}
+                accessibilityRole="button"
+                accessibilityLabel={strings.months.title}
+                style={({ pressed }) => [
+                  styles.monthChip,
+                  pressed && styles.chipPressed,
+                ]}
+              >
+                <Text
+                  style={[styles.monthChipText, { color: colors.shellInk }]}
+                  numberOfLines={1}
+                >
+                  {monthChip}
+                </Text>
+                <Svg
+                  width={12}
+                  height={12}
+                  viewBox="0 0 12 12"
+                  accessibilityElementsHidden
+                  importantForAccessibility="no"
+                >
+                  <Path
+                    d="M3 4.5 L6 7.5 L9 4.5"
+                    stroke={colors.shellSubtle}
+                    strokeWidth={1.6}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    fill="none"
+                  />
+                </Svg>
+              </Pressable>
+
+              <Pressable
+                onPress={goNextMonth}
+                disabled={nextMonth == null}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={strings.map.monthNext}
+                style={({ pressed }) => [
+                  styles.edgeChip,
+                  pressed && nextMonth != null && styles.chipPressed,
+                  nextMonth == null && styles.edgeChipOff,
+                ]}
+              >
+                <Text style={[styles.edgeChevron, { color: colors.shellInk }]}>
+                  ›
+                </Text>
+              </Pressable>
+            </View>
+
+            <Pressable
+              onPress={() => router.push('/settings' as Href)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={strings.map.settings}
+              style={({ pressed }) => [
+                styles.settingsBtn,
+                pressed && styles.chipPressed,
+              ]}
+            >
+              <SettingsGear color={colors.shellInk} />
+            </Pressable>
+          </View>
+
+          <View style={styles.bannerSlot} pointerEvents="box-none">
+            <HomeIndexingBanner />
+          </View>
+
           {!isStaleMonth && data && data.photos.length === 0 ? (
-            <View style={styles.emptyOverlay} pointerEvents="box-none">
-              <Text style={styles.emptyOverlayText}>
+            <View style={styles.emptyHint} pointerEvents="none">
+              <Text style={styles.emptyHintText}>
                 {data.homeExcludedCount > 0
                   ? strings.map.emptyAllHome
                   : strings.map.emptyMonth}
               </Text>
             </View>
           ) : null}
+
+          {(isPending || isStaleMonth || isFetching) && !data?.photos.length ? (
+            <View style={styles.pinLoading} pointerEvents="none">
+              <Text style={styles.pinLoadingText}>
+                {strings.map.resolvingLocations}
+              </Text>
+            </View>
+          ) : null}
+
           <View style={styles.fabWrap} pointerEvents="box-none">
             <CreateCardFab onPress={() => router.push('/cards/create')} />
           </View>
@@ -444,6 +417,8 @@ export function MonthlyMapScreen() {
         onClose={() => setSelected(null)}
         coverAssetId={selectedPlaceKey ? covers[selectedPlaceKey] : null}
         onSetCover={setCover}
+        variant="compact"
+        bottomOffset={previewBottom}
       />
     </SafeAreaView>
   );
@@ -456,110 +431,144 @@ const styles = StyleSheet.create({
   body: {
     flex: 1,
   },
-  header: {
-    paddingHorizontal: theme.spacing.md,
-    paddingTop: 0,
-    paddingBottom: 2,
-    gap: 6,
-  },
-  headerTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 36,
-  },
-  headerTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  monthEdgeBtn: {
-    width: 40,
-    paddingVertical: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  monthEdgeBtnPressed: {
-    opacity: 0.45,
-  },
-  monthEdgeChevron: {
-    fontFamily: theme.fonts.sans,
-    fontSize: 28,
-    lineHeight: 28,
-    fontWeight: '300',
-    color: theme.colors.ink,
-    opacity: 0.55,
-  },
-  monthEdgeChevronOff: {
-    opacity: 0.18,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  actionBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionBtnPressed: {
-    opacity: 0.55,
-  },
-  hero: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 1,
-    minWidth: 0,
-    paddingHorizontal: theme.spacing.xs,
-  },
-  heroTitleHit: {
-    alignItems: 'center',
-  },
-  jumpCurrentHit: {
-    alignItems: 'center',
-    paddingBottom: 1,
-  },
-  jumpCurrentHitPressed: {
-    opacity: 0.45,
-  },
-  jumpCurrent: {
-    ...theme.type.micro,
-    fontFamily: theme.fonts.sans,
-    fontWeight: '600',
-    letterSpacing: -0.1,
-    textAlign: 'center',
-  },
-  brandEyebrow: {
-    ...theme.type.label,
-    fontFamily: theme.fonts.sans,
-    color: theme.colors.ink,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-  wordmark: {
-    fontFamily: theme.fonts.sans,
-    color: theme.colors.ink,
-    fontSize: 22,
-    lineHeight: 26,
-    letterSpacing: -0.4,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  monthMeta: {
-    ...theme.type.micro,
-    fontFamily: theme.fonts.sans,
-    color: theme.colors.subtle,
-    marginTop: 1,
-    textAlign: 'center',
-  },
   mapBlock: {
     flex: 1,
     position: 'relative',
-    marginTop: theme.spacing.xs,
   },
   mapBlockStale: {
-    opacity: 0.55,
+    opacity: 0.92,
+  },
+  chromeTop: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    zIndex: 4,
+  },
+  monthChipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 1,
+  },
+  monthChip: {
+    height: 44,
+    paddingLeft: 15,
+    paddingRight: 12,
+    borderRadius: 13,
+    backgroundColor: theme.colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.panelBorder,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    shadowColor: theme.colors.ink,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+    maxWidth: 210,
+  },
+  monthChipText: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    letterSpacing: -0.2,
+    flexShrink: 1,
+  },
+  edgeChip: {
+    width: 36,
+    height: 44,
+    borderRadius: 13,
+    backgroundColor: theme.colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.panelBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: theme.colors.ink,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  edgeChipOff: {
+    opacity: 0.35,
+  },
+  edgeChevron: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 22,
+    lineHeight: 24,
+    fontWeight: '300',
+  },
+  settingsBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: theme.colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.panelBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: theme.colors.ink,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  chipPressed: {
+    opacity: 0.72,
+  },
+  bannerSlot: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    zIndex: 3,
+  },
+  emptyHint: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    top: 108,
+    alignItems: 'flex-start',
+    zIndex: 3,
+  },
+  emptyHintText: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
+    color: theme.colors.inkSoft,
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.panelBorder,
+  },
+  pinLoading: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    top: 108,
+    alignItems: 'flex-start',
+    zIndex: 3,
+  },
+  pinLoadingText: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '500',
+    color: theme.colors.subtle,
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    overflow: 'hidden',
   },
   fabWrap: {
     ...StyleSheet.absoluteFillObject,
@@ -567,22 +576,5 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     paddingRight: theme.spacing.md,
     paddingBottom: theme.spacing.md,
-  },
-  emptyOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: theme.spacing.lg,
-  },
-  emptyOverlayText: {
-    ...theme.type.body,
-    color: theme.colors.inkSoft,
-    fontWeight: '600',
-    textAlign: 'center',
-    backgroundColor: theme.colors.overlay,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.radius.sm,
-    overflow: 'hidden',
   },
 });

@@ -376,14 +376,23 @@ export async function loadMonthSummaries(): Promise<MonthSummary[]> {
 
   const assets = await collectAssets({});
   const counts = new Map<MonthKey, number>();
+  const covers = new Map<MonthKey, string>();
 
   for (const asset of assets) {
     const month = monthKeyFromTimestamp(asset.creationTime);
     counts.set(month, (counts.get(month) ?? 0) + 1);
+    // Keep the newest cover (assets usually arrive newest-first).
+    if (!covers.has(month)) {
+      covers.set(month, asset.id);
+    }
   }
 
   return [...counts.entries()]
-    .map(([month, totalCount]) => ({ month, totalCount }))
+    .map(([month, totalCount]) => ({
+      month,
+      totalCount,
+      coverAssetId: covers.get(month),
+    }))
     .sort((a, b) => b.month.localeCompare(a.month));
 }
 
