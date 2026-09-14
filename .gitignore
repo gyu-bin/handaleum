@@ -1,58 +1,48 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
-# dependencies
-node_modules/
-.pnpm-store/
-
+!.env.example
 # Expo
-.expo/
-dist/
-web-build/
-expo-env.d.ts
-
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+# Metro
 # Native
-.kotlin/
-*.orig.*
+# debug
+# dependencies
+# generated native folders
+# local env files
+# macOS
+# project
+# python
+# typescript
 *.jks
-*.p8
-*.p12
 *.key
 *.mobileprovision
-
-# Metro
-.metro-health-check*
-
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
-
-# macOS
-.DS_Store
+*.orig.*
+*.p12
+*.p8
 *.pem
-
-# local env files
-.env*.local
-
-# typescript
 *.tsbuildinfo
-
-example
-
-# generated native folders
-/ios
-/android
-modules/asset-locations/android/build/
-
-# project
-.cursor/
+.DS_Store
 .claude/
+.cursor/
+.env
+.env*.local
+.env.*
+.expo/
+.kotlin/
+.metro-health-check*
+.pnpm-store/
+.venv-shots/
+/android
+/ios
 AGENTS.md
 CLAUDE.md
-.env
-.env.*
-!.env.example
-
-# python
 __pycache__/
+dist/
+example
+expo-env.d.ts
+modules/asset-locations/android/build/
+node_modules/
+npm-debug.*
 scripts/.venv/
+web-build/
+yarn-debug.*
+yarn-error.*
