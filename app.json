@@ -80,7 +80,10 @@
             "blockedPermissions": [
               "android.permission.READ_MEDIA_VIDEO",
               "android.permission.READ_MEDIA_AUDIO"
-            ]
+            ],
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "extraProguardRules": "-keep class com.naver.maps.** { *; }\n-keep interface com.naver.maps.** { *; }\n-dontwarn com.naver.maps.**\n-keep class com.naver.nmap.** { *; }\n-keep class com.facebook.react.** { *; }\n-keep class com.facebook.hermes.** { *; }\n-keep class com.facebook.jni.** { *; }\n-keep class expo.modules.** { *; }\n-keep class com.handaleum.app.** { *; }"
           }
         }
       ],
