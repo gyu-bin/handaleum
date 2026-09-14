@@ -14,11 +14,14 @@ import Animated, {
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 
-import { TravelStamp, stampInkForKey } from './TravelStamp';
+import type { StampLevel } from '../config/stampVisuals';
+import { TravelStamp, type TravelStampSize } from './TravelStamp';
 
 export interface StampBadgeProps {
   name: string;
   collected: boolean;
+  level?: StampLevel;
+  stampKey?: string;
   /** First collected this calendar month. */
   isNew?: boolean;
   /** Play press-in stamp animation once (newly earned). */
@@ -26,23 +29,23 @@ export interface StampBadgeProps {
   /** Deterministic slight rotation for collected stamps (−8…8 deg). */
   tiltDeg?: number;
   onPress?: () => void;
-  /** Larger seal for earn overlay. */
-  size?: 'grid' | 'hero';
+  size?: TravelStampSize;
   nameEn?: string;
 }
 
 const DROP_FROM = 42;
-const SLAM_MS = 300;
-const SETTLE_MS = 110;
+const SLAM_MS = 320;
+const SETTLE_MS = 140;
 const never = { reduceMotion: ReduceMotion.Never as const };
 
 /**
- * Rubber-stamp seal on cream paper — slate navy / muted blue ink.
- * Slam drops from above with a short ink bloom (no game-y bounce).
+ * Rubber-stamp seal — slate navy ink. Slam is short ink settle (no game bounce).
  */
 export function StampBadge({
   name,
   collected,
+  level = 'district',
+  stampKey,
   isNew = false,
   animateIn = false,
   tiltDeg = 0,
@@ -145,8 +148,20 @@ export function StampBadge({
     ],
   }));
 
+  const stamp = (
+    <TravelStamp
+      name={name}
+      nameEn={nameEn}
+      stampKey={stampKey}
+      level={level}
+      collected={collected}
+      size={size}
+      brand={level === 'sido' || hero}
+    />
+  );
+
   const body = collected ? (
-    <View style={[styles.slot, hero && styles.slotHero]}>
+    <View style={[styles.slot, hero && styles.slotHero, size === 'leaf' && styles.slotLeaf]}>
       {animateIn ? (
         <>
           <Animated.View style={[styles.shadow, shadowStyle]} />
@@ -166,16 +181,7 @@ export function StampBadge({
           />
         </>
       ) : null}
-      <Animated.View style={[styles.sealWrap, sealStyle]}>
-        <TravelStamp
-          name={name}
-          nameEn={nameEn}
-          collected
-          size={hero ? 'hero' : 'grid'}
-          ink={stampInkForKey(name)}
-          brand={Boolean(nameEn) || hero}
-        />
-      </Animated.View>
+      <Animated.View style={[styles.sealWrap, sealStyle]}>{stamp}</Animated.View>
       {isNew && !hero ? (
         <View
           style={styles.newBadge}
@@ -187,16 +193,10 @@ export function StampBadge({
     </View>
   ) : (
     <View
-      style={[styles.slot, hero && styles.slotHero]}
+      style={[styles.slot, hero && styles.slotHero, size === 'leaf' && styles.slotLeaf]}
       accessibilityLabel={strings.stamps.uncollected}
     >
-      <TravelStamp
-        name={name}
-        nameEn={nameEn}
-        collected={false}
-        size={hero ? 'hero' : 'grid'}
-        brand={false}
-      />
+      {stamp}
     </View>
   );
 
@@ -226,6 +226,9 @@ const styles = StyleSheet.create({
     width: 140,
     height: 140,
     aspectRatio: undefined,
+  },
+  slotLeaf: {
+    padding: 2,
   },
   sealWrap: {
     alignItems: 'center',

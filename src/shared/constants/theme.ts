@@ -42,6 +42,29 @@ export const theme = {
     stampInkMuted: '#8AA3BB',
     stampInkWash: 'rgba(51,71,91,0.10)',
     stampInkSoft: 'rgba(138,163,187,0.35)',
+    /**
+     * Regional stamp inks — paper dyes matched to 발도장 sheet.
+     * Visit = full hue; unvisited = muted gray seal (same anatomy).
+     */
+    stampInkCoral: '#E0453C',
+    stampInkSunset: '#E06A35',
+    stampInkAmber: '#E0922E',
+    stampInkOlive: '#6B9A45',
+    stampInkForest: '#3D9A55',
+    stampInkTeal: '#2A9A88',
+    stampInkSky: '#3B9AD9',
+    stampInkIndigo: '#4558A8',
+    stampInkPlum: '#9A4AB0',
+    stampInkRose: '#E04A8A',
+    stampInkCocoa: '#9A6A45',
+    stampInkSlate: '#33475B',
+    stampInkClay: '#E07058',
+    stampInkMoss: '#5AAA4A',
+    stampInkSea: '#2A88B8',
+    stampInkWine: '#C04588',
+    stampInkSand: '#C09050',
+    /** Unvisited seal ink (full anatomy, faint). */
+    stampInkEmpty: '#C5CDD6',
 
     /**
      * Design-sheet point color — sparse highlights only (not a second chrome accent).

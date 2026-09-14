@@ -109,7 +109,14 @@ export function StampEarnOverlay({ names, onDone }: StampEarnOverlayProps) {
           <View style={styles.stage}>
             <Animated.View style={[styles.bloomRing, bloomStyle]} />
             <Animated.View style={stampStyle}>
-              <StampBadge name={name} collected size="hero" tiltDeg={-3} />
+              <StampBadge
+                name={name}
+                stampKey={name}
+                level="neighborhood"
+                collected
+                size="hero"
+                tiltDeg={-3}
+              />
             </Animated.View>
           </View>
           <Text style={styles.title}>{strings.stamps.earned(name)}</Text>

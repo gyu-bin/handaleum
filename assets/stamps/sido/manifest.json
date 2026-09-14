@@ -1,0 +1,12 @@
+{
+  "sido": {
+    "source": "_sheet.png",
+    "sliceScript": "scripts/slice-sido-stamps.py",
+    "size": 512
+  },
+  "symbols": {
+    "dir": "assets/stamps/symbols",
+    "count": 12,
+    "note": "Filled silhouettes for district/neighborhood; tint with stamp ink"
+  }
+}

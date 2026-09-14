@@ -177,6 +177,7 @@ const styles = StyleSheet.create({
   },
   mapImage: {
     height: '100%',
+    opacity: 0.8,
     width: '100%',
   },
   routeClip: {

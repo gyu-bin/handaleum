@@ -10,7 +10,7 @@ import type { StampsCollected } from '../types';
 import { loadSidoCoverAssetIds } from '../services/stampDongPhotos';
 import { sidoEn, sidoFormal } from '../utils/sidoLabels';
 import { CityList, type CityRow } from './CityList';
-import { TravelStamp, stampInkForKey } from './TravelStamp';
+import { TravelStamp } from './TravelStamp';
 
 const MOMENT_SIZE = 88;
 
@@ -95,9 +95,10 @@ export function StampRegionDetail({
         <TravelStamp
           name={sido}
           nameEn={sidoEn(sido)}
+          stampKey={sido}
+          level="sido"
           collected={visited}
           size="hero"
-          ink={stampInkForKey(sido)}
         />
         <Text style={[styles.formal, shell.ink]}>{sidoFormal(sido)}</Text>
         <Text style={[styles.heroSub, shell.soft]}>
@@ -109,7 +110,7 @@ export function StampRegionDetail({
         {strings.stamps.regionDistricts(sido)}
       </Text>
 
-      <CityList cities={cities} onSelect={onSelectCity} />
+      <CityList sido={sido} cities={cities} onSelect={onSelectCity} />
 
       {momentIds.length > 0 ? (
         <View style={styles.moments}>

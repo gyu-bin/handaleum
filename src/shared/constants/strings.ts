@@ -456,6 +456,8 @@ export const strings = {
     title: '발도장',
     progress: (a: number, b: number) =>
       a === 0 ? '아직 없음' : `${a} / ${b}`,
+    leafVisitSummary: (visited: number, unvisited: number) =>
+      `방문 ${visited} · 미방문 ${unvisited}`,
     progressLabel: (sido: string) => `${sido}에서 `,
     cityProgressLabel: (city: string) => `${city} · `,
     bookTitle: (sido: string) => `${sido} 도장판`,
@@ -515,6 +517,19 @@ export const strings = {
     mapEmpty: '아직 모은 동이 없어요',
     leafListEmpty: '동네 목록이 없어요',
     gunLeafListEmpty: '면·읍 목록을 아직 준비 중이에요',
+    dongSearchPlaceholder: '동 이름으로 검색',
+    dongSearchEmpty: '검색 결과가 없어요',
+    filterEmpty: '해당하는 동네가 없어요',
+    filterAll: '전체',
+    filterVisited: '방문한 곳',
+    filterUnvisited: '미방문',
+    sortAlpha: '가나다순',
+    sortRecent: '최근 방문순',
+    leafPlaceLine: (city: string, sidoFormal: string) =>
+      `${city} · ${sidoFormal}`,
+    firstVisitMonth: (label: string) => `첫 방문 · ${label}`,
+    viewPhotos: (n: number) =>
+      n > 0 ? `사진 보기 (${n})` : '사진 보기',
     dongPhotosLoading: '사진을 찾는 중…',
     dongPhotosCount: (n: number) =>
       n === 0 ? '모은 사진 없음' : `모은 사진 ${n}장`,

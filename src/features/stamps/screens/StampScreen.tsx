@@ -113,13 +113,8 @@ function leafSectionForUnit(
       // Earn overlay is the celebration — mass grid slam janks on many NEW.
       animateIn: false,
       tiltDeg: tiltForName(name),
+      firstMonth: entry?.firstMonth,
     };
-  });
-  units.sort((a, b) => {
-    if (a.collected !== b.collected) {
-      return a.collected ? -1 : 1;
-    }
-    return a.name.localeCompare(b.name, 'ko');
   });
   return {
     city: unit.label,
@@ -218,7 +213,8 @@ export function StampScreen() {
 
   const popStampLayerRef = useRef(popStampLayer);
   popStampLayerRef.current = popStampLayer;
-  const nestedBack = Boolean(l1Key) || dongPhotos != null || sidoListOpen;
+  const nestedBack =
+    Boolean(l1Key) || dongPhotos != null || sidoListOpen;
 
   /** Deep link / cold open of /stamps has no stack — bare GO_BACK warns in dev. */
   const leaveStampScreen = useCallback(() => {
@@ -362,7 +358,9 @@ export function StampScreen() {
 
   const openDongPhotos = useCallback(
     (unit: CityStampUnit, stampCity: string) => {
-      onReplayStamp(unit.id);
+      if (unit.collected) {
+        onReplayStamp(unit.id);
+      }
       setDongPhotos({
         sido,
         city: stampCity,
@@ -422,7 +420,7 @@ export function StampScreen() {
         <CityStampSections
           sections={[section]}
           replayNonce={replayNonce}
-          onSelectCollected={(stamp) => openDongPhotos(stamp, unit.stampCity)}
+          onSelectUnit={(stamp) => openDongPhotos(stamp, unit.stampCity)}
         />
       );
     },
@@ -507,9 +505,9 @@ export function StampScreen() {
               {leafSection ? (
                 <View style={styles.leafHint}>
                   <Text style={[styles.leafHintText, shell.soft]} numberOfLines={1}>
-                    {strings.stamps.progress(
+                    {strings.stamps.leafVisitSummary(
                       leafSection.collected,
-                      leafSection.total,
+                      Math.max(0, leafSection.total - leafSection.collected),
                     )}
                   </Text>
                 </View>

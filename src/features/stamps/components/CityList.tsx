@@ -12,6 +12,7 @@ export type CityRow = {
 };
 
 export interface CityListProps {
+  sido: string;
   cities: CityRow[];
   onSelect: (key: string) => void;
 }
@@ -27,7 +28,7 @@ function tiltForName(name: string): number {
 /**
  * L1 stamp book (구·시·군). Drill-down stays intact; the grid is a seal board.
  */
-export function CityList({ cities, onSelect }: CityListProps) {
+export function CityList({ sido, cities, onSelect }: CityListProps) {
   return (
     <View style={styles.book}>
       {cities.map((row) => {
@@ -47,6 +48,8 @@ export function CityList({ cities, onSelect }: CityListProps) {
           >
             <StampBadge
               name={row.label}
+              stampKey={`${sido}/${row.key}`}
+              level="district"
               collected={visited}
               tiltDeg={tiltForName(row.label)}
             />
