@@ -179,6 +179,7 @@ export const strings = {
   settings: {
     title: '설정',
     /** Section labels (reference: grey header above a ruled list). */
+    photoRecordSection: '사진과 기록',
     albumSection: '앨범',
     displaySection: '화면',
     notificationSection: '알림',

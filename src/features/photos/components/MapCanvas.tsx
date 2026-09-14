@@ -41,19 +41,24 @@ const EMPTY_CAMERA = {
 const SINGLE_PHOTO_ZOOM = 14;
 
 /**
- * Content insets so fitBounds keeps pins clear of floating chrome.
- * Keep modest — oversized insets force a wide zoom that shows NK/sea.
+ * Content insets for camera / chrome. Keep `bottom: 0` — Naver places the
+ * logo inside content padding, so a bottom inset lifts it onto Jeju pins.
+ * (Pre-mapPadding builds sat the logo at the true bottom-left.)
  */
 const MAP_PADDING = {
   top: 120,
   right: 20,
-  bottom: 72,
-  left: 20,
+  bottom: 0,
+  // Keep left at 0 so the Naver logo can sit on the true left edge.
+  left: 0,
 } as const;
 
+/** All four insets required — partial rect can break native logo align. */
 const LOGO_MARGIN = {
-  bottom: 10,
-  left: 10,
+  top: 0,
+  left: 0,
+  bottom: 0,
+  right: 0,
 } as const;
 
 /** South Korea frame clamp — never fit-zoom past the peninsula. */

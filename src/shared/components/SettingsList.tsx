@@ -5,11 +5,11 @@ import { theme } from '@/shared/constants/theme';
 import { useTheme } from '@/shared/theme/ThemeProvider';
 
 /**
- * Flat, paper-like settings sections. Rows are separated only by an inset
+ * Flat, paper-like settings sections. Rows are separated only by a quiet
  * hairline so settings stay quiet beside the photo-led screens.
  */
 
-const CARD_PAD = theme.spacing.md;
+const ROW_PAD = 0;
 
 export interface SettingsSectionProps {
   label: string;
@@ -28,7 +28,7 @@ export function SettingsSection({ label, children }: SettingsSectionProps) {
   );
 }
 
-/** Hairline between rows, inset to the row text. */
+/** Quiet full-width rule between rows on the paper page. */
 export function SettingsDivider() {
   const { colors } = useTheme();
   return <View style={[styles.divider, { backgroundColor: colors.hairline }]} />;
@@ -40,7 +40,7 @@ export interface SettingsRowProps {
   value?: string;
   /** Show the disclosure caret. Defaults to true when `onPress` is given. */
   chevron?: boolean;
-  /** Secondary actions (해제, 복원) sit quieter than the rest of the card. */
+  /** Secondary actions (해제, 복원) sit quieter than the primary settings. */
   muted?: boolean;
   disabled?: boolean;
   onPress?: () => void;
@@ -114,8 +114,8 @@ export function SettingsRow({
 }
 
 /**
- * Full-width slot inside a card for anything that is not a plain row
- * (chip pickers, sliders). Matches row padding so it stays on the grid.
+ * Full-width slot for anything that is not a plain row (chip pickers,
+ * sliders). It stays on the same page grid as the surrounding rows.
  */
 export function SettingsCustomRow({ children }: { children: ReactNode }) {
   return <View style={styles.customRow}>{children}</View>;
@@ -126,16 +126,15 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.lg,
   },
   sectionLabel: {
-    ...theme.type.micro,
+    ...theme.type.label,
     fontFamily: theme.fonts.sans,
     fontWeight: '600',
-    letterSpacing: 0.6,
-    marginLeft: theme.spacing.xs,
+    letterSpacing: 0.1,
     marginBottom: theme.spacing.sm,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    marginLeft: CARD_PAD,
+    marginLeft: ROW_PAD,
   },
   row: {
     minHeight: 54,
@@ -143,7 +142,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: theme.spacing.md,
-    paddingHorizontal: CARD_PAD,
+    paddingHorizontal: ROW_PAD,
     paddingVertical: 13,
   },
   rowDisabled: {
@@ -183,7 +182,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: theme.spacing.md,
-    paddingHorizontal: CARD_PAD,
+    paddingHorizontal: ROW_PAD,
     paddingVertical: 12,
     minHeight: 54,
   },

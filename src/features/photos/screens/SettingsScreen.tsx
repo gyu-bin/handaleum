@@ -6,7 +6,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/shared/components/Button';
-import { ScreenHeader } from '@/shared/components/ScreenHeader';
 import {
   SettingsCustomRow,
   SettingsDivider,
@@ -201,10 +200,29 @@ export function SettingsScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, shellBg]} edges={['top', 'left', 'right']}>
-      <ScreenHeader
-        title={strings.settings.title}
-        onTitlePress={onTitlePress}
-      />
+      <View style={styles.pageHeader}>
+        <Pressable
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel={strings.common.back}
+          hitSlop={10}
+          style={({ pressed }) => [styles.backAction, pressed && styles.backPressed]}
+        >
+          <Text style={[styles.backChevron, { color: colors.shellInk }]}>‹</Text>
+          <Text style={[styles.backLabel, { color: colors.shellInk }]}>
+            {strings.common.back}
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={onTitlePress}
+          accessibilityRole="header"
+          style={({ pressed }) => [pressed && styles.titlePressed]}
+        >
+          <Text style={[styles.pageTitle, { color: colors.shellInk }]}>
+            {strings.settings.title}
+          </Text>
+        </Pressable>
+      </View>
 
       <ScrollView
         contentContainerStyle={[
@@ -213,8 +231,18 @@ export function SettingsScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Every reason a photo is missing from the map, in one card. */}
-        <SettingsSection label={strings.settings.mapNoticeSection}>
+        <SettingsSection label={strings.settings.photoRecordSection}>
+          <SettingsRow
+            title={
+              albumSyncing
+                ? strings.settings.albumSyncing
+                : strings.settings.albumSync
+            }
+            subtitle={strings.settings.albumSyncExplain}
+            disabled={albumSyncing}
+            onPress={() => setAlbumSyncOpen(true)}
+          />
+          <SettingsDivider />
           <SettingsRow
             title={strings.settings.noLocationTitle}
             subtitle={strings.settings.noLocationExplain}
@@ -303,19 +331,6 @@ export function SettingsScreen() {
           <Text style={[styles.error, { color: colors.shellInk }]}>{error}</Text>
         ) : null}
 
-        <SettingsSection label={strings.settings.albumSection}>
-          <SettingsRow
-            title={
-              albumSyncing
-                ? strings.settings.albumSyncing
-                : strings.settings.albumSync
-            }
-            subtitle={strings.settings.albumSyncExplain}
-            disabled={albumSyncing}
-            onPress={() => setAlbumSyncOpen(true)}
-          />
-        </SettingsSection>
-
         <SettingsSection label={strings.settings.notificationSection}>
           <SettingsRow
             title={strings.settings.monthEndReminder}
@@ -380,43 +395,37 @@ export function SettingsScreen() {
 
         {__DEV__ ? (
           <SettingsSection label={strings.settings.devToggle}>
-            <Pressable
-              onPress={() => setDevOpen((v) => !v)}
-              accessibilityRole="button"
-              style={({ pressed }) => [styles.devToggle, pressed && styles.pressed]}
-            >
-              <Text style={[styles.devLabel, { color: colors.shellSubtle }]}>
-                {strings.settings.devDetails}
-                {devOpen ? ' ▾' : ' ▸'}
-              </Text>
-            </Pressable>
+            <SettingsRow
+              title={strings.settings.devDetails}
+              value={devOpen ? '닫기' : undefined}
+              onPress={() => setDevOpen((value) => !value)}
+            />
             {devOpen ? (
-              <View
-                style={[
-                  styles.devBox,
-                  {
-                    backgroundColor: colors.shellSurface,
-                    borderColor: colors.hairline,
-                  },
-                ]}
-              >
-                <Text
-                  style={[styles.devMono, { color: colors.shellSubtle }]}
-                  numberOfLines={3}
-                >
-                  {diag}
-                </Text>
-                <Button
+              <>
+                <SettingsDivider />
+                <SettingsCustomRow>
+                  <Text
+                    style={[styles.devMono, { color: colors.shellSubtle }]}
+                    numberOfLines={3}
+                  >
+                    {diag}
+                  </Text>
+                </SettingsCustomRow>
+                <SettingsDivider />
+                <SettingsRow
                   title={
                     dummyEnabled
                       ? strings.settings.devDummyDisable
                       : strings.settings.devDummyEnable
                   }
-                  variant="ghost"
-                  size="md"
+                  value={
+                    dummyEnabled
+                      ? strings.settings.devDummyOn
+                      : strings.settings.devDummyOff
+                  }
                   onPress={() => setDummyEnabled(!dummyEnabled)}
                 />
-              </View>
+              </>
             ) : null}
           </SettingsSection>
         ) : null}
@@ -482,14 +491,49 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingHorizontal: theme.spacing.md,
-    paddingTop: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.sm,
     paddingBottom: theme.spacing.xl,
   },
   radiusLabel: {
     ...theme.type.body,
     fontFamily: theme.fonts.sans,
     fontWeight: '500',
+  },
+  pageHeader: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.xs,
+    paddingBottom: theme.spacing.md,
+  },
+  backAction: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    gap: 2,
+    minHeight: 32,
+  },
+  backPressed: {
+    opacity: 0.64,
+  },
+  backChevron: {
+    fontFamily: theme.fonts.sans,
+    fontSize: 22,
+    lineHeight: 24,
+    marginTop: -1,
+  },
+  backLabel: {
+    ...theme.type.label,
+    fontFamily: theme.fonts.sans,
+    fontWeight: '600',
+  },
+  pageTitle: {
+    ...theme.type.display,
+    fontFamily: theme.fonts.serif,
+    fontWeight: '700',
+    marginTop: theme.spacing.xs,
+  },
+  titlePressed: {
+    opacity: 0.72,
   },
   chips: {
     flexDirection: 'row',
@@ -516,24 +560,6 @@ const styles = StyleSheet.create({
     marginTop: -theme.spacing.sm,
     marginBottom: theme.spacing.lg,
     marginLeft: theme.spacing.xs,
-  },
-  pressed: {
-    opacity: 0.5,
-  },
-  devToggle: {
-    minHeight: 36,
-    justifyContent: 'center',
-    paddingHorizontal: theme.spacing.md,
-  },
-  devLabel: {
-    ...theme.type.label,
-    fontFamily: theme.fonts.sans,
-  },
-  devBox: {
-    gap: theme.spacing.sm,
-    padding: theme.spacing.md,
-    borderRadius: theme.radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
   },
   devMono: {
     ...theme.type.micro,
