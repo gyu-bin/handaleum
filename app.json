@@ -33,6 +33,10 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_MEDIA_LOCATION"
+      ],
+      "blockedPermissions": [
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO"
       ]
     },
     "web": {
@@ -77,11 +81,7 @@
             "extraMavenRepos": [
               "https://repository.map.naver.com/archive/maven"
             ],
-            "blockedPermissions": [
-              "android.permission.READ_MEDIA_VIDEO",
-              "android.permission.READ_MEDIA_AUDIO"
-            ],
-            "enableProguardInReleaseBuilds": true,
+            "enableMinifyInReleaseBuilds": true,
             "enableShrinkResourcesInReleaseBuilds": true,
             "extraProguardRules": "-keep class com.naver.maps.** { *; }\n-keep interface com.naver.maps.** { *; }\n-dontwarn com.naver.maps.**\n-keep class com.naver.nmap.** { *; }\n-keep class com.facebook.react.** { *; }\n-keep class com.facebook.hermes.** { *; }\n-keep class com.facebook.jni.** { *; }\n-keep class expo.modules.** { *; }\n-keep class com.handaleum.app.** { *; }"
           }
