@@ -29,6 +29,7 @@ import { useDarkMode, useTheme } from '@/shared/theme/ThemeProvider';
 import { RecapBoard } from '../components/RecapBoard';
 import { RecapPhotosModal } from '../components/RecapPhotosModal';
 import { useCards, useDeleteCards } from '../hooks/useCards';
+import { useMonthCover } from '../hooks/useMonthCover';
 import type { RecapCard } from '../types';
 import { summaryTopPlaces } from '../utils/summaryTopPlaces';
 import { AssetThumbImage } from '../../photos/components/AssetThumbImage';
@@ -126,6 +127,8 @@ export function CardListScreen() {
     resetKey: month,
   });
   const { covers: pinCovers } = usePinCovers(month);
+  const { coverAssetId: monthCoverId, setCover: setMonthCover } =
+    useMonthCover(month);
 
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -135,26 +138,54 @@ export function CardListScreen() {
   );
   const [viewerPhotos, setViewerPhotos] = useState<PhotoRef[] | null>(null);
   const [viewerCoverId, setViewerCoverId] = useState<string | null>(null);
+  /** Only hero opens the modal with month-cover "대표로 쓰기". */
+  const [viewerSetsMonthCover, setViewerSetsMonthCover] = useState(false);
 
-  const heroId = monthPhotos[0]?.assetId ?? null;
+  const heroId = useMemo(() => {
+    if (
+      monthCoverId &&
+      monthPhotos.some((photo) => photo.assetId === monthCoverId)
+    ) {
+      return monthCoverId;
+    }
+    return monthPhotos[0]?.assetId ?? null;
+  }, [monthCoverId, monthPhotos]);
+
   const topPlaces = useMemo(
     () =>
       summaryTopPlaces(monthPhotos, visitPlaces, pinCovers, TOP_PLACE_LIMIT),
     [monthPhotos, visitPlaces, pinCovers],
   );
 
-  const openViewer = useCallback((photos: PhotoRef[], coverAssetId?: string | null) => {
-    if (photos.length === 0) {
-      return;
-    }
-    setViewerPhotos(photos);
-    setViewerCoverId(coverAssetId ?? photos[0]?.assetId ?? null);
-  }, []);
+  const openViewer = useCallback(
+    (
+      photos: PhotoRef[],
+      coverAssetId?: string | null,
+      opts?: { setMonthCover?: boolean },
+    ) => {
+      if (photos.length === 0) {
+        return;
+      }
+      setViewerPhotos(photos);
+      setViewerCoverId(coverAssetId ?? photos[0]?.assetId ?? null);
+      setViewerSetsMonthCover(opts?.setMonthCover === true);
+    },
+    [],
+  );
 
   const closeViewer = useCallback(() => {
     setViewerPhotos(null);
     setViewerCoverId(null);
+    setViewerSetsMonthCover(false);
   }, []);
+
+  const onSetViewerMonthCover = useCallback(
+    (assetId: string) => {
+      setMonthCover(assetId);
+      setViewerCoverId(assetId);
+    },
+    [setMonthCover],
+  );
 
   /**
    * Pop back to home (native back animation). `replace('/')` slides home in
@@ -462,7 +493,9 @@ export function CardListScreen() {
             ) : tab === 'summary' ? (
               <View style={styles.summary}>
                 <Pressable
-                  onPress={() => openViewer(monthPhotos, heroId)}
+                  onPress={() =>
+                    openViewer(monthPhotos, heroId, { setMonthCover: true })
+                  }
                   disabled={!heroId}
                   style={styles.hero}
                   accessibilityRole="button"
@@ -619,6 +652,7 @@ export function CardListScreen() {
       <RecapPhotosModal
         photos={viewerPhotos}
         coverAssetId={viewerCoverId}
+        onSetCover={viewerSetsMonthCover ? onSetViewerMonthCover : undefined}
         onClose={closeViewer}
       />
 

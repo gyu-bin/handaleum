@@ -388,6 +388,7 @@ export function PhotoPreviewSheet({
             </View>
             {cluster ? (
               <FlatList
+                style={styles.grid}
                 data={pagePhotos}
                 keyExtractor={(item) => item.assetId}
                 numColumns={3}
@@ -496,7 +497,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     borderTopLeftRadius: theme.radius.card,
     borderTopRightRadius: theme.radius.card,
-    maxHeight: '62%',
+    height: '80%',
+    maxHeight: '80%',
     overflow: 'hidden',
   },
   handle: {
@@ -540,9 +542,12 @@ const styles = StyleSheet.create({
   },
 
   list: {
-    flexGrow: 0,
+    flexGrow: 1,
     paddingHorizontal: theme.spacing.md - theme.spacing.sm / 2,
     paddingBottom: theme.spacing.xl,
+  },
+  grid: {
+    flex: 1,
   },
   thumb: {
     width: '100%',

@@ -57,7 +57,6 @@ const DAY_GAP_X = 5;
 const CAPTION_GAP = 4;
 const CAPTION_LINE = 16;
 const CELL_PAD_BOTTOM = 14;
-const RAIL_MAX_NODES = 8;
 
 function canRenamePlace(id: string): boolean {
   return id.length > 0 && !id.startsWith('pending:');
@@ -265,7 +264,7 @@ function BoardPage({
     mode === 'day' ? chunkRows(pageNodes, cols) : snakeRows(pageNodes, cols);
   const gridH = rows.length * rowH;
   const rail =
-    mode === 'place' && pageNodes.length <= RAIL_MAX_NODES
+    mode === 'place'
       ? snakeRailPath(pageNodes.length, cols, size, rowH, inner / 2, gapX)
       : '';
 

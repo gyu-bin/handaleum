@@ -291,6 +291,17 @@ export function setRecapCoversRaw(month: string, json: string): void {
   storage.set(`${RECAP_COVERS_PREFIX}${month}`, json);
 }
 
+/** Summary-tab hero cover assetId for one month. */
+const MONTH_COVER_PREFIX = 'monthCover:';
+
+export function getMonthCoverRaw(month: string): string | null {
+  return storage.getString(`${MONTH_COVER_PREFIX}${month}`) ?? null;
+}
+
+export function setMonthCoverRaw(month: string, assetId: string): void {
+  storage.set(`${MONTH_COVER_PREFIX}${month}`, assetId);
+}
+
 /** JSON map of place identity → user alias for recap board labels. */
 const PLACE_ALIASES_KEY = 'placeAliases';
 

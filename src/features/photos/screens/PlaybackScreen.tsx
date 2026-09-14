@@ -34,7 +34,7 @@ import {
   type DayPlaceBlock,
   type DayTimelineSection,
 } from '../utils/dayTimeline';
-import { resolveClusterDetailLabel } from '../utils/placeJourney';
+import { resolveClusterDetailLabel, placeBucketKey } from '../utils/placeJourney';
 
 const RADIUS = 8;
 /** Tight gutters — collage, not equal gallery tiles. */
@@ -240,6 +240,7 @@ function placeLineFor(
 function DaySection({
   section,
   width,
+  covers,
   labels,
   onOpen,
 }: {
@@ -252,13 +253,22 @@ function DaySection({
   const shell = useShellInk();
   const contentW = width - theme.spacing.lg * 2;
 
-  const thumbs: DayThumb[] = useMemo(
-    () =>
-      section.places.flatMap((block) =>
-        block.photos.map((photo) => ({ assetId: photo.assetId, block })),
-      ),
-    [section.places],
-  );
+  const thumbs: DayThumb[] = useMemo(() => {
+    return section.places.flatMap((block) => {
+      const coverId = covers[block.placeKey];
+      const photos = [...block.photos];
+      if (coverId) {
+        const at = photos.findIndex((photo) => photo.assetId === coverId);
+        if (at > 0) {
+          const [cover] = photos.splice(at, 1);
+          if (cover) {
+            photos.unshift(cover);
+          }
+        }
+      }
+      return photos.map((photo) => ({ assetId: photo.assetId, block }));
+    });
+  }, [covers, section.places]);
 
   const placeLine = placeLineFor(section, labels);
 
@@ -329,6 +339,11 @@ export function PlaybackScreen() {
   const shellBg = useShellBackground();
   const shell = useShellInk();
   const { width } = useWindowDimensions();
+  const jumpSheetPad = theme.spacing.lg;
+  /** Compact day hit target — full-width squares made the sheet look empty. */
+  const calCellW = (width - jumpSheetPad * 2) / 7;
+  const calDot = Math.min(34, Math.round(calCellW * 0.72));
+  const calRowH = calDot + 6;
   const params = useLocalSearchParams<{ assetId?: string | string[] }>();
   const focusAssetId = Array.isArray(params.assetId)
     ? params.assetId[0]
@@ -455,9 +470,7 @@ export function PlaybackScreen() {
   }, []);
 
   const selectedCoverKey = selected
-    ? sections
-        .flatMap((s) => s.places)
-        .find((p) => p.cluster.id === selected.id)?.placeKey
+    ? placeBucketKey(selected.centerLat, selected.centerLng)
     : null;
 
   const chrome = (
@@ -555,7 +568,10 @@ export function PlaybackScreen() {
             </View>
             <View style={styles.weekdayRow}>
               {['일', '월', '화', '수', '목', '금', '토'].map((weekday) => (
-                <Text key={weekday} style={[styles.weekday, shell.subtle]}>
+                <Text
+                  key={weekday}
+                  style={[styles.weekday, { width: calCellW }, shell.subtle]}
+                >
                   {weekday}
                 </Text>
               ))}
@@ -564,7 +580,10 @@ export function PlaybackScreen() {
               {calendarSlots.map((day, index) => {
                 const hasPhotos = photoDays.has(day);
                 return day < 1 ? (
-                  <View key={`blank-${index}`} style={styles.calendarCell} />
+                  <View
+                    key={`blank-${index}`}
+                    style={[styles.calendarCell, { width: calCellW, height: calRowH }]}
+                  />
                 ) : (
                   <Pressable
                     key={day}
@@ -579,20 +598,32 @@ export function PlaybackScreen() {
                     }}
                     style={[
                       styles.calendarCell,
-                      hasPhotos && styles.calendarCellOn,
+                      { width: calCellW, height: calRowH },
                     ]}
                     accessibilityRole="button"
                     accessibilityState={{ disabled: !hasPhotos }}
                   >
-                    <Text
+                    <View
                       style={[
-                        styles.calendarDay,
-                        shell.soft,
-                        hasPhotos && styles.calendarDayOn,
+                        styles.calendarDot,
+                        {
+                          width: calDot,
+                          height: calDot,
+                          borderRadius: calDot / 2,
+                        },
+                        hasPhotos && styles.calendarDotOn,
                       ]}
                     >
-                      {day}
-                    </Text>
+                      <Text
+                        style={[
+                          styles.calendarDay,
+                          shell.soft,
+                          hasPhotos && styles.calendarDayOn,
+                        ]}
+                      >
+                        {day}
+                      </Text>
+                    </View>
                   </Pressable>
                 );
               })}
@@ -776,13 +807,13 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     backgroundColor: theme.colors.hairline,
-    marginBottom: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
   },
   jumpHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
   },
   jumpTitle: {
     fontFamily: theme.fonts.sans,
@@ -798,10 +829,9 @@ const styles = StyleSheet.create({
   },
   weekdayRow: {
     flexDirection: 'row',
-    marginBottom: 5,
+    marginBottom: 2,
   },
   weekday: {
-    width: '14.2857%',
     textAlign: 'center',
     fontFamily: theme.fonts.sans,
     fontSize: 11,
@@ -811,22 +841,27 @@ const styles = StyleSheet.create({
   calendarGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: theme.spacing.lg,
+    marginBottom: theme.spacing.sm,
   },
   calendarCell: {
-    width: '14.2857%',
-    aspectRatio: 1,
-    borderRadius: theme.radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  calendarCellOn: {
+  calendarDot: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarDotOn: {
     backgroundColor: theme.colors.ink,
   },
   calendarDay: {
     fontFamily: theme.fonts.sans,
     fontSize: 13,
-    lineHeight: 18,
+    fontWeight: '500',
+    textAlign: 'center',
+    // Match fontSize so the glyph sits in the circle (lineHeight skews RN Text).
+    lineHeight: 13,
+    includeFontPadding: false,
   },
   calendarDayOn: {
     color: theme.colors.surface,
@@ -837,6 +872,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 20,
     fontWeight: '700',
+    marginTop: theme.spacing.xs,
     marginBottom: theme.spacing.sm,
   },
   jumpList: {
