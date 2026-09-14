@@ -66,9 +66,9 @@
 | 핀 thumb 없으면 마커 **숨김**. placeholder `symbol`은 네이버 기본 초록 핀으로 보임 | lightblue symbol 즉시 | 사용자: 사진 덜 불러온 초록 핀 | 2026-08-31 |
 | 월 이미지 워밍: **예산 캡(≤120)** — 보이는 핀 커버/시드 + 시트·재생 **현재 페이지**만 `Image.prefetch`. 월 전체(수천~수만) prefetch 금지 | 월 전체 warm | 50k에서 디스크·MediaLibrary 고갈 방지 | 2026-08-02 |
 | 핀 vs 스탬프: 핀 thumb export busy면 라이브러리 GPS 배치 **양보**; 맵은 첫 핀 파도 후 스탬프 시작. cluster cellDeg **줌별 sticky**로 progressive remount 감소 | 고정 4.5s 후 스탬프 / grain 매번 재계산 | 핀 사진 교체 지연 완화 | 2026-08-02 |
-| 지도 정돈(A): **BUILDING 등 레이어 off** + 핀 `isHideCollidedSymbols`. POI 랜드마크 단독 필터는 SDK 미지원 | 커스텀 방문 라벨(B) | 사용자 선택 A | 2026-07-27 |
+| 지도 정돈(A): **BUILDING 등 레이어 off** + 핀 `isHideCollidedSymbols`(POI만). **마커끼리 숨김 off** — 밀도는 상한·그리드로 | 커스텀 방문 라벨(B) / isHideCollidedMarkers | 사용자: 겹쳐도 사진 더 보이게 | 2026-09-14 |
 | 지도 라벨: 제스처 중에도 **마운트 유지** (MapScreenAnchor). 숨김은 깜빡임의 원인 | 제스처 중 unmount | 확대/패닝 시 라벨 깜빡임 해소 | 2026-07-27 |
-| 클러스터링: **공간 그리드 O(n)** + **줌별 핀 상한** (넘치면 셀 확대). 개요≈38핀, 확대 시 ≤170 | 시드+haversine O(n²) / 상한 없음 | 대량·전국 산포 시 핀 카펫·튕김 방지 | 2026-07-23 |
+| 클러스터링: **공간 그리드 O(n)** + **줌별 핀 상한** (넘치면 셀 확대). 개요≈50핀, 확대 시 ≤194. 시작 반경 55km | 시드+haversine O(n²) / 상한 없음 | 대량·전국 산포 시 핀 카펫·튕김 방지 | 2026-07-23 |
 | 대량 사진 안정성: GPS `LOCATION_BATCH=8`, 핀 thumb export **동시 2**, URI/bake **LRU**, 그리드 FlatList window 축소 + expo-image recycling/clearMemoryCache | 무제한 Promise.all / 캐시 무한 성장 | 수백 장 월에서 ImageManipulator·디코드 jetsam 완화 | 2026-07-29 |
 | 대량 로드 하드닝: limiter **maxQueue**, fileUri 실패 네거티브 캐시 8s, 맵 핀 burst 재시도+idle 1회. 스펙 `2026-08-10-photo-load-hardening-design.md` | 무한 retry / 무제한 wait 큐 | 끊김·강제종료 우선, 썸네일은 순차 복구 | 2026-08-10 |
 | 이번 달 thumb **중간 프리웜**: GPS 후 idle에 핀 seed/cover → 월 fill≤160. 스크롤 시 양보. 스펙 `2026-08-10-month-thumb-prewarm-design.md` | 볼 때만 굽기 / 전체 라이브러리 선생성 | 지도·몰아보기 첫인상↑, 인덱싱은 메타만 | 2026-08-10 |

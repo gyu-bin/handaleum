@@ -2,18 +2,17 @@ import type { PhotoRef, PlaceCluster } from '../types';
 
 /**
  * Soft cap on visible pins so the paper map stays readable.
- * Overview (~zoom 6–7) ≈ 40 pins; deep zoom allows more detail.
+ * Overview (~zoom 6–7) ≈ 50 pins; deep zoom allows more detail.
  */
 function maxPinsForZoom(zoom: number): number {
   const z = Math.max(6, Math.min(18, zoom));
-  // Modest bump vs 28+(z-6)*10 — more pins without carpeting the overview.
-  return Math.round(38 + (z - 6) * 11); // 38 @6 → 104 @12 → 170 @18
+  return Math.round(50 + (z - 6) * 12); // 50 @6 → 122 @12 → 194 @18
 }
 
 /** Starting cell size in degrees from map zoom (~km/111). */
 function cellDegForZoom(zoom: number): number {
-  // Broader than the old haversine radius — overview should read as cities, not dots.
-  const radiusKm = Math.max(1.0, 70 / 2 ** Math.max(0, zoom - 6));
+  // Slightly tighter than 70km base so neighborhoods split earlier on overview.
+  const radiusKm = Math.max(1.0, 55 / 2 ** Math.max(0, zoom - 6));
   return Math.max(radiusKm / 111, 0.006);
 }
 
