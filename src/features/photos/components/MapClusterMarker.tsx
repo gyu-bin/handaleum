@@ -181,7 +181,9 @@ function MapClusterMarkerInner({
       height={markerH}
       anchor={{ x: 0.5, y: 1 }}
       zIndex={selected ? 10 : 2}
-      alpha={photoUri && !framedUri ? 0.4 : 1}
+      // Full opacity even before the paper-frame bake — dimming looked like a
+      // white filter, and Android often stays on the raw thumb longer.
+      alpha={1}
       // Hide under map POI labels only — do not drop neighboring photo pins.
       isHideCollidedSymbols
       isForceShowIcon={selected}

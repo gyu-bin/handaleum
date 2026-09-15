@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import {
   FlatList,
   InteractionManager,
+  Platform,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -118,6 +119,11 @@ export function NoLocationPhotosScreen() {
       <Text style={[styles.subtitle, shell.subtle]}>
         {strings.settings.noLocationSubtitle(formatMonthDot(month))}
       </Text>
+      {Platform.OS === 'android' && rows.length > 0 ? (
+        <Text style={[styles.androidTip, shell.soft]}>
+          {strings.settings.androidLocationTip}
+        </Text>
+      ) : null}
       {rows.length === 0 ? (
         <StateView title={strings.settings.noLocationEmpty} />
       ) : (
@@ -147,6 +153,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: theme.spacing.sm,
+  },
+  androidTip: {
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
+    textAlign: 'center',
+    lineHeight: 18,
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: theme.spacing.md,
   },
   list: {
     paddingHorizontal: theme.spacing.lg,

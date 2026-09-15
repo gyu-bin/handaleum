@@ -103,6 +103,9 @@ export const strings = {
     subhead: '체크인도, 기록도 필요 없습니다.',
     /** Sits directly above the button — read right before the system prompt. */
     privacy: '사진은 기기 밖으로 나가지 않습니다. 위치만 읽습니다.',
+    /** Android only — camera must write GPS into the file. */
+    androidLocationTip:
+      '갤럭시·안드로이드는 카메라에서 위치 태그를 켜 두세요. 꺼져 있으면 지도에 안 올라갑니다.',
     /** Names what the tap produces, not a generic "start". */
     start: '이번 달 지도 만들기',
     skip: '건너뛰기',
@@ -218,6 +221,9 @@ export const strings = {
     noLocationCount: (count: number) => `${count}장`,
     noLocationExplain:
       'GPS가 없는 사진은 지도에 안 뜹니다. 카드 만들기에는 넣을 수 있어요.',
+    /** Android only — shown when this month has GPS-less photos. */
+    androidLocationTip:
+      '카메라 앱 → 설정 → 위치 태그를 켜 두면, 앞으로 찍는 사진이 지도에 표시됩니다.',
     noLocationSubtitle: (monthLabel: string) =>
       `${monthLabel} · GPS가 없어 지도에 안 뜹니다`,
     noLocationEmpty: '위치 없는 사진이 없습니다',

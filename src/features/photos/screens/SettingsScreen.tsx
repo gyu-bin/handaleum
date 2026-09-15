@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, Platform, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import * as Location from 'expo-location';
 import { useRouter, type Href } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -245,7 +245,12 @@ export function SettingsScreen() {
           <SettingsDivider />
           <SettingsRow
             title={strings.settings.noLocationTitle}
-            subtitle={strings.settings.noLocationExplain}
+            subtitle={
+              Platform.OS === 'android' &&
+              (monthQuery.data?.noLocationCount ?? 0) > 0
+                ? `${strings.settings.noLocationExplain}\n${strings.settings.androidLocationTip}`
+                : strings.settings.noLocationExplain
+            }
             value={strings.settings.noLocationCount(
               monthQuery.data?.noLocationCount ?? 0,
             )}
