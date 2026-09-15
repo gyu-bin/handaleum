@@ -311,14 +311,16 @@ export const strings = {
   },
   playback: {
     title: '몰아보기',
+    openPhoto: '사진 크게 보기',
+    viewerHint: '좌우로 넘겨 보세요',
     empty: '이 달에는 보여줄 사진이 없습니다',
     jumpToDate: '날짜 바로가기',
     datesWithPhotos: '사진이 있는 날짜',
     openDateJump: '날짜 바로가기 열기',
     placeLoading: '위치 확인 중…',
     placeUnknown: '위치 없음',
-    stripHint: '같은 장소 · 탭하면 대표 사진',
-    gridHint: '탭하면 대표 사진',
+    stripHint: '같은 장소 · 탭하면 크게 보기',
+    gridHint: '탭하면 크게 보기',
     prevPlace: '이전 장소',
     nextPlace: '다음 장소',
     chapterDay: (iso: string) => {
@@ -370,7 +372,7 @@ export const strings = {
     loadingPhotos: (done: number, total: number) =>
       `사진 ${done.toLocaleString('ko-KR')}/${total.toLocaleString('ko-KR')}`,
     boardPlace: '장소',
-    boardDay: '사진',
+    boardDay: '월',
     boardMemo: '메모',
     boardSummary: '요약',
     journeyTitle: (monthNum: number) => `${monthNum}월의 여정`,
@@ -381,8 +383,7 @@ export const strings = {
     topPlacesTitle: '이번 달 많이 남긴 곳',
     topPlacesHint: '가장 많은 추억을 남긴 장소들이에요.',
     topPlacesViewAll: '전체보기',
-    topPlaceMeta: (monthNum: number, day: number, count: number) =>
-      `${monthNum}월 ${day}일 · ${count}장`,
+    topPlaceMeta: (count: number) => `이번 달 ${count}장`,
     expandPhoto: '사진 확대',
     statPlaces: '방문한 장소',
     statPhotos: '찍은 사진',

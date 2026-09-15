@@ -34,7 +34,7 @@ import {
   type DayPlaceBlock,
   type DayTimelineSection,
 } from '../utils/dayTimeline';
-import { resolveClusterDetailLabel, placeBucketKey } from '../utils/placeJourney';
+import { resolveClusterDetailLabel } from '../utils/placeJourney';
 
 const RADIUS = 8;
 /** Tight gutters — collage, not equal gallery tiles. */
@@ -92,13 +92,13 @@ function Thumb({
 }: {
   item: DayThumb;
   style: object;
-  onOpen: (cluster: PlaceCluster, assetId: string) => void;
+  onOpen: (item: DayThumb) => void;
   decode: number;
   overlay?: string;
 }) {
   return (
     <Pressable
-      onPress={() => onOpen(item.block.cluster, item.assetId)}
+      onPress={() => onOpen(item)}
       style={[styles.thumb, style]}
       accessibilityRole="button"
     >
@@ -117,22 +117,24 @@ function Thumb({
 }
 
 /**
- * Editorial collage from the UI guide — a quiet day stays compact, while a
- * photo-rich day earns a larger hero and supporting grid.
+ * Editorial collage — quiet days stay compact; 4+ days show 3 cells +N.
+ * Tapping opens the day sheet with *all* photos for that date.
  */
 function DayCollage({
   thumbs,
   width,
-  onOpen,
+  onOpenAsset,
 }: {
   thumbs: DayThumb[];
   width: number;
-  onOpen: (cluster: PlaceCluster, assetId: string) => void;
+  onOpenAsset: (assetId: string) => void;
 }) {
   const n = thumbs.length;
   if (n === 0) {
     return null;
   }
+
+  const open = (item: DayThumb) => onOpenAsset(item.assetId);
 
   if (n === 1) {
     const h = Math.max(
@@ -144,7 +146,7 @@ function DayCollage({
         item={thumbs[0]!}
         style={{ width, height: h, borderRadius: RADIUS }}
         decode={Math.ceil(width * 2)}
-        onOpen={onOpen}
+        onOpen={open}
       />
     );
   }
@@ -160,7 +162,7 @@ function DayCollage({
             item={item}
             style={{ width: w, height: h, borderRadius: RADIUS }}
             decode={Math.ceil(w * 2)}
-            onOpen={onOpen}
+            onOpen={open}
           />
         ))}
       </View>
@@ -178,7 +180,7 @@ function DayCollage({
             item={item}
             style={{ width: w, height: h, borderRadius: RADIUS }}
             decode={Math.ceil(w * 2)}
-            onOpen={onOpen}
+            onOpen={open}
           />
         ))}
       </View>
@@ -200,7 +202,7 @@ function DayCollage({
         item={featured}
         style={{ width: leftW, height: leftH, borderRadius: RADIUS }}
         decode={Math.ceil(leftW * 2)}
-        onOpen={onOpen}
+        onOpen={open}
       />
       <View style={[styles.sideStack, { width: rightW, gap: GUTTER }]}>
         {side.map((item, index) => (
@@ -209,7 +211,7 @@ function DayCollage({
             item={item}
             style={{ width: rightW, height: sideH, borderRadius: RADIUS }}
             decode={Math.ceil(rightW * 2)}
-            onOpen={onOpen}
+            onOpen={open}
             overlay={
               index === side.length - 1 && overflow > 0
                 ? `+${overflow}`
@@ -272,6 +274,27 @@ function DaySection({
 
   const placeLine = placeLineFor(section, labels);
 
+  const openDayAsset = useCallback(
+    (assetId: string) => {
+      const seed =
+        section.photos.find((photo) => photo.assetId === assetId) ??
+        section.photos[0];
+      if (!seed) {
+        return;
+      }
+      onOpen(
+        {
+          id: `day:${section.dayKey}`,
+          centerLat: seed.lat,
+          centerLng: seed.lng,
+          photos: section.photos,
+        },
+        assetId,
+      );
+    },
+    [onOpen, section.dayKey, section.photos],
+  );
+
   return (
     <View style={styles.section}>
       <View style={styles.dateRow}>
@@ -283,7 +306,11 @@ function DaySection({
       <Text style={[styles.placeLabel, shell.soft]} numberOfLines={1}>
         {`📍 ${placeLine}`}
       </Text>
-      <DayCollage thumbs={thumbs} width={contentW} onOpen={onOpen} />
+      <DayCollage
+        thumbs={thumbs}
+        width={contentW}
+        onOpenAsset={openDayAsset}
+      />
     </View>
   );
 }
@@ -331,8 +358,8 @@ function PlaybackChrome({
 }
 
 /**
- * Photo timeline — days top-to-bottom; quiet days stay compact, rich days grow.
- * Detail / hide / cover still go through PhotoPreviewSheet.
+ * Detail / hide still go through PhotoPreviewSheet.
+ * Cover is map-only — playback taps open the full-size viewer.
  */
 export function PlaybackScreen() {
   const router = useRouter();
@@ -351,7 +378,7 @@ export function PlaybackScreen() {
   const { month } = useCurrentMonth();
   const { data, isPending, isError, refetch } = useMonthlyPhotos(month);
   const showLoading = useHeldBusy(isPending);
-  const { covers, setCover } = usePinCovers(month);
+  const { covers } = usePinCovers(month);
   const [selected, setSelected] = useState<PlaceCluster | null>(null);
   const [labels, setLabels] = useState<Record<string, string>>({});
   const [dateJumpOpen, setDateJumpOpen] = useState(false);
@@ -469,10 +496,6 @@ export function PlaybackScreen() {
     setSelected(cluster);
   }, []);
 
-  const selectedCoverKey = selected
-    ? placeBucketKey(selected.centerLat, selected.centerLng)
-    : null;
-
   const chrome = (
     <PlaybackChrome
       month={month}
@@ -541,8 +564,6 @@ export function PlaybackScreen() {
       <PhotoPreviewSheet
         cluster={selected}
         onClose={() => setSelected(null)}
-        coverAssetId={selectedCoverKey ? covers[selectedCoverKey] : null}
-        onSetCover={setCover}
       />
       <Modal
         visible={dateJumpOpen}

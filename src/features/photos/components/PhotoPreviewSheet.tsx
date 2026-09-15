@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Modal,
   Platform,
@@ -10,7 +11,10 @@ import {
   View,
   useWindowDimensions,
   type ListRenderItemInfo,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { strings } from '@/shared/constants/strings';
@@ -18,7 +22,11 @@ import { theme } from '@/shared/constants/theme';
 
 import { AssetThumbImage } from './AssetThumbImage';
 import { usePauseGridThumbWarmOnScroll } from '../hooks/usePauseGridThumbWarmOnScroll';
-import { warmGridThumbs } from '../services/mediaLibrary';
+import {
+  resolveAssetUri,
+  syncAssetDisplayUri,
+  warmGridThumbs,
+} from '../services/mediaLibrary';
 import type { PlaceCluster, PhotoRef } from '../types';
 import { placeBucketKey, resolveClusterDetailLabel } from '../utils/placeJourney';
 import { peekResolvedPlace } from '../services/placeResolve';
@@ -28,6 +36,8 @@ const PAGE_SIZE = 18;
 const COMPACT_HERO = 72;
 const COMPACT_STRIP = 36;
 const COMPACT_STRIP_MAX = 8;
+/** Full-bleed viewer — skip pin-thumb tier. */
+const VIEWER_IMAGE_SIZE = 1080;
 
 export interface PhotoPreviewSheetProps {
   /** null closes the sheet */
@@ -35,7 +45,7 @@ export interface PhotoPreviewSheetProps {
   onClose: () => void;
   /** Currently selected cover asset for this place bucket. */
   coverAssetId?: string | null;
-  /** Set cover for the cluster's place bucket. */
+  /** Set cover for the cluster's place bucket. Map home only. */
   onSetCover?: (placeKey: string, assetId: string) => void;
   /**
    * `compact` — floating card above bottom nav (map home).
@@ -71,20 +81,27 @@ const PhotoThumb = memo(function PhotoThumb({
   size,
   isCover,
   onSelectCover,
+  onOpenViewer,
 }: {
   photo: PhotoRef;
   size: number;
   isCover: boolean;
   onSelectCover?: () => void;
+  onOpenViewer?: () => void;
 }) {
+  const canSetCover = onSelectCover != null;
+  const canView = onOpenViewer != null;
   return (
     <Pressable
-      onLongPress={onSelectCover}
-      onPress={onSelectCover}
-      disabled={!onSelectCover}
+      onPress={canSetCover ? onSelectCover : onOpenViewer}
+      disabled={!canSetCover && !canView}
       accessibilityRole="button"
       accessibilityLabel={
-        isCover ? strings.map.coverSelected : strings.map.setAsCover
+        canSetCover
+          ? isCover
+            ? strings.map.coverSelected
+            : strings.map.setAsCover
+          : strings.playback.openPhoto
       }
       style={{ width: size, height: size, margin: theme.spacing.sm / 2 }}
     >
@@ -93,16 +110,79 @@ const PhotoThumb = memo(function PhotoThumb({
         size={size}
         style={styles.thumb}
       />
-      {isCover ? (
+      {canSetCover && isCover ? (
         <View style={styles.coverBadge}>
           <Text style={styles.coverBadgeText}>{strings.map.coverBadge}</Text>
         </View>
-      ) : onSelectCover ? (
+      ) : canSetCover ? (
         <View style={styles.coverHint}>
           <Text style={styles.coverHintText}>{strings.map.setAsCoverShort}</Text>
         </View>
       ) : null}
     </Pressable>
+  );
+});
+
+const ViewerPage = memo(function ViewerPage({
+  photo,
+  width,
+  height,
+}: {
+  photo: PhotoRef;
+  width: number;
+  height: number;
+}) {
+  // Dummy → bundled URI; real iOS → ph:// (1080 skips soft pin-thumb bake).
+  const syncUri = syncAssetDisplayUri(photo.assetId, VIEWER_IMAGE_SIZE);
+  const [asyncUri, setAsyncUri] = useState<string | null>(null);
+  const uri = syncUri ?? asyncUri;
+  const imageH = height - 48;
+  const dateLabel = formatTakenAt(photo.takenAt);
+
+  useEffect(() => {
+    if (syncUri) {
+      return;
+    }
+    let cancelled = false;
+    setAsyncUri(null);
+    void resolveAssetUri(photo.assetId, { imageSize: VIEWER_IMAGE_SIZE })
+      .then((next) => {
+        if (!cancelled) {
+          setAsyncUri(next);
+        }
+      })
+      .catch((error) => {
+        console.warn('[photos] viewer uri failed', photo.assetId, error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [photo.assetId, syncUri]);
+
+  return (
+    <View style={[styles.viewerPage, { width, height }]}>
+      {uri ? (
+        <Image
+          source={{ uri }}
+          style={{ width, height: imageH }}
+          contentFit="contain"
+          cachePolicy="memory-disk"
+          recyclingKey={`${photo.assetId}-viewer`}
+          priority="high"
+          transition={0}
+          allowDownscaling
+        />
+      ) : (
+        <View style={[styles.viewerPlaceholder, { width, height: imageH }]}>
+          <ActivityIndicator color={theme.colors.ink} />
+        </View>
+      )}
+      {dateLabel ? (
+        <Text style={styles.viewerDate} numberOfLines={1}>
+          {dateLabel}
+        </Text>
+      ) : null}
+    </View>
   );
 });
 
@@ -115,7 +195,7 @@ export function PhotoPreviewSheet({
   bottomOffset = 0,
 }: PhotoPreviewSheetProps) {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, height: windowH } = useWindowDimensions();
   const thumbWarmScroll = usePauseGridThumbWarmOnScroll();
   const placeKey = cluster
     ? placeBucketKey(cluster.centerLat, cluster.centerLng)
@@ -124,11 +204,15 @@ export function PhotoPreviewSheet({
   const [labelLoading, setLabelLoading] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [expanded, setExpanded] = useState(variant === 'sheet');
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const cell = (width - theme.spacing.md * 2 - theme.spacing.sm * 2) / 3;
+  const viewerOpen = viewerIndex != null;
+  const canSetCover = onSetCover != null;
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
     setExpanded(variant === 'sheet');
+    setViewerIndex(null);
   }, [cluster?.id, variant]);
 
   const heroPhoto = useMemo(() => {
@@ -157,6 +241,8 @@ export function PhotoPreviewSheet({
     }
     return cluster.photos.slice(0, COMPACT_STRIP_MAX);
   }, [cluster]);
+
+  const allPhotos = cluster?.photos ?? [];
 
   // Idle file thumbs — same path as playback/cards (not per-cell getAssetInfo).
   useEffect(() => {
@@ -231,20 +317,76 @@ export function PhotoPreviewSheet({
     );
   }, [cluster]);
 
-  const renderItem = useCallback(
+  const closeSheet = useCallback(() => {
+    setViewerIndex(null);
+    if (variant === 'compact') {
+      setExpanded(false);
+      onClose();
+      return;
+    }
+    onClose();
+  }, [onClose, variant]);
+
+  const onCloseViewer = useCallback(() => {
+    setViewerIndex(null);
+  }, []);
+
+  const onViewerMomentumEnd = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const x = event.nativeEvent.contentOffset.x;
+      const next = Math.round(x / Math.max(width, 1));
+      if (next >= 0 && next < allPhotos.length) {
+        setViewerIndex(next);
+      }
+    },
+    [allPhotos.length, width],
+  );
+
+  const getViewerLayout = useCallback(
+    (_: ArrayLike<PhotoRef> | null | undefined, index: number) => ({
+      length: width,
+      offset: width * index,
+      index,
+    }),
+    [width],
+  );
+
+  const viewerH = Math.max(
+    280,
+    windowH - insets.top - insets.bottom - 72,
+  );
+
+  const renderViewerPage = useCallback(
     ({ item }: ListRenderItemInfo<PhotoRef>) => (
+      <ViewerPage photo={item} width={width} height={viewerH} />
+    ),
+    [viewerH, width],
+  );
+
+  const renderItem = useCallback(
+    ({ item, index }: ListRenderItemInfo<PhotoRef>) => (
       <PhotoThumb
         photo={item}
         size={cell}
         isCover={coverAssetId === item.assetId}
         onSelectCover={
-          onSetCover && placeKey
-            ? () => onSetCover(placeKey, item.assetId)
+          canSetCover && placeKey
+            ? () => onSetCover?.(placeKey, item.assetId)
             : undefined
+        }
+        onOpenViewer={
+          canSetCover
+            ? undefined
+            : () => {
+                const fullIndex = allPhotos.findIndex(
+                  (p) => p.assetId === item.assetId,
+                );
+                setViewerIndex(fullIndex >= 0 ? fullIndex : index);
+              }
         }
       />
     ),
-    [cell, coverAssetId, onSetCover, placeKey],
+    [allPhotos, canSetCover, cell, coverAssetId, onSetCover, placeKey],
   );
 
   const titleText = labelLoading
@@ -324,24 +466,22 @@ export function PhotoPreviewSheet({
         transparent
         presentationStyle="overFullScreen"
         onRequestClose={() => {
-          if (variant === 'compact') {
-            setExpanded(false);
-            onClose();
+          if (viewerOpen) {
+            onCloseViewer();
             return;
           }
-          onClose();
+          closeSheet();
         }}
       >
         <View style={styles.backdrop}>
           <Pressable
             style={StyleSheet.absoluteFill}
             onPress={() => {
-              if (variant === 'compact') {
-                setExpanded(false);
-                onClose();
+              if (viewerOpen) {
+                onCloseViewer();
                 return;
               }
-              onClose();
+              closeSheet();
             }}
             accessibilityRole="button"
             accessibilityLabel={strings.common.cancel}
@@ -349,45 +489,79 @@ export function PhotoPreviewSheet({
           <View
             style={[
               styles.sheet,
-              { paddingBottom: Math.max(insets.bottom, theme.spacing.sm) },
+              viewerOpen && styles.sheetViewer,
+              {
+                paddingBottom: Math.max(insets.bottom, theme.spacing.sm),
+              },
             ]}
           >
-            <View style={styles.handle} />
+            <View
+              style={[styles.handle, viewerOpen && styles.handleOnDark]}
+            />
             <View style={styles.header}>
               <View style={styles.titleBlock}>
-                <Text style={styles.title} numberOfLines={1}>
-                  {titleText}
+                <Text
+                  style={[styles.title, viewerOpen && styles.titleOnDark]}
+                  numberOfLines={1}
+                >
+                  {viewerOpen ? strings.playback.openPhoto : titleText}
                 </Text>
-                {cluster && !labelLoading && placeLabel ? (
-                  <Text style={styles.meta} numberOfLines={1}>
-                    {strings.map.clusterCount(cluster.photos.length)}
+                {viewerOpen ? (
+                  <Text style={[styles.meta, styles.metaOnDark]} numberOfLines={1}>
+                    {strings.playback.viewerHint}
                   </Text>
-                ) : null}
-                {takenLabel ? (
-                  <Text style={styles.meta} numberOfLines={1}>
-                    {takenLabel}
-                  </Text>
-                ) : null}
-                {onSetCover ? (
-                  <Text style={styles.meta}>{strings.map.coverHint}</Text>
-                ) : null}
+                ) : (
+                  <>
+                    {cluster && !labelLoading && placeLabel ? (
+                      <Text style={styles.meta} numberOfLines={1}>
+                        {strings.map.clusterCount(cluster.photos.length)}
+                      </Text>
+                    ) : null}
+                    {takenLabel ? (
+                      <Text style={styles.meta} numberOfLines={1}>
+                        {takenLabel}
+                      </Text>
+                    ) : null}
+                    {canSetCover ? (
+                      <Text style={styles.meta}>{strings.map.coverHint}</Text>
+                    ) : (
+                      <Text style={styles.meta}>{strings.playback.gridHint}</Text>
+                    )}
+                  </>
+                )}
               </View>
               <Pressable
-                onPress={() => {
-                  if (variant === 'compact') {
-                    setExpanded(false);
-                    onClose();
-                    return;
-                  }
-                  onClose();
-                }}
+                onPress={viewerOpen ? onCloseViewer : closeSheet}
                 accessibilityRole="button"
               >
-                <Text style={styles.close}>{strings.common.confirm}</Text>
+                <Text style={[styles.close, viewerOpen && styles.closeOnDark]}>
+                  {viewerOpen
+                    ? strings.common.cancel
+                    : strings.common.confirm}
+                </Text>
               </Pressable>
             </View>
-            {cluster ? (
+            {viewerOpen && cluster ? (
               <FlatList
+                key="photo-viewer"
+                style={styles.viewerList}
+                data={allPhotos}
+                keyExtractor={(item) => item.assetId}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                initialScrollIndex={viewerIndex ?? 0}
+                getItemLayout={getViewerLayout}
+                renderItem={renderViewerPage}
+                onMomentumScrollEnd={onViewerMomentumEnd}
+                initialNumToRender={1}
+                maxToRenderPerBatch={1}
+                windowSize={2}
+                removeClippedSubviews={Platform.OS === 'android'}
+              />
+            ) : cluster ? (
+              <FlatList
+                key="photo-grid"
                 style={styles.grid}
                 data={pagePhotos}
                 keyExtractor={(item) => item.assetId}
@@ -501,6 +675,11 @@ const styles = StyleSheet.create({
     maxHeight: '80%',
     overflow: 'hidden',
   },
+  sheetViewer: {
+    height: '92%',
+    maxHeight: '92%',
+    backgroundColor: theme.colors.viewerBackdrop,
+  },
   handle: {
     alignSelf: 'center',
     width: 34,
@@ -509,6 +688,9 @@ const styles = StyleSheet.create({
     backgroundColor: theme.tint.mid,
     marginTop: theme.spacing.sm,
     marginBottom: theme.spacing.xs,
+  },
+  handleOnDark: {
+    backgroundColor: theme.colors.viewerMuted,
   },
   header: {
     flexDirection: 'row',
@@ -528,10 +710,16 @@ const styles = StyleSheet.create({
     color: theme.colors.ink,
     fontWeight: '600',
   },
+  titleOnDark: {
+    color: theme.colors.background,
+  },
   meta: {
     ...theme.type.micro,
     fontFamily: theme.fonts.sans,
     color: theme.colors.inkSoft,
+  },
+  metaOnDark: {
+    color: theme.colors.viewerMuted,
   },
   close: {
     ...theme.type.body,
@@ -539,6 +727,9 @@ const styles = StyleSheet.create({
     color: theme.colors.terracotta,
     fontWeight: '600',
     marginTop: 2,
+  },
+  closeOnDark: {
+    color: theme.colors.background,
   },
 
   list: {
@@ -582,5 +773,23 @@ const styles = StyleSheet.create({
     color: theme.colors.surface,
     fontSize: 9,
     fontWeight: '600',
+  },
+  viewerList: {
+    flex: 1,
+  },
+  viewerPage: {
+    justifyContent: 'center',
+  },
+  viewerPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewerDate: {
+    ...theme.type.micro,
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.viewerMuted,
+    textAlign: 'center',
+    marginTop: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
   },
 });

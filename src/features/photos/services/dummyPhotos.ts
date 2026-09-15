@@ -84,27 +84,29 @@ function iosAddr(
  * Nationwide demo hubs — map pins, journey chips, 발도장, card “위치별”.
  * Coordinates stay inside the named leaf so jitter still resolves via
  * offline PIP / canned geocode (see dummyHubs.pip.check.ts).
- * One photo per hub on consecutive local days ending today (this month)
- * so recap day cells stay sparse but the streak line can show.
+ *
+ * QA packing (see buildDummyMonthlyPhotos):
+ * - Fat hubs (count ≥ 4) → all shots on *today* (tight jitter) so 몰아보기
+ *   shows a full-day grid and 회고 “많이 남긴 곳” has a 13장 place.
+ * - Thin hubs (count 1) → one photo each on earlier days for map/stamp span.
  *
  * Stress: `DUMMY_STRESS_MULT` multiplies per-hub counts.
- * Image URIs reuse a small pool so picsum/network doesn't mask JS jank.
  */
 /** __DEV__ map/CPU stress. Set back to 1 after stress testing. */
 export const DUMMY_STRESS_MULT = 1;
 
 /**
- * Bump when HUBS lat/lng set changes so 발도장 drops the stale GPS snapshot
- * and rebuilds 모은 동네 from the new sample album.
+ * Bump when HUBS lat/lng or count packing changes so 발도장 drops the stale
+ * GPS snapshot and rebuilds 모은 동네 from the new sample album.
  */
-export const DUMMY_HUBS_REV = 3;
+export const DUMMY_HUBS_REV = 4;
 
 /** One hub per major region — enough for glance-dot coverage. */
 const HUBS: DummyHub[] = [
   {
     lat: 37.5345,
     lng: 126.9946,
-    count: 1,
+    count: 13,
     label: '이태원',
     address: iosAddr({
       region: '서울특별시',
@@ -235,7 +237,7 @@ const HUBS: DummyHub[] = [
   {
     lat: 36.328,
     lng: 127.427,
-    count: 1,
+    count: 4,
     label: '대전',
     address: iosAddr({
       region: '대전광역시',
@@ -352,7 +354,7 @@ const HUBS: DummyHub[] = [
   {
     lat: 35.1587,
     lng: 129.1604,
-    count: 1,
+    count: 6,
     label: '해운대',
     address: iosAddr({
       region: '부산광역시',
@@ -456,18 +458,32 @@ export function buildDummyMonthlyPhotos(month: MonthKey): MonthlyPhotos {
       ? Math.min(now.getDate(), daysInMonth)
       : daysInMonth;
   const photos: PhotoRef[] = [];
-  const total = dummyPhotoCount();
-  const firstDay = Math.max(1, lastDay - total + 1);
   let i = 0;
+  /** Thin hubs fill earlier days so the streak/map still span the month. */
+  let thinSlot = 0;
+  const earlierSpan = Math.max(1, lastDay - 1);
 
   for (const hub of HUBS) {
     const n = hubCount(hub);
-    const tight = n >= 50;
+    const fat = n >= 4;
+    const tight = fat;
     for (let k = 0; k < n; k += 1) {
-      const day = Math.min(lastDay, firstDay + i);
+      const day = fat
+        ? lastDay
+        : Math.max(1, lastDay - 1 - (thinSlot % earlierSpan));
+      if (!fat) {
+        thinSlot += 1;
+      }
       photos.push({
         assetId: `${DUMMY_ASSET_PREFIX}${month}:${i}`,
-        takenAt: new Date(year, monthIndex, day, 12, i % 12, 0).toISOString(),
+        takenAt: new Date(
+          year,
+          monthIndex,
+          day,
+          10 + (k % 8),
+          (i * 7) % 60,
+          0,
+        ).toISOString(),
         lat: hub.lat + jitter(i, 0, tight),
         lng: hub.lng + jitter(i, 1, tight),
       });

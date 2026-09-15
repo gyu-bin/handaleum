@@ -65,11 +65,6 @@ function monthHeading(month: string): string {
   return `${y}년 ${Number(m)}월`;
 }
 
-function localMonthDay(iso: string): { monthNum: number; day: number } {
-  const d = new Date(iso);
-  return { monthNum: d.getMonth() + 1, day: d.getDate() };
-}
-
 function StatPinIcon({ color }: { color: string }) {
   return (
     <Svg width={16} height={16} viewBox="0 0 24 24" accessibilityElementsHidden>
@@ -574,9 +569,6 @@ export function CardListScreen() {
                       contentContainerStyle={styles.topPlaceRow}
                     >
                       {topPlaces.map((place) => {
-                        const { monthNum, day } = localMonthDay(
-                          place.latestTakenAt,
-                        );
                         return (
                           <View key={place.identity} style={styles.topPlaceCard}>
                             <Pressable
@@ -594,9 +586,11 @@ export function CardListScreen() {
                               />
                             </Pressable>
                             <Pressable
-                              onPress={() => setTab('place')}
+                              onPress={() =>
+                                openViewer(place.photos, place.coverAssetId)
+                              }
                               accessibilityRole="button"
-                              accessibilityLabel={place.label}
+                              accessibilityLabel={`${place.label}, ${strings.months.photoCount(place.photoCount)}`}
                             >
                               <Text
                                 style={[styles.topPlaceLabel, shell.ink]}
@@ -608,11 +602,7 @@ export function CardListScreen() {
                                 style={[styles.topPlaceMeta, shell.soft]}
                                 numberOfLines={1}
                               >
-                                {strings.cards.topPlaceMeta(
-                                  monthNum,
-                                  day,
-                                  place.photoCount,
-                                )}
+                                {strings.cards.topPlaceMeta(place.photoCount)}
                               </Text>
                             </Pressable>
                           </View>

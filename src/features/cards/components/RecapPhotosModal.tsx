@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   FlatList,
   Modal,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -28,9 +27,8 @@ import type { PhotoRef } from '../../photos/types';
 const VIEWER_IMAGE_SIZE = 1080;
 
 function viewerUri(assetId: string): string | null {
-  return Platform.OS === 'ios'
-    ? `ph://${assetId}`
-    : syncAssetDisplayUri(assetId, VIEWER_IMAGE_SIZE);
+  // Dummy → bundled URI; real iOS → ph:// (1080 skips soft pin-thumb bake).
+  return syncAssetDisplayUri(assetId, VIEWER_IMAGE_SIZE);
 }
 
 const PhotoPage = memo(function PhotoPage({

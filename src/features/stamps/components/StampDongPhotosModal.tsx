@@ -210,11 +210,8 @@ const ViewerPage = memo(function ViewerPage({
   width: number;
   height: number;
 }) {
-  // iOS: ph:// only — never pin-export file:// (can blank Optimized Storage assets).
-  const syncUri =
-    Platform.OS === 'ios'
-      ? `ph://${item.assetId}`
-      : syncAssetDisplayUri(item.assetId, VIEWER_IMAGE_SIZE);
+  // Dummy → bundled URI; real iOS → ph:// (never soft pin-thumb bake).
+  const syncUri = syncAssetDisplayUri(item.assetId, VIEWER_IMAGE_SIZE);
   const [asyncUri, setAsyncUri] = useState<string | null>(null);
   const uri = syncUri ?? asyncUri;
   const imageH = height - 48;

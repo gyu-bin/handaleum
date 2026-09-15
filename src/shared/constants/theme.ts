@@ -115,6 +115,13 @@ export const theme = {
     line: '#E8E4DC',
     overlay: 'rgba(251,249,244,0.88)',
     overlayDark: 'rgba(51,71,91,0.45)',
+    /**
+     * Full-bleed photo viewer (몰아보기 / 발도장). Deep night navy — darker
+     * than `ink` so photos pop without muddy mid-tone slate.
+     */
+    viewerBackdrop: '#171E27',
+    /** Secondary chrome on `viewerBackdrop` (hints, dates). */
+    viewerMuted: 'rgba(247,241,232,0.55)',
     labelBg: 'rgba(251,249,244,0.9)',
     selectedGlow: 'rgba(51,71,91,0.18)',
     shadow: 'rgba(51,71,91,0.10)',
