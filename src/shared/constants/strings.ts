@@ -178,7 +178,7 @@ export const strings = {
     coverAlready: '이 장소의 대표 사진',
     androidLocationTipTitle: '카메라 위치 태그',
     androidLocationTipBody:
-      '갤럭시·안드로이드는 카메라 앱 → 설정 → 위치 태그를 켜 두세요. 꺼져 있으면 새로 찍은 사진이 지도에 안 올라갑니다.',
+      '갤럭시·안드로이드는 기본 카메라 앱을 연 뒤, 상단 또는 더보기에서 설정으로 들어가 「위치 태그」또는 「위치 정보」를 켜 주세요. 사진 파일에 촬영 장소가 함께 저장되어야 지도에 표시됩니다.\n\n위치 태그를 켠 뒤 새로 찍는 사진부터 지도에 올라갑니다. 이미 GPS 없이 저장된 사진은 태그를 켜도 위치가 생기지 않아, 지도에는 나타나지 않습니다.',
     androidLocationTipConfirm: '확인',
     hidePhoto: '이 사진 빼기',
   },
@@ -226,7 +226,7 @@ export const strings = {
       'GPS가 없는 사진은 지도에 안 뜹니다. 카드 만들기에는 넣을 수 있어요.',
     /** Android only — shown when this month has GPS-less photos. */
     androidLocationTip:
-      '카메라 앱 → 설정 → 위치 태그를 켜 두면, 앞으로 찍는 사진이 지도에 표시됩니다.',
+      '기본 카메라 앱 → 상단·더보기 설정 → 「위치 태그」또는 「위치 정보」를 켜 주세요. 켠 뒤 새로 찍는 사진부터 지도에 표시됩니다. 이미 GPS 없이 저장된 사진은 태그를 켜도 위치가 생기지 않아 지도에 나타나지 않습니다.',
     noLocationSubtitle: (monthLabel: string) =>
       `${monthLabel} · GPS가 없어 지도에 안 뜹니다`,
     noLocationEmpty: '위치 없는 사진이 없습니다',

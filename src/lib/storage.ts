@@ -200,7 +200,7 @@ export function setStampsScanIntroSeen(): void {
   storage.set(STAMPS_SCAN_INTRO_KEY, '1');
 }
 
-const ANDROID_LOCATION_TIP_KEY = 'androidLocationTipSeen';
+const ANDROID_LOCATION_TIP_KEY = 'androidLocationTipSeenV2';
 
 /** First map entry on Android: camera location-tagging tip. */
 export function getAndroidLocationTipSeen(): boolean {
