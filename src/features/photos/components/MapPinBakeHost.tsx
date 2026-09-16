@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, PixelRatio, StyleSheet, Text, View } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 
 import { theme } from '@/shared/constants/theme';
@@ -11,17 +11,22 @@ import {
   subscribePinBake,
 } from '../services/mapPinBake';
 
-const BORDER = 2;
-const RADIUS = 9;
-const CARET_W = 10;
-const CARET_H = 6;
+/** Logical (dp) chrome — scaled by PixelRatio when laying out the bake view. */
+const BORDER_DP = 2;
+const RADIUS_DP = 9;
+const CARET_W_DP = 10;
+const CARET_H_DP = 6;
 /** Let Image paint into the layer before view-shot. */
-const CAPTURE_SETTLE_MS = 50;
+const CAPTURE_SETTLE_MS = 80;
 const DOT_SETTLE_MS = 24;
 
 /**
  * Off-screen host (outside NaverMapView). Bakes one framed pin PNG at a time
  * so markers can use native `image.httpUri` with paper-pin chrome.
+ *
+ * Layout is in *device pixels as dp numbers* (cardSize × PixelRatio) so the
+ * captured PNG is dense enough for Naver markers sized in logical dp. Capturing
+ * a 48dp view and only upscaling the bitmap left pins soft on @2x/@3x.
  */
 export function MapPinBakeHost() {
   const job = useSyncExternalStore(subscribePinBake, getActivePinBakeJob, () => null);
@@ -62,6 +67,7 @@ export function MapPinBakeHost() {
         finish(null);
         return;
       }
+      // Capture the laid-out pixel buffer as-is (already @ PixelRatio).
       void captureRef(ref, {
         format: 'png',
         quality: 1,
@@ -93,7 +99,12 @@ export function MapPinBakeHost() {
     return null;
   }
 
-  const cardSize = job.cardSize;
+  const scale = PixelRatio.get();
+  const cardSize = Math.max(1, Math.round(job.cardSize * scale));
+  const border = Math.max(1, Math.round(BORDER_DP * scale));
+  const radius = Math.max(1, Math.round(RADIUS_DP * scale));
+  const caretW = Math.max(2, Math.round(CARET_W_DP * scale));
+  const caretH = Math.max(2, Math.round(CARET_H_DP * scale));
   const selected = job.selected;
 
   if (job.kind === 'dot') {
@@ -119,12 +130,18 @@ export function MapPinBakeHost() {
                 height: diameter,
                 borderRadius: diameter / 2,
                 borderColor: ring,
-                borderWidth: selected ? 2.5 : 2,
+                borderWidth: selected ? Math.max(2, Math.round(2.5 * scale)) : border,
                 backgroundColor: theme.colors.splashMark,
               },
             ]}
           >
-            <Text style={styles.dotCount} numberOfLines={1}>
+            <Text
+              style={[
+                styles.dotCount,
+                { fontSize: Math.round(13 * scale), lineHeight: Math.round(16 * scale) },
+              ]}
+              numberOfLines={1}
+            >
               {job.count > 99 ? '99+' : String(job.count)}
             </Text>
           </View>
@@ -135,8 +152,8 @@ export function MapPinBakeHost() {
 
   const frame = selected ? theme.colors.splashMark : theme.colors.surface;
   const tip = selected ? theme.colors.splashMark : theme.colors.surface;
-  const outerW = cardSize + BORDER * 2;
-  const outerH = outerW + CARET_H;
+  const outerW = cardSize + border * 2;
+  const outerH = outerW + caretH;
 
   return (
     <View style={styles.host} pointerEvents="none">
@@ -151,9 +168,9 @@ export function MapPinBakeHost() {
             {
               width: outerW,
               height: outerW,
-              borderRadius: RADIUS,
+              borderRadius: radius,
               borderColor: frame,
-              borderWidth: BORDER,
+              borderWidth: border,
             },
           ]}
         >
@@ -173,9 +190,9 @@ export function MapPinBakeHost() {
           style={[
             styles.caret,
             {
-              borderLeftWidth: CARET_W / 2,
-              borderRightWidth: CARET_W / 2,
-              borderTopWidth: CARET_H,
+              borderLeftWidth: caretW / 2,
+              borderRightWidth: caretW / 2,
+              borderTopWidth: caretH,
               borderTopColor: tip,
             },
           ]}
@@ -210,9 +227,7 @@ const styles = StyleSheet.create({
   dotCount: {
     color: theme.colors.surface,
     fontFamily: theme.fonts.sans,
-    fontSize: 13,
     fontWeight: '700',
-    lineHeight: 16,
     fontVariant: ['tabular-nums'],
   },
 });

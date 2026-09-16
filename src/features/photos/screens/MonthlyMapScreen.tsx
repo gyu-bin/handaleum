@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Redirect, useRouter, type Href } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
@@ -11,6 +11,10 @@ import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
 import { useShellBackground } from '@/shared/hooks/useShellBackground';
 import { useTheme } from '@/shared/theme/ThemeProvider';
+import {
+  getAndroidLocationTipSeen,
+  setAndroidLocationTipSeen,
+} from '@/lib/storage';
 
 import { useOnboarding } from '@/features/onboarding/hooks/useOnboarding';
 import { IndexingBanner } from '@/features/stamps/components/IndexingBanner';
@@ -20,6 +24,7 @@ import { scheduleStampLibrarySyncFromMap } from '@/features/stamps/services/stam
 
 import { DEFAULT_MAP_ZOOM, MapCanvas } from '../components/MapCanvas';
 import { clusterSeedId } from '../components/MapClusterMarker';
+import { AndroidLocationTipModal } from '../components/AndroidLocationTipModal';
 import { HomeNavBar } from '../components/HomeNavBar';
 import { APP_NAV_ITEMS } from '../constants/appNav';
 import { PhotoPreviewSheet } from '../components/PhotoPreviewSheet';
@@ -88,6 +93,13 @@ export function MonthlyMapScreen() {
   const hasAccess = hasLibraryAccess || isDevDummyPhotosEnabled();
   const { month, setMonth, canOpenMonth } = useCurrentMonth();
   const { covers, setCover } = usePinCovers(month);
+  const [androidTipOpen, setAndroidTipOpen] = useState(
+    () => Platform.OS === 'android' && !getAndroidLocationTipSeen(),
+  );
+  const onAndroidTipConfirm = useCallback(() => {
+    setAndroidLocationTipSeen();
+    setAndroidTipOpen(false);
+  }, []);
   const {
     data,
     isPending,
@@ -410,6 +422,11 @@ export function MonthlyMapScreen() {
       </View>
 
       <HomeNavBar items={MAP_NAV_ITEMS} />
+
+      <AndroidLocationTipModal
+        visible={androidTipOpen}
+        onConfirm={onAndroidTipConfirm}
+      />
 
       <PhotoPreviewSheet
         cluster={selected}

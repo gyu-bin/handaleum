@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -18,6 +18,7 @@ import { useOnboarding } from '../hooks/useOnboarding';
  *
  * There is no import toggle: the system photo dialog already asks for full vs
  * limited access, so asking first in our own UI only added a tap.
+ * Android camera location-tag tip lives on first map entry (modal).
  */
 export function OnboardingScreen() {
   const shellBg = useShellBackground();
@@ -28,7 +29,6 @@ export function OnboardingScreen() {
   const { markSeen } = useOnboarding();
   const { request } = usePhotoPermission();
   const [busy, setBusy] = useState(false);
-  const showAndroidLocationTip = Platform.OS === 'android' && !isReplay;
 
   const leaveReplay = useCallback(() => {
     if (router.canGoBack()) {
@@ -103,11 +103,6 @@ export function OnboardingScreen() {
           {!isReplay ? (
             <Text style={[styles.privacy, shell.subtle]}>
               {strings.onboarding.privacy}
-            </Text>
-          ) : null}
-          {showAndroidLocationTip ? (
-            <Text style={[styles.androidTip, shell.soft]}>
-              {strings.onboarding.androidLocationTip}
             </Text>
           ) : null}
           <Button
@@ -200,14 +195,6 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.sans,
     letterSpacing: -0.1,
     marginBottom: theme.spacing.md,
-  },
-  androidTip: {
-    ...theme.type.micro,
-    fontFamily: theme.fonts.sans,
-    letterSpacing: -0.1,
-    lineHeight: 18,
-    marginBottom: theme.spacing.md,
-    marginTop: -theme.spacing.sm,
   },
   startBtn: {
     alignSelf: 'stretch',

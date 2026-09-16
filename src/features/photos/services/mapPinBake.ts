@@ -25,8 +25,8 @@ const listeners = new Set<() => void>();
 
 /** Bound baked PNG path cache — month switches used to retain every pin forever. */
 const BAKE_CACHE_MAX = 128;
-/** Cap pending bakes — excess fall back to raw thumbs so zoom doesn't stall. */
-const BAKE_QUEUE_MAX = 36;
+/** Cap pending bakes — excess re-queue later; markers wait for a framed PNG. */
+const BAKE_QUEUE_MAX = 64;
 
 function cacheBake(key: string, uri: string) {
   if (cache.has(key)) {
@@ -53,8 +53,8 @@ function bakeKey(
   count: number,
   kind: 'photo' | 'dot' = 'photo',
 ): string {
-  // v4: larger photo pins + navy count-only cluster dots.
-  return `v4|${kind}|${photoUri}|${selected ? 1 : 0}|${cardSize}|${count}`;
+  // v7: markers wait for dense framed PNG (no raw JPEG fallback).
+  return `v7|${kind}|${photoUri}|${selected ? 1 : 0}|${cardSize}|${count}`;
 }
 
 function trimQueue() {

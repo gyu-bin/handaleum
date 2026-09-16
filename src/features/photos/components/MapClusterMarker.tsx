@@ -16,6 +16,8 @@ const CARD = 48;
 const CARD_SELECTED = 52;
 const BORDER = 2;
 const CARET_H = 6;
+/** Soft raw JPEGs as markers look muddy vs sheet thumbs — retry framed bake. */
+const BAKE_RETRY_MAX = 4;
 
 /** Earliest photo in the cluster — stable React key across zoom grain changes. */
 export function clusterSeedId(cluster: PlaceCluster): string {
@@ -63,7 +65,7 @@ function MapClusterMarkerInner({
     id: string;
     uri: string;
   } | null>(null);
-  /** Framed bake when ready; until then we show the raw thumb file. */
+  /** Framed bake only — raw thumbs on Naver markers look soft vs sheet images. */
   const [framedUri, setFramedUri] = useState<string | null>(null);
   const lastHttpRef = useRef<MapImageProp | null>(null);
 
@@ -133,41 +135,51 @@ function MapClusterMarkerInner({
     };
   }, [displayAssetId]);
 
-  // Always bake as a photo pin (no numeric cluster badge).
+  // Paper-frame PNG only — never paint the raw JPEG as the marker.
   useEffect(() => {
     if (!photoUri || !displayAssetId) {
       setFramedUri(null);
       return;
     }
     let cancelled = false;
-    void requestMapPinBake(photoUri, selected, cardSize, 1)
-      .then((baked) => {
-        if (!cancelled && baked) {
-          setFramedUri(baked);
+    const run = async () => {
+      for (let attempt = 0; attempt < BAKE_RETRY_MAX && !cancelled; attempt += 1) {
+        try {
+          const baked = await requestMapPinBake(photoUri, selected, cardSize, 1);
+          if (cancelled) {
+            return;
+          }
+          if (baked) {
+            setFramedUri(baked);
+            return;
+          }
+        } catch (error) {
+          console.warn('map pin bake request failed', error);
         }
-      })
-      .catch((error) => {
-        console.warn('map pin bake request failed', error);
-      });
+        if (cancelled) {
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+      }
+    };
+    void run();
     return () => {
       cancelled = true;
     };
   }, [photoUri, selected, cardSize, displayAssetId]);
 
   const image = useMemo((): MapImageProp | null => {
-    const uri = framedUri ?? photoUri;
-    if (uri && displayAssetId) {
+    if (framedUri && displayAssetId) {
       const next: MapImageProp = {
-        httpUri: uri,
-        reuseIdentifier: framedUri
-          ? `framed-v4-${displayAssetId}-${cardSize}`
-          : `thumb-${displayAssetId}-${cardSize}`,
+        httpUri: framedUri,
+        reuseIdentifier: `framed-v7-${displayAssetId}-${cardSize}`,
       };
       lastHttpRef.current = next;
       return next;
     }
+    // Keep previous framed pin across cover/size churn; never fall back to raw JPEG.
     return lastHttpRef.current;
-  }, [framedUri, photoUri, displayAssetId, cardSize]);
+  }, [framedUri, displayAssetId, cardSize]);
 
   if (!image) {
     return null;
@@ -181,8 +193,6 @@ function MapClusterMarkerInner({
       height={markerH}
       anchor={{ x: 0.5, y: 1 }}
       zIndex={selected ? 10 : 2}
-      // Full opacity even before the paper-frame bake — dimming looked like a
-      // white filter, and Android often stays on the raw thumb longer.
       alpha={1}
       // Hide under map POI labels only — do not drop neighboring photo pins.
       isHideCollidedSymbols

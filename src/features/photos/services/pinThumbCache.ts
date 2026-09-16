@@ -11,7 +11,7 @@ import { storage } from '@/lib/storage';
 /** Cap on-disk pin thumbs — visible pins + some scroll backlog, not whole library. */
 const MAX_DISK_THUMBS = 400;
 const LRU_KEY = 'pinThumbLru';
-const DIR_NAME = 'pin-thumbs-v1';
+const DIR_NAME = 'pin-thumbs-v3';
 
 function thumbDir(): string | null {
   if (!cacheDirectory) {

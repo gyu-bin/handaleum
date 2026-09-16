@@ -807,14 +807,19 @@ export function waitWhilePinExportBusy(maxMs = 2500): Promise<void> {
   });
 }
 
-/** Pin thumbs are ~44pt; 128px covers @3x without shipping full camera-roll files. */
-const PIN_THUMB_WIDTH = 128;
+/** Pin thumbs: ≥ card×@3x (~156) with headroom for dense bake layout. */
+const PIN_THUMB_WIDTH = 384;
+/**
+ * Only grid/pin-sized requests may reuse the pin file thumb. Heroes (256+)
+ * must not inherit this soft bake after PIN_THUMB_WIDTH grew past 256.
+ */
+const PIN_THUMB_DISPLAY_MAX = 160;
 
 /**
  * Sync display URI for list cells — no Promise, no setState on scroll.
- * Prefers a warm ~128px `file://` pin thumb only when `imageSize` is thumb-sized
+ * Prefers a warm pin `file://` thumb only when `imageSize` is thumb-sized
  * (avoids full `ph://` decode on dense grids). Hero / collage (256+) skip the
- * pin thumb so they are not stuck on a soft 128px bake after warmGridThumbs.
+ * pin thumb so they are not stuck on a soft pin bake after warmGridThumbs.
  * Else iOS/dummy sync; Android cache hit or null (warm via
  * {@link resolveAssetUri} / {@link resolveAssetFileUri}).
  */
@@ -825,7 +830,7 @@ export function syncAssetDisplayUri(
   if (isDummyAssetId(assetId)) {
     return dummyAssetImageUri(assetId, imageSize);
   }
-  if (imageSize <= PIN_THUMB_WIDTH) {
+  if (imageSize <= PIN_THUMB_DISPLAY_MAX) {
     const file = peekAssetFileUri(assetId);
     if (file) {
       return file;
@@ -975,7 +980,7 @@ async function exportPinThumbFileUri(assetId: string): Promise<string | null> {
       const out = await manipulateAsync(
         src,
         [{ resize: { width: PIN_THUMB_WIDTH } }],
-        { compress: 0.78, format: SaveFormat.JPEG },
+        { compress: 0.9, format: SaveFormat.JPEG },
       );
       const fileUri = normalizeFileCandidate(out.uri) ?? out.uri;
       // Only accept manipulator cache output — never a Photos DCIM path.

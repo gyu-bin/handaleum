@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { strings } from '@/shared/constants/strings';
 import { theme } from '@/shared/constants/theme';
+import { Button } from '@/shared/components/Button';
 
 import { AssetThumbImage } from './AssetThumbImage';
 import { usePauseGridThumbWarmOnScroll } from '../hooks/usePauseGridThumbWarmOnScroll';
@@ -80,27 +81,22 @@ const PhotoThumb = memo(function PhotoThumb({
   photo,
   size,
   isCover,
-  onSelectCover,
   onOpenViewer,
 }: {
   photo: PhotoRef;
   size: number;
   isCover: boolean;
-  onSelectCover?: () => void;
   onOpenViewer?: () => void;
 }) {
-  const canSetCover = onSelectCover != null;
   const canView = onOpenViewer != null;
   return (
     <Pressable
-      onPress={canSetCover ? onSelectCover : onOpenViewer}
-      disabled={!canSetCover && !canView}
+      onPress={onOpenViewer}
+      disabled={!canView}
       accessibilityRole="button"
       accessibilityLabel={
-        canSetCover
-          ? isCover
-            ? strings.map.coverSelected
-            : strings.map.setAsCover
+        isCover
+          ? `${strings.playback.openPhoto}, ${strings.map.coverBadge}`
           : strings.playback.openPhoto
       }
       style={{ width: size, height: size, margin: theme.spacing.sm / 2 }}
@@ -110,13 +106,9 @@ const PhotoThumb = memo(function PhotoThumb({
         size={size}
         style={styles.thumb}
       />
-      {canSetCover && isCover ? (
+      {isCover ? (
         <View style={styles.coverBadge}>
           <Text style={styles.coverBadgeText}>{strings.map.coverBadge}</Text>
-        </View>
-      ) : canSetCover ? (
-        <View style={styles.coverHint}>
-          <Text style={styles.coverHintText}>{strings.map.setAsCoverShort}</Text>
         </View>
       ) : null}
     </Pressable>
@@ -353,7 +345,11 @@ export function PhotoPreviewSheet({
 
   const viewerH = Math.max(
     280,
-    windowH - insets.top - insets.bottom - 72,
+    windowH -
+      insets.top -
+      insets.bottom -
+      72 -
+      (canSetCover ? 64 : 0),
   );
 
   const renderViewerPage = useCallback(
@@ -369,25 +365,21 @@ export function PhotoPreviewSheet({
         photo={item}
         size={cell}
         isCover={coverAssetId === item.assetId}
-        onSelectCover={
-          canSetCover && placeKey
-            ? () => onSetCover?.(placeKey, item.assetId)
-            : undefined
-        }
-        onOpenViewer={
-          canSetCover
-            ? undefined
-            : () => {
-                const fullIndex = allPhotos.findIndex(
-                  (p) => p.assetId === item.assetId,
-                );
-                setViewerIndex(fullIndex >= 0 ? fullIndex : index);
-              }
-        }
+        onOpenViewer={() => {
+          const fullIndex = allPhotos.findIndex(
+            (p) => p.assetId === item.assetId,
+          );
+          setViewerIndex(fullIndex >= 0 ? fullIndex : index);
+        }}
       />
     ),
-    [allPhotos, canSetCover, cell, coverAssetId, onSetCover, placeKey],
+    [allPhotos, cell, coverAssetId],
   );
+
+  const viewerPhoto =
+    viewerIndex != null ? (allPhotos[viewerIndex] ?? null) : null;
+  const viewerIsCover =
+    viewerPhoto != null && coverAssetId === viewerPhoto.assetId;
 
   const titleText = labelLoading
     ? strings.map.placeLoading
@@ -542,23 +534,49 @@ export function PhotoPreviewSheet({
               </Pressable>
             </View>
             {viewerOpen && cluster ? (
-              <FlatList
-                key="photo-viewer"
-                style={styles.viewerList}
-                data={allPhotos}
-                keyExtractor={(item) => item.assetId}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                initialScrollIndex={viewerIndex ?? 0}
-                getItemLayout={getViewerLayout}
-                renderItem={renderViewerPage}
-                onMomentumScrollEnd={onViewerMomentumEnd}
-                initialNumToRender={1}
-                maxToRenderPerBatch={1}
-                windowSize={2}
-                removeClippedSubviews={Platform.OS === 'android'}
-              />
+              <>
+                <FlatList
+                  key="photo-viewer"
+                  style={styles.viewerList}
+                  data={allPhotos}
+                  keyExtractor={(item) => item.assetId}
+                  horizontal
+                  pagingEnabled
+                  showsHorizontalScrollIndicator={false}
+                  initialScrollIndex={viewerIndex ?? 0}
+                  getItemLayout={getViewerLayout}
+                  renderItem={renderViewerPage}
+                  onMomentumScrollEnd={onViewerMomentumEnd}
+                  initialNumToRender={1}
+                  maxToRenderPerBatch={1}
+                  windowSize={2}
+                  removeClippedSubviews={Platform.OS === 'android'}
+                />
+                {canSetCover && placeKey && viewerPhoto ? (
+                  <View
+                    style={[
+                      styles.viewerCoverBar,
+                      { paddingBottom: Math.max(insets.bottom, theme.spacing.md) },
+                    ]}
+                  >
+                    {viewerIsCover ? (
+                      <Text style={styles.viewerCoverAlready}>
+                        {strings.map.coverAlready}
+                      </Text>
+                    ) : (
+                      <Button
+                        title={strings.map.setAsCoverInViewer}
+                        variant="accent"
+                        surface="paper"
+                        size="md"
+                        onPress={() =>
+                          onSetCover?.(placeKey, viewerPhoto.assetId)
+                        }
+                      />
+                    )}
+                  </View>
+                ) : null}
+              </>
             ) : cluster ? (
               <FlatList
                 key="photo-grid"
@@ -759,23 +777,21 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
   },
-
-  coverHint: {
-    position: 'absolute',
-    left: 4,
-    bottom: 4,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: 4,
-    backgroundColor: theme.colors.overlayDark,
-  },
-  coverHintText: {
-    color: theme.colors.surface,
-    fontSize: 9,
-    fontWeight: '600',
-  },
   viewerList: {
     flex: 1,
+  },
+  viewerCoverBar: {
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.sm,
+    gap: theme.spacing.sm,
+  },
+  viewerCoverAlready: {
+    ...theme.type.body,
+    fontFamily: theme.fonts.sans,
+    color: theme.colors.viewerMuted,
+    textAlign: 'center',
+    fontWeight: '600',
+    paddingVertical: theme.spacing.sm,
   },
   viewerPage: {
     justifyContent: 'center',

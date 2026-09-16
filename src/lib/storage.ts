@@ -200,6 +200,17 @@ export function setStampsScanIntroSeen(): void {
   storage.set(STAMPS_SCAN_INTRO_KEY, '1');
 }
 
+const ANDROID_LOCATION_TIP_KEY = 'androidLocationTipSeen';
+
+/** First map entry on Android: camera location-tagging tip. */
+export function getAndroidLocationTipSeen(): boolean {
+  return storage.getString(ANDROID_LOCATION_TIP_KEY) === '1';
+}
+
+export function setAndroidLocationTipSeen(): void {
+  storage.set(ANDROID_LOCATION_TIP_KEY, '1');
+}
+
 const STAMPS_LIBRARY_SYNC_AT_KEY = 'stampsLibrarySyncAt';
 /** Epoch ms when full-album GPS phase last finished (geocode may still run). */
 const STAMPS_GPS_SCAN_AT_KEY = 'stampsGpsScanAt';

@@ -103,9 +103,6 @@ export const strings = {
     subhead: '체크인도, 기록도 필요 없습니다.',
     /** Sits directly above the button — read right before the system prompt. */
     privacy: '사진은 기기 밖으로 나가지 않습니다. 위치만 읽습니다.',
-    /** Android only — camera must write GPS into the file. */
-    androidLocationTip:
-      '갤럭시·안드로이드는 카메라에서 위치 태그를 켜 두세요. 꺼져 있으면 지도에 안 올라갑니다.',
     /** Names what the tap produces, not a generic "start". */
     start: '이번 달 지도 만들기',
     skip: '건너뛰기',
@@ -172,11 +169,17 @@ export const strings = {
       return `이번 달 사진 ${countWord(places.length)} 곳`;
     },
     navSeparator: '·',
-    coverHint: '사진을 눌러 이 장소의 대표 사진으로 지정',
+    coverHint: '사진을 눌러 크게 보기 · 크게 보기에서 대표 지정',
     setAsCover: '대표 사진으로 지정',
     setAsCoverShort: '대표',
     coverSelected: '대표 사진',
     coverBadge: '대표',
+    setAsCoverInViewer: '대표로 설정',
+    coverAlready: '이 장소의 대표 사진',
+    androidLocationTipTitle: '카메라 위치 태그',
+    androidLocationTipBody:
+      '갤럭시·안드로이드는 카메라 앱 → 설정 → 위치 태그를 켜 두세요. 꺼져 있으면 새로 찍은 사진이 지도에 안 올라갑니다.',
+    androidLocationTipConfirm: '확인',
     hidePhoto: '이 사진 빼기',
   },
   settings: {
