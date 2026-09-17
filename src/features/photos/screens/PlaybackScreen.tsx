@@ -28,10 +28,9 @@ import { useCurrentMonth } from '../hooks/useCurrentMonth';
 import { useMonthlyPhotos } from '../hooks/useMonthlyPhotos';
 import { usePinCovers } from '../hooks/usePinCovers';
 import { startMonthThumbPrewarm } from '../services/monthImageWarmup';
-import type { PlaceCluster } from '../types';
+import type { DisplayPhoto, PlaceCluster } from '../types';
 import {
   buildDayTimeline,
-  type DayPlaceBlock,
   type DayTimelineSection,
 } from '../utils/dayTimeline';
 import { resolveClusterDetailLabel } from '../utils/placeJourney';
@@ -80,7 +79,7 @@ function CalendarIcon({ color }: { color: string }) {
 
 type DayThumb = {
   assetId: string;
-  block: DayPlaceBlock;
+  takenAt: string;
 };
 
 function Thumb({
@@ -158,7 +157,7 @@ function DayCollage({
       <View style={[styles.row, { gap: GUTTER }]}>
         {thumbs.slice(0, 2).map((item) => (
           <Thumb
-            key={`${item.block.key}-${item.assetId}`}
+            key={item.assetId}
             item={item}
             style={{ width: w, height: h, borderRadius: RADIUS }}
             decode={Math.ceil(w * 2)}
@@ -176,7 +175,7 @@ function DayCollage({
       <View style={[styles.row, { gap: GUTTER }]}>
         {thumbs.map((item) => (
           <Thumb
-            key={`${item.block.key}-${item.assetId}`}
+            key={item.assetId}
             item={item}
             style={{ width: w, height: h, borderRadius: RADIUS }}
             decode={Math.ceil(w * 2)}
@@ -207,7 +206,7 @@ function DayCollage({
       <View style={[styles.sideStack, { width: rightW, gap: GUTTER }]}>
         {side.map((item, index) => (
           <Thumb
-            key={`${item.block.key}-${item.assetId}`}
+            key={item.assetId}
             item={item}
             style={{ width: rightW, height: sideH, borderRadius: RADIUS }}
             decode={Math.ceil(rightW * 2)}
@@ -250,13 +249,13 @@ function DaySection({
   width: number;
   covers: Record<string, string>;
   labels: Record<string, string>;
-  onOpen: (cluster: PlaceCluster, assetId: string) => void;
+  onOpen: (cluster: PlaceCluster | null, photos: DisplayPhoto[]) => void;
 }) {
   const shell = useShellInk();
   const contentW = width - theme.spacing.lg * 2;
 
   const thumbs: DayThumb[] = useMemo(() => {
-    return section.places.flatMap((block) => {
+    const byPlace = section.places.flatMap((block) => {
       const coverId = covers[block.placeKey];
       const photos = [...block.photos];
       if (coverId) {
@@ -268,31 +267,26 @@ function DaySection({
           }
         }
       }
-      return photos.map((photo) => ({ assetId: photo.assetId, block }));
+      return photos.map((photo) => ({
+        assetId: photo.assetId,
+        takenAt: photo.takenAt,
+      }));
     });
-  }, [covers, section.places]);
+    return [
+      ...byPlace,
+      ...section.noLocationPhotos.map((photo) => ({
+        assetId: photo.assetId,
+        takenAt: photo.takenAt,
+      })),
+    ].sort((a, b) => b.takenAt.localeCompare(a.takenAt));
+  }, [covers, section.noLocationPhotos, section.places]);
 
   const placeLine = placeLineFor(section, labels);
 
   const openDayAsset = useCallback(
-    (assetId: string) => {
-      const seed =
-        section.photos.find((photo) => photo.assetId === assetId) ??
-        section.photos[0];
-      if (!seed) {
-        return;
-      }
-      onOpen(
-        {
-          id: `day:${section.dayKey}`,
-          centerLat: seed.lat,
-          centerLng: seed.lng,
-          photos: section.photos,
-        },
-        assetId,
-      );
-    },
-    [onOpen, section.dayKey, section.photos],
+    (_assetId: string) =>
+      onOpen(section.places[0]?.cluster ?? null, section.photos),
+    [onOpen, section.photos, section.places],
   );
 
   return (
@@ -303,9 +297,11 @@ function DaySection({
           {strings.months.photoCount(thumbs.length)}
         </Text>
       </View>
-      <Text style={[styles.placeLabel, shell.soft]} numberOfLines={1}>
-        {`📍 ${placeLine}`}
-      </Text>
+      {section.places.length > 0 ? (
+        <Text style={[styles.placeLabel, shell.soft]} numberOfLines={1}>
+          {`📍 ${placeLine}`}
+        </Text>
+      ) : null}
       <DayCollage
         thumbs={thumbs}
         width={contentW}
@@ -379,14 +375,17 @@ export function PlaybackScreen() {
   const { data, isPending, isError, refetch } = useMonthlyPhotos(month);
   const showLoading = useHeldBusy(isPending);
   const { covers } = usePinCovers(month);
-  const [selected, setSelected] = useState<PlaceCluster | null>(null);
+  const [selected, setSelected] = useState<{
+    cluster: PlaceCluster | null;
+    photos: DisplayPhoto[];
+  } | null>(null);
   const [labels, setLabels] = useState<Record<string, string>>({});
   const [dateJumpOpen, setDateJumpOpen] = useState(false);
   const listRef = useRef<FlatList<DayTimelineSection>>(null);
   const didFocusScroll = useRef<string | null>(null);
 
   const sections = useMemo(
-    () => (data ? buildDayTimeline(data.photos) : []),
+    () => (data ? buildDayTimeline(data.displayPhotos) : []),
     [data],
   );
 
@@ -418,7 +417,7 @@ export function PlaybackScreen() {
     startMonthThumbPrewarm({
       month,
       priorityIds: Object.values(covers),
-      monthAssetIds: data.photos.map((p) => p.assetId),
+      monthAssetIds: data.displayPhotos.map((p) => p.assetId),
       maxMonthFill: 64,
     });
   }, [covers, data, month, showLoading]);
@@ -481,20 +480,24 @@ export function PlaybackScreen() {
       return;
     }
     for (const section of sections) {
-      for (const place of section.places) {
-        if (place.photos.some((p) => p.assetId === focusAssetId)) {
-          didFocusScroll.current = focusAssetId;
-          setSelected(place.cluster);
-          jumpToDay(section.dayKey);
-          return;
-        }
+      if (section.photos.some((photo) => photo.assetId === focusAssetId)) {
+        didFocusScroll.current = focusAssetId;
+        setSelected({
+          cluster: section.places[0]?.cluster ?? null,
+          photos: section.photos,
+        });
+        jumpToDay(section.dayKey);
+        return;
       }
     }
   }, [focusAssetId, jumpToDay, sections]);
 
-  const onOpen = useCallback((cluster: PlaceCluster, _assetId: string) => {
-    setSelected(cluster);
-  }, []);
+  const onOpen = useCallback(
+    (cluster: PlaceCluster | null, photos: DisplayPhoto[]) => {
+      setSelected({ cluster, photos });
+    },
+    [],
+  );
 
   const chrome = (
     <PlaybackChrome
@@ -562,7 +565,8 @@ export function PlaybackScreen() {
       />
       <HomeNavBar items={APP_NAV_ITEMS} />
       <PhotoPreviewSheet
-        cluster={selected}
+        cluster={selected?.cluster ?? null}
+        photos={selected?.photos}
         onClose={() => setSelected(null)}
       />
       <Modal
@@ -684,7 +688,9 @@ export function PlaybackScreen() {
                         style={[styles.jumpRowPlace, shell.soft]}
                         numberOfLines={1}
                       >
-                        {placeLineFor(section, labels)}
+                        {section.places.length > 0
+                          ? placeLineFor(section, labels)
+                          : ''}
                       </Text>
                     </View>
                     <Text style={[styles.jumpRowCount, shell.soft]}>

@@ -18,10 +18,11 @@ import {
 } from '../services/mediaLibrary';
 import { startMonthWarmup } from '../services/monthWarmup';
 import { subscribeAppForeground } from '../services/appForeground';
-import type { MonthKey, MonthlyPhotos, PhotoRef } from '../types';
+import type { DisplayPhoto, MonthKey, MonthlyPhotos, PhotoRef } from '../types';
 import { withoutHiddenPhotos } from '../utils/withoutHiddenPhotos';
 import { excludeHomePhotos } from '../utils/homeFilter';
 import { isKoreaLatLng } from '../utils/koreaBounds';
+import { getAllMonthlyPhotos } from '../utils/monthlyPhotoDisplay';
 import { currentMonthKey } from '../utils/month';
 import { isDummyAssetId } from '../services/dummyPhotos';
 import {
@@ -47,6 +48,8 @@ export interface MonthlyPhotosData extends MonthlyPhotos {
    * the month (decision 2026-07-19).
    */
   allPhotos: PhotoRef[];
+  /** Every visible photo record, whether its source has GPS metadata or not. */
+  displayPhotos: DisplayPhoto[];
   /** How many of `allPhotos` sit at home and so are missing from `photos`. */
   homeExcludedCount: number;
 }
@@ -144,10 +147,15 @@ export function useMonthlyPhotos(month: MonthKey, options?: { enabled?: boolean 
       notHome.filter((p) => isKoreaLatLng(p.lat, p.lng)),
       hidden,
     );
+    const displayPhotos = withoutHiddenPhotos(
+      getAllMonthlyPhotos(query.data),
+      hidden,
+    );
     return {
       ...query.data,
       photos,
       allPhotos: query.data.photos,
+      displayPhotos,
       homeExcludedCount,
       noLocationPhotos: query.data.noLocationPhotos ?? [],
       noLocationCount:

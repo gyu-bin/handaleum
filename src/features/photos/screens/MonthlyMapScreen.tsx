@@ -402,7 +402,9 @@ export function MonthlyMapScreen() {
               <Text style={styles.emptyHintText}>
                 {data.homeExcludedCount > 0
                   ? strings.map.emptyAllHome
-                  : strings.map.emptyMonth}
+                  : data.noLocationCount > 0
+                    ? strings.map.emptyNoLocation
+                    : strings.map.emptyMonth}
               </Text>
             </View>
           ) : null}

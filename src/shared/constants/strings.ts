@@ -112,6 +112,8 @@ export const strings = {
   map: {
     home: '지도',
     emptyMonth: '이 달에는 지도에 남길 사진이 없어요.',
+    emptyNoLocation:
+      '이 달에는 위치정보가 있는 사진이 없어요. 사진은 몰아보기에서 확인할 수 있어요.',
     emptyAllHome: '이 달은 집에서 찍은 사진만 있습니다. 카드는 만들 수 있어요',
     noLocationNotice: (count: number) =>
       `위치 정보가 있는 사진만 표시됩니다 (제외 ${count}장)`,
@@ -176,9 +178,9 @@ export const strings = {
     coverBadge: '대표',
     setAsCoverInViewer: '대표로 설정',
     coverAlready: '이 장소의 대표 사진',
-    androidLocationTipTitle: '카메라 위치 태그',
+    androidLocationTipTitle: '사진의 장소도 함께 기록해보세요',
     androidLocationTipBody:
-      '갤럭시·안드로이드는 기본 카메라 앱을 연 뒤, 상단 또는 더보기에서 설정으로 들어가 「위치 태그」또는 「위치 정보」를 켜 주세요. 사진 파일에 촬영 장소가 함께 저장되어야 지도에 표시됩니다.\n\n위치 태그를 켠 뒤 새로 찍는 사진부터 지도에 올라갑니다. 이미 GPS 없이 저장된 사진은 태그를 켜도 위치가 생기지 않아, 지도에는 나타나지 않습니다.',
+      '일부 사진에는 위치정보가 없어요. 사진은 한달음에서 그대로 볼 수 있지만, 위치정보가 있는 사진만 지도와 발도장에 표시됩니다.\n\n앞으로 찍는 사진도 지도에 남기고 싶다면 카메라의 위치 태그를 켜주세요.',
     androidLocationTipConfirm: '확인',
     hidePhoto: '이 사진 빼기',
   },
@@ -223,12 +225,12 @@ export const strings = {
     noLocationTitle: '위치 없는 사진',
     noLocationCount: (count: number) => `${count}장`,
     noLocationExplain:
-      'GPS가 없는 사진은 지도에 안 뜹니다. 카드 만들기에는 넣을 수 있어요.',
+      '사진 기록에는 포함되지만, 위치정보가 없어 지도와 발도장에는 표시되지 않아요.',
     /** Android only — shown when this month has GPS-less photos. */
     androidLocationTip:
-      '기본 카메라 앱 → 상단·더보기 설정 → 「위치 태그」또는 「위치 정보」를 켜 주세요. 켠 뒤 새로 찍는 사진부터 지도에 표시됩니다. 이미 GPS 없이 저장된 사진은 태그를 켜도 위치가 생기지 않아 지도에 나타나지 않습니다.',
+      '앞으로 찍는 사진의 장소도 남기고 싶다면 카메라 설정에서 「위치 태그」 또는 「위치 정보」를 켜주세요.',
     noLocationSubtitle: (monthLabel: string) =>
-      `${monthLabel} · GPS가 없어 지도에 안 뜹니다`,
+      `${monthLabel} · 사진 기록에는 포함되며, 지도와 발도장에는 표시되지 않아요.`,
     noLocationEmpty: '위치 없는 사진이 없습니다',
     /** Sits under the home-location row — says what setting a home actually does. */
     homeExcludedExplain:
@@ -323,6 +325,7 @@ export const strings = {
     openPhoto: '사진 크게 보기',
     viewerHint: '좌우로 넘겨 보세요',
     empty: '이 달에는 보여줄 사진이 없습니다',
+    photoCount: (count: number) => `사진 ${count}장`,
     jumpToDate: '날짜 바로가기',
     datesWithPhotos: '사진이 있는 날짜',
     openDateJump: '날짜 바로가기 열기',
@@ -446,6 +449,8 @@ export const strings = {
   insights: {
     title: '인사이트',
     empty: '이 달은 보여줄 인사이트가 없어요',
+    photoSummary: (photos: number, places: number) =>
+      `사진 ${photos.toLocaleString('ko-KR')}장 · 방문 장소 ${places.toLocaleString('ko-KR')}곳`,
     placesCount: '사진 찍힌 동네',
     newPlaces: '새로 찍힌 곳',
     newPlacesWarming: '기록 쌓이는 중',

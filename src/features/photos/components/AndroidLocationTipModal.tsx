@@ -10,8 +10,8 @@ export interface AndroidLocationTipModalProps {
 }
 
 /**
- * First map entry on Android: camera location tagging must be on or new
- * photos stay off the map.
+ * First map entry on Android: location tagging expands photo records into
+ * map and stamp experiences; it never blocks the photo journal itself.
  */
 export function AndroidLocationTipModal({
   visible,

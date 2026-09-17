@@ -16,7 +16,7 @@ const CARD = 48;
 const CARD_SELECTED = 52;
 const BORDER = 2;
 const CARET_H = 6;
-/** Soft raw JPEGs as markers look muddy vs sheet thumbs — retry framed bake. */
+/** Soft raw JPEGs as markers look muddy vs sheet thumbs — upgrade to framed bake. */
 const BAKE_RETRY_MAX = 4;
 
 /** Earliest photo in the cluster — stable React key across zoom grain changes. */
@@ -65,7 +65,7 @@ function MapClusterMarkerInner({
     id: string;
     uri: string;
   } | null>(null);
-  /** Framed bake only — raw thumbs on Naver markers look soft vs sheet images. */
+  /** Framed bake when ready; raw file:// is a first-paint placeholder. */
   const [framedUri, setFramedUri] = useState<string | null>(null);
   const lastHttpRef = useRef<MapImageProp | null>(null);
 
@@ -80,11 +80,15 @@ function MapClusterMarkerInner({
       lastHttpRef.current = null;
       return;
     }
+    // Drop sticky previous-asset image so month switches don't flash the wrong pin.
+    lastHttpRef.current = null;
+    setFramedUri(null);
     const peek = peekAssetFileUri(displayAssetId);
     if (peek) {
       setResolved({ id: displayAssetId, uri: peek });
       return;
     }
+    setResolved(null);
     let cancelled = false;
     const MAX_BURST = 6;
     const load = async () => {
@@ -135,7 +139,7 @@ function MapClusterMarkerInner({
     };
   }, [displayAssetId]);
 
-  // Paper-frame PNG only — never paint the raw JPEG as the marker.
+  // Upgrade raw thumb → paper-frame PNG in the background.
   useEffect(() => {
     if (!photoUri || !displayAssetId) {
       setFramedUri(null);
@@ -177,9 +181,17 @@ function MapClusterMarkerInner({
       lastHttpRef.current = next;
       return next;
     }
-    // Keep previous framed pin across cover/size churn; never fall back to raw JPEG.
+    // First paint: raw file:// while bake queue catches up (month-switch feel).
+    if (photoUri && displayAssetId) {
+      const next: MapImageProp = {
+        httpUri: photoUri,
+        reuseIdentifier: `raw-v7-${displayAssetId}-${cardSize}`,
+      };
+      lastHttpRef.current = next;
+      return next;
+    }
     return lastHttpRef.current;
-  }, [framedUri, displayAssetId, cardSize]);
+  }, [framedUri, photoUri, displayAssetId, cardSize]);
 
   if (!image) {
     return null;

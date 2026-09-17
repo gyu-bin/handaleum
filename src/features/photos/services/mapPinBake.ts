@@ -53,7 +53,7 @@ function bakeKey(
   count: number,
   kind: 'photo' | 'dot' = 'photo',
 ): string {
-  // v7: markers wait for dense framed PNG (no raw JPEG fallback).
+  // v7: dense framed PNG; markers may show raw file:// until bake lands.
   return `v7|${kind}|${photoUri}|${selected ? 1 : 0}|${cardSize}|${count}`;
 }
 

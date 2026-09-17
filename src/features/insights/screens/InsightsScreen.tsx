@@ -35,6 +35,7 @@ export function InsightsScreen() {
   const [paywallOpen, setPaywallOpen] = useState(false);
   const {
     insights,
+    photoCount,
     isPending,
     isError,
     isEmpty,
@@ -111,6 +112,9 @@ export function InsightsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={[styles.monthHint, shell.subtle]}>{month}</Text>
+        <Text style={[styles.photoSummary, shell.soft]}>
+          {strings.insights.photoSummary(photoCount, insights.placesCount)}
+        </Text>
         {isResolvingLabels ? (
           <Text style={[styles.resolving, shell.soft]}>
             {strings.common.loading}
@@ -194,6 +198,12 @@ const styles = StyleSheet.create({
   resolving: {
     ...theme.type.label,
     color: theme.colors.inkSoft,
+  },
+  photoSummary: {
+    ...theme.type.label,
+    color: theme.colors.inkSoft,
+    fontWeight: '600',
+    marginTop: -theme.spacing.sm,
   },
   list: {
     gap: theme.spacing.sm,

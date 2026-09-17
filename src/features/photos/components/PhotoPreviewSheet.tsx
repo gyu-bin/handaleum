@@ -28,7 +28,7 @@ import {
   syncAssetDisplayUri,
   warmGridThumbs,
 } from '../services/mediaLibrary';
-import type { PlaceCluster, PhotoRef } from '../types';
+import type { DisplayPhoto, PlaceCluster } from '../types';
 import { placeBucketKey, resolveClusterDetailLabel } from '../utils/placeJourney';
 import { peekResolvedPlace } from '../services/placeResolve';
 
@@ -43,6 +43,8 @@ const VIEWER_IMAGE_SIZE = 1080;
 export interface PhotoPreviewSheetProps {
   /** null closes the sheet */
   cluster: PlaceCluster | null;
+  /** Optional photo-record source for a day that also contains GPS-less photos. */
+  photos?: DisplayPhoto[];
   onClose: () => void;
   /** Currently selected cover asset for this place bucket. */
   coverAssetId?: string | null;
@@ -83,7 +85,7 @@ const PhotoThumb = memo(function PhotoThumb({
   isCover,
   onOpenViewer,
 }: {
-  photo: PhotoRef;
+  photo: DisplayPhoto;
   size: number;
   isCover: boolean;
   onOpenViewer?: () => void;
@@ -120,7 +122,7 @@ const ViewerPage = memo(function ViewerPage({
   width,
   height,
 }: {
-  photo: PhotoRef;
+  photo: DisplayPhoto;
   width: number;
   height: number;
 }) {
@@ -180,6 +182,7 @@ const ViewerPage = memo(function ViewerPage({
 
 export function PhotoPreviewSheet({
   cluster,
+  photos,
   onClose,
   coverAssetId,
   onSetCover,
@@ -201,40 +204,32 @@ export function PhotoPreviewSheet({
   const viewerOpen = viewerIndex != null;
   const canSetCover = onSetCover != null;
 
+  const allPhotos = photos ?? cluster?.photos ?? [];
+  const photosKey = allPhotos.map((photo) => photo.assetId).join('|');
+
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
     setExpanded(variant === 'sheet');
     setViewerIndex(null);
-  }, [cluster?.id, variant]);
+  }, [cluster?.id, photosKey, variant]);
 
   const heroPhoto = useMemo(() => {
-    if (!cluster) {
-      return null;
-    }
     if (coverAssetId) {
-      const hit = cluster.photos.find((p) => p.assetId === coverAssetId);
+      const hit = allPhotos.find((p) => p.assetId === coverAssetId);
       if (hit) {
         return hit;
       }
     }
-    return cluster.photos[0] ?? null;
-  }, [cluster, coverAssetId]);
+    return allPhotos[0] ?? null;
+  }, [allPhotos, coverAssetId]);
 
   const pagePhotos = useMemo(() => {
-    if (!cluster) {
-      return [];
-    }
-    return cluster.photos.slice(0, visibleCount);
-  }, [cluster, visibleCount]);
+    return allPhotos.slice(0, visibleCount);
+  }, [allPhotos, visibleCount]);
 
   const stripPhotos = useMemo(() => {
-    if (!cluster) {
-      return [];
-    }
-    return cluster.photos.slice(0, COMPACT_STRIP_MAX);
-  }, [cluster]);
-
-  const allPhotos = cluster?.photos ?? [];
+    return allPhotos.slice(0, COMPACT_STRIP_MAX);
+  }, [allPhotos]);
 
   // Idle file thumbs — same path as playback/cards (not per-cell getAssetInfo).
   useEffect(() => {
@@ -299,15 +294,15 @@ export function PhotoPreviewSheet({
   }, [cluster, coverAssetId]);
 
   const loadMore = useCallback(() => {
-    if (!cluster) {
+    if (allPhotos.length === 0) {
       return;
     }
     setVisibleCount((n) =>
-      n >= cluster.photos.length
+      n >= allPhotos.length
         ? n
-        : Math.min(n + PAGE_SIZE, cluster.photos.length),
+        : Math.min(n + PAGE_SIZE, allPhotos.length),
     );
-  }, [cluster]);
+  }, [allPhotos.length]);
 
   const closeSheet = useCallback(() => {
     setViewerIndex(null);
@@ -335,7 +330,7 @@ export function PhotoPreviewSheet({
   );
 
   const getViewerLayout = useCallback(
-    (_: ArrayLike<PhotoRef> | null | undefined, index: number) => ({
+    (_: ArrayLike<DisplayPhoto> | null | undefined, index: number) => ({
       length: width,
       offset: width * index,
       index,
@@ -353,14 +348,14 @@ export function PhotoPreviewSheet({
   );
 
   const renderViewerPage = useCallback(
-    ({ item }: ListRenderItemInfo<PhotoRef>) => (
+    ({ item }: ListRenderItemInfo<DisplayPhoto>) => (
       <ViewerPage photo={item} width={width} height={viewerH} />
     ),
     [viewerH, width],
   );
 
   const renderItem = useCallback(
-    ({ item, index }: ListRenderItemInfo<PhotoRef>) => (
+    ({ item, index }: ListRenderItemInfo<DisplayPhoto>) => (
       <PhotoThumb
         photo={item}
         size={cell}
@@ -384,12 +379,16 @@ export function PhotoPreviewSheet({
   const titleText = labelLoading
     ? strings.map.placeLoading
     : (placeLabel ??
-      (cluster ? strings.map.clusterCount(cluster.photos.length) : ''));
+      (cluster
+        ? strings.map.clusterCount(cluster.photos.length)
+        : strings.playback.photoCount(allPhotos.length)));
   const takenLabel = formatTakenAt(heroPhoto?.takenAt);
 
   const showCompact = variant === 'compact' && cluster != null && !expanded;
   const showSheet =
-    cluster != null && (variant === 'sheet' || expanded);
+    allPhotos.length > 0 &&
+    (cluster != null || photos != null) &&
+    (variant === 'sheet' || expanded);
 
   return (
     <>
@@ -533,7 +532,7 @@ export function PhotoPreviewSheet({
                 </Text>
               </Pressable>
             </View>
-            {viewerOpen && cluster ? (
+            {viewerOpen ? (
               <>
                 <FlatList
                   key="photo-viewer"
@@ -577,7 +576,7 @@ export function PhotoPreviewSheet({
                   </View>
                 ) : null}
               </>
-            ) : cluster ? (
+            ) : showSheet ? (
               <FlatList
                 key="photo-grid"
                 style={styles.grid}

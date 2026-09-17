@@ -118,6 +118,8 @@ export function CardListScreen() {
   const monthQuery = useMonthlyPhotos(month);
   const loadProgress = useMonthLoadProgress();
   const monthPhotos = monthQuery.data?.photos ?? [];
+  /** Total album rows for the month (GPS + no-GPS) — count chip only. */
+  const monthPhotoCount = monthQuery.data?.displayPhotos?.length ?? 0;
   const { visitPlaces } = useMonthJourney(monthPhotos, {
     resetKey: month,
   });
@@ -472,7 +474,7 @@ export function CardListScreen() {
             })}
           </View>
           <ScrollView contentContainerStyle={styles.boardScroll}>
-            {monthQuery.isPending && monthPhotos.length === 0 ? (
+            {monthQuery.isPending && monthPhotoCount === 0 ? (
               <LoadProgressBanner
                 label={
                   loadProgress.total > 0 && loadProgress.month === month
@@ -534,7 +536,7 @@ export function CardListScreen() {
                     <StatPhotoIcon color={colors.shellSubtle} />
                     <View style={styles.statText}>
                       <Text style={[styles.statNum, shell.ink]}>
-                        {monthPhotos.length}
+                        {monthPhotoCount}
                       </Text>
                       <Text style={[styles.statLabel, shell.soft]}>
                         {strings.cards.statPhotos}

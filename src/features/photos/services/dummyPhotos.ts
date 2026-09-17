@@ -3,7 +3,7 @@ import { Image } from 'react-native';
 
 import { getDevDummyPhotosRaw, setDevDummyPhotosRaw } from '@/lib/storage';
 
-import type { MonthKey, MonthlyPhotos, MonthSummary, PhotoRef } from '../types';
+import type { MonthKey, MonthlyPhotos, MonthSummary, NoLocationPhoto, PhotoRef } from '../types';
 import { monthBounds } from '../utils/month';
 
 export const DUMMY_ASSET_PREFIX = 'dummy:';
@@ -89,6 +89,9 @@ function iosAddr(
  * - Fat hubs (count ≥ 4) → all shots on *today* (tight jitter) so 몰아보기
  *   shows a full-day grid and 회고 “많이 남긴 곳” has a 13장 place.
  * - Thin hubs (count 1) → one photo each on earlier days for map/stamp span.
+ * - Current calendar month: peel 11 GPS rows into noLocationPhotos (30+11=41)
+ *   with a mixed day (12th) and a GPS-only day (15th) for policy QA.
+ * - Previous calendar month: 8 no-GPS-only rows (map empty / 몰아보기 full).
  *
  * Stress: `DUMMY_STRESS_MULT` multiplies per-hub counts.
  */
@@ -99,7 +102,7 @@ export const DUMMY_STRESS_MULT = 1;
  * Bump when HUBS lat/lng or count packing changes so 발도장 drops the stale
  * GPS snapshot and rebuilds 모은 동네 from the new sample album.
  */
-export const DUMMY_HUBS_REV = 4;
+export const DUMMY_HUBS_REV = 5;
 
 /** One hub per major region — enough for glance-dot coverage. */
 const HUBS: DummyHub[] = [
@@ -446,7 +449,22 @@ function hubCount(hub: DummyHub): number {
   return hub.count * Math.max(1, DUMMY_STRESS_MULT);
 }
 
-export function buildDummyMonthlyPhotos(month: MonthKey): MonthlyPhotos {
+function calendarMonthKey(d: Date): MonthKey {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` as MonthKey;
+}
+
+function localIso(
+  year: number,
+  monthIndex: number,
+  day: number,
+  hour: number,
+  minute: number,
+): string {
+  return new Date(year, monthIndex, day, hour, minute, 0).toISOString();
+}
+
+/** All-GPS hub packing used by non-fixture months. */
+function buildAllGpsHubPhotos(month: MonthKey): PhotoRef[] {
   const { startMs } = monthBounds(month);
   const origin = new Date(startMs);
   const year = origin.getFullYear();
@@ -459,7 +477,6 @@ export function buildDummyMonthlyPhotos(month: MonthKey): MonthlyPhotos {
       : daysInMonth;
   const photos: PhotoRef[] = [];
   let i = 0;
-  /** Thin hubs fill earlier days so the streak/map still span the month. */
   let thinSlot = 0;
   const earlierSpan = Math.max(1, lastDay - 1);
 
@@ -476,14 +493,7 @@ export function buildDummyMonthlyPhotos(month: MonthKey): MonthlyPhotos {
       }
       photos.push({
         assetId: `${DUMMY_ASSET_PREFIX}${month}:${i}`,
-        takenAt: new Date(
-          year,
-          monthIndex,
-          day,
-          10 + (k % 8),
-          (i * 7) % 60,
-          0,
-        ).toISOString(),
+        takenAt: localIso(year, monthIndex, day, 10 + (k % 8), (i * 7) % 60),
         lat: hub.lat + jitter(i, 0, tight),
         lng: hub.lng + jitter(i, 1, tight),
       });
@@ -492,23 +502,169 @@ export function buildDummyMonthlyPhotos(month: MonthKey): MonthlyPhotos {
   }
 
   photos.sort((a, b) => a.takenAt.localeCompare(b.takenAt));
+  return photos;
+}
+
+/**
+ * Current-month fixture: 30 GPS + 11 no-GPS.
+ * Day 12 → 3 GPS + 4 no-GPS; day 15 → 5 GPS (busiest = day 12).
+ */
+function buildMixedMonthFixture(month: MonthKey): MonthlyPhotos {
+  const photos = buildAllGpsHubPhotos(month);
+  if (photos.length < 30) {
+    return {
+      month,
+      photos,
+      noLocationCount: 0,
+      noLocationPhotos: [],
+    };
+  }
+
+  const { startMs } = monthBounds(month);
+  const origin = new Date(startMs);
+  const year = origin.getFullYear();
+  const monthIndex = origin.getMonth();
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const day12 = Math.min(12, daysInMonth);
+  const day15 = Math.min(15, daysInMonth);
+
+  // Hub build order (assetId …:0 … :N) — do not string-sort ids (breaks :10 vs :2).
+  photos.sort((a, b) => {
+    const ai = Number(a.assetId.split(':').pop());
+    const bi = Number(b.assetId.split(':').pop());
+    return ai - bi;
+  });
+
+  // Indices 0–2 GPS on day 12; 3–6 peel to no-GPS on day 12; 7–11 GPS on day 15.
+  const day12GpsIds = new Set(
+    [0, 1, 2].map((i) => photos[i]!.assetId),
+  );
+  const day12NoLocIds = new Set(
+    [3, 4, 5, 6].map((i) => photos[i]!.assetId),
+  );
+  const day15GpsIds = new Set(
+    [7, 8, 9, 10, 11].map((i) => photos[i]!.assetId),
+  );
+  for (let i = 0; i < 3; i += 1) {
+    const p = photos[i]!;
+    p.takenAt = localIso(year, monthIndex, day12, 10 + i, 10);
+  }
+  for (let i = 3; i < 7; i += 1) {
+    const p = photos[i]!;
+    p.takenAt = localIso(year, monthIndex, day12, 14 + (i - 3), 20);
+  }
+  for (let i = 7; i < 12; i += 1) {
+    const p = photos[i]!;
+    p.takenAt = localIso(year, monthIndex, day15, 10 + (i - 7), 30);
+  }
+
+  const peel = new Set<number>([3, 4, 5, 6, 12, 13, 14, 15, 16, 17, 18]);
+  const located: PhotoRef[] = [];
+  const noLocationPhotos: NoLocationPhoto[] = [];
+  photos.forEach((photo, index) => {
+    if (peel.has(index)) {
+      noLocationPhotos.push({
+        assetId: photo.assetId,
+        takenAt: photo.takenAt,
+      });
+    } else {
+      located.push(photo);
+    }
+  });
+
+  // Spread leftover rows so day 12 (7) stays busiest — hub packing otherwise
+  // dumps thin hubs onto day 12 / fat hubs onto "today".
+  const fillDays: number[] = [];
+  for (let d = 1; d <= daysInMonth; d += 1) {
+    if (d !== day12 && d !== day15) {
+      fillDays.push(d);
+    }
+  }
+  let fill = 0;
+  for (const photo of located) {
+    if (day12GpsIds.has(photo.assetId) || day15GpsIds.has(photo.assetId)) {
+      continue;
+    }
+    const day = fillDays[fill % fillDays.length]!;
+    photo.takenAt = localIso(year, monthIndex, day, 11 + (fill % 6), (fill * 3) % 60);
+    fill += 1;
+  }
+  fill = 0;
+  for (const photo of noLocationPhotos) {
+    if (day12NoLocIds.has(photo.assetId)) {
+      continue;
+    }
+    const day = fillDays[fill % fillDays.length]!;
+    photo.takenAt = localIso(year, monthIndex, day, 15 + (fill % 4), (fill * 5) % 60);
+    fill += 1;
+  }
+
+  located.sort((a, b) => a.takenAt.localeCompare(b.takenAt));
+  noLocationPhotos.sort((a, b) => a.takenAt.localeCompare(b.takenAt));
+  return {
+    month,
+    photos: located,
+    noLocationCount: noLocationPhotos.length,
+    noLocationPhotos,
+  };
+}
+
+/** Previous-month fixture: GPS 0 + no-GPS only. */
+function buildNoGpsOnlyMonth(month: MonthKey, count: number): MonthlyPhotos {
+  const { startMs } = monthBounds(month);
+  const origin = new Date(startMs);
+  const year = origin.getFullYear();
+  const monthIndex = origin.getMonth();
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const noLocationPhotos: NoLocationPhoto[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const day = 1 + (i % daysInMonth);
+    noLocationPhotos.push({
+      assetId: `${DUMMY_ASSET_PREFIX}${month}:noloc:${i}`,
+      takenAt: localIso(year, monthIndex, day, 10 + (i % 8), (i * 7) % 60),
+    });
+  }
+  return {
+    month,
+    photos: [],
+    noLocationCount: noLocationPhotos.length,
+    noLocationPhotos,
+  };
+}
+
+export function buildDummyMonthlyPhotos(month: MonthKey): MonthlyPhotos {
+  const now = new Date();
+  const current = calendarMonthKey(now);
+  const previous = calendarMonthKey(
+    new Date(now.getFullYear(), now.getMonth() - 1, 1),
+  );
+
+  if (month === previous) {
+    return buildNoGpsOnlyMonth(month, 8);
+  }
+  if (month === current) {
+    return buildMixedMonthFixture(month);
+  }
+
+  const photos = buildAllGpsHubPhotos(month);
   return { month, photos, noLocationCount: 0, noLocationPhotos: [] };
 }
 
 export function buildDummyMonthSummaries(): MonthSummary[] {
   const now = new Date();
   const out: MonthSummary[] = [];
-  const total = dummyPhotoCount();
   // More months under stress → stamp library path + month warmup contend.
   const months = DUMMY_STRESS_MULT > 1 ? 18 : 8;
   for (let i = 0; i < months; i += 1) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const month =
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` as MonthKey;
+    const month = calendarMonthKey(d);
+    const built = buildDummyMonthlyPhotos(month);
+    const totalCount = built.photos.length + built.noLocationPhotos.length;
     out.push({
       month,
-      totalCount: total,
-      coverAssetId: `${DUMMY_ASSET_PREFIX}${month}:0`,
+      totalCount,
+      coverAssetId:
+        built.photos[0]?.assetId ?? built.noLocationPhotos[0]?.assetId,
     });
   }
   return out;

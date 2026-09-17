@@ -18,6 +18,8 @@ import type {
 export type MonthKey = z.infer<typeof monthKeySchema>;
 export type PhotoRef = z.infer<typeof photoRefSchema>;
 export type NoLocationPhoto = z.infer<typeof noLocationPhotoSchema>;
+/** A camera-roll photo that can be rendered without inventing a location. */
+export type DisplayPhoto = PhotoRef | NoLocationPhoto;
 export type MonthlyPhotos = z.infer<typeof monthlyPhotosSchema>;
 export type MonthSummary = z.infer<typeof monthSummarySchema>;
 export type PlaceCluster = z.infer<typeof placeClusterSchema>;

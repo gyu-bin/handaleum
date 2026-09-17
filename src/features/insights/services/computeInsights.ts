@@ -1,4 +1,10 @@
-import type { HomeLocation, MonthKey, PhotoRef, PlaceCluster } from '@/features/photos/types';
+import type {
+  DisplayPhoto,
+  HomeLocation,
+  MonthKey,
+  PhotoRef,
+  PlaceCluster,
+} from '@/features/photos/types';
 import { distanceMeters } from '@/features/photos/utils/homeFilter';
 
 import {
@@ -54,13 +60,24 @@ function localDateKey(iso: string): string {
  */
 export function computeInsights(input: {
   month: MonthKey;
+  /** Map-eligible photos drive place metrics. */
   photos: PhotoRef[];
+  /** Every photo record drives photo-centric metrics such as busiest day. */
+  displayPhotos: DisplayPhoto[];
   journeyPlaces: string[];
   clusters: PlaceCluster[];
   home: HomeLocation | null;
   placeFirstSeen: PlaceFirstSeenMap;
 }): InsightsMetrics {
-  const { month, photos, journeyPlaces, clusters, home, placeFirstSeen } = input;
+  const {
+    month,
+    photos,
+    displayPhotos,
+    journeyPlaces,
+    clusters,
+    home,
+    placeFirstSeen,
+  } = input;
 
   const placesCount = journeyPlaces.length;
 
@@ -125,9 +142,9 @@ export function computeInsights(input: {
   }
 
   let busiestDay: BusiestDay | null = null;
-  if (photos.length > 0) {
+  if (displayPhotos.length > 0) {
     const byDay = new Map<string, number>();
-    for (const photo of photos) {
+    for (const photo of displayPhotos) {
       const key = localDateKey(photo.takenAt);
       byDay.set(key, (byDay.get(key) ?? 0) + 1);
     }

@@ -1,6 +1,7 @@
-import type { PhotoRef, PlaceCluster } from '../types';
+import type { DisplayPhoto, PhotoRef, PlaceCluster } from '../types';
 import { clusterPhotos } from '../services/cluster';
 import { placeBucketKey } from '../utils/placeJourney';
+import { isLocatedPhoto } from './monthlyPhotoDisplay';
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
@@ -17,7 +18,10 @@ export type DayTimelineSection = {
   dayKey: string;
   dateLabel: string;
   places: DayPlaceBlock[];
-  photos: PhotoRef[];
+  /** Every photo from this date, including rows without GPS metadata. */
+  photos: DisplayPhoto[];
+  /** GPS-less rows stay in the same day collage without a made-up place. */
+  noLocationPhotos: DisplayPhoto[];
 };
 
 function dayKeyFromIso(iso: string): string {
@@ -44,11 +48,11 @@ function dateLabelFromKey(dayKey: string): string {
 /**
  * Newest day first. Within a day, place clusters (existing clusterPhotos).
  */
-export function buildDayTimeline(photos: PhotoRef[]): DayTimelineSection[] {
+export function buildDayTimeline(photos: DisplayPhoto[]): DayTimelineSection[] {
   if (photos.length === 0) {
     return [];
   }
-  const byDay = new Map<string, PhotoRef[]>();
+  const byDay = new Map<string, DisplayPhoto[]>();
   for (const photo of photos) {
     const key = dayKeyFromIso(photo.takenAt);
     const list = byDay.get(key);
@@ -64,7 +68,8 @@ export function buildDayTimeline(photos: PhotoRef[]): DayTimelineSection[] {
     const dayPhotos = (byDay.get(dayKey) ?? []).slice().sort((a, b) =>
       b.takenAt.localeCompare(a.takenAt),
     );
-    const clusters = clusterPhotos(dayPhotos, 14).sort((a, b) => {
+    const locatedPhotos = dayPhotos.filter(isLocatedPhoto);
+    const clusters = clusterPhotos(locatedPhotos, 14).sort((a, b) => {
       const a0 = a.photos[0]?.takenAt ?? '';
       const b0 = b.photos[0]?.takenAt ?? '';
       return b0.localeCompare(a0);
@@ -82,6 +87,7 @@ export function buildDayTimeline(photos: PhotoRef[]): DayTimelineSection[] {
       dateLabel: dateLabelFromKey(dayKey),
       places,
       photos: dayPhotos,
+      noLocationPhotos: dayPhotos.filter((photo) => !isLocatedPhoto(photo)),
     };
   });
 }

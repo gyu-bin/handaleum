@@ -36,6 +36,9 @@
 | **현재 달만** 포그라운드 복귀 시 monthly query invalidate. 카메라→앱 복귀에서 오늘 사진이 지도·라이브 발도장에 보이게 | 전체 월 refetch / 포커스 refetch 없음 | 기본 staleTime 5분 + refetchOnWindowFocus=false면 백그라운드에서 찍은 사진이 안 들어옴 | 2026-08-27 |
 | 월 선택 = **저널 UI: 연도 스테퍼 + 1–12월 2열** (0장 비활성) | 전체 월 스크롤 / 연도 칩 | 사용자 시안(옵션 C) | 2026-08-02 |
 | GPS 없는 사진은 지도에서 제외. 설정 그리드에서 보기만 | lat/lng optional / 사용자 위치 지정 | 사용자 2026-08-21: 목록만 | 2026-07-17 |
+| GPS 없는 사진도 **몰아보기·사진 중심 회고**에는 포함. 지도·발도장·장소 지표만 위치 사진을 사용 | GPS 없는 사진을 전 화면 제외 / 임의 좌표 부여 | Android 위치 태그가 꺼져도 사진 기록은 온전히 남기고, 공간 기능의 정확성은 유지 | 2026-09-17 |
+| 회고 `찍은 사진` = `displayPhotos.length` (GPS+no-GPS). 장소/핀/journey는 계속 `photos` | GPS만 카운트 | 정책과 집계 일치. 카드 photoRefs schema는 불변 | 2026-09-17 |
+| `__DEV__` 샘플: 이번 달 30+11 혼합, 지난 달 no-GPS 8장 — production 경로 미사용 | 실앨범 DATE_TAKEN fixture | 에뮬레이터 MediaStore 날짜 이슈 우회용 QA | 2026-09-17 |
 | 몰아보기 = **장소 페이지** (히어로+그리드). 자동재생 없음. 순서=첫 사진 takenAt 오름차순(달 초→말). 지도 연동 비범위 | 지도 이동형 / ▶ 자동 스와이프 | 2026-08-07 A 정리 | 2026-08-07 |
 | 몰아보기 = 제목 고정 + **정사각 히어로**만 스크롤 시 비율 축소(scale). 스펙 `2026-08-09-playback-half-layout-design.md` | 직사각 fill / 제목까지 clip | 짤림·덮개 체감 제거 | 2026-08-10 |
 | 스크롤 축소 = **scale + translateY**(height 레이아웃 금지). 그리드 warm은 momentum 후 재개, batch≥3 | height 매프레임 / batch=1 | 몰아보기·카드·핀시트·동사진 끊김 | 2026-08-10 |
@@ -97,7 +100,7 @@
 | Android: 위치 없는 사진>0이면 설정 행·목록에 **카메라 위치 태그** 팁 | iOS 동일 / 항상 표시 | 사용자 2026-09-16 | 2026-09-16 |
 | Android 지도 **첫 진입 1회** `AndroidLocationTipModal` (kv `androidLocationTipSeen`) | 온보딩 인라인 / 매번 | 사용자 2026-09-16 | 2026-09-16 |
 | 맵 핀 alpha = **항상 1** (bake 전 0.4 제거). 반투명이 흰 필터처럼 보임 | bake 전 dim | 사용자 2026-09-16 | 2026-09-16 |
-| 맵 핀 선명도: bake 레이아웃 **cardSize×PixelRatio** + thumb 384. 마커는 **framed PNG만** (raw JPEG `httpUri` 금지 — 시트 대비 뿌연 원인). queue 64·bake 재시도 | raw thumb 즉시 표시 | 사용자: 지도 핀만 뿌옇다 2026-09-16 | 2026-09-16 |
+| 맵 핀 선명도: bake 레이아웃 **cardSize×PixelRatio** + thumb 384. **첫 페인트는 raw file://**, bake 완료 후 framed PNG로 교체 (월 전환 체감). queue 64·bake 재시도 | framed만 대기 / raw 영구 | 사용자 A 2026-09-17 (월 전환 느림) | 2026-09-17 |
 | 맵 시트 그리드 탭 = **큰 뷰어**. 대표는 뷰어 CTA (설정 후 뷰어 유지). Playback과 동일 탭→뷰어 | 그리드 탭=대표만 | 사용자 B안 2026-09-16 | 2026-09-16 |
 | 사진 빼기: `hiddenPhotos:{month}` assetId 집합. `useMonthlyPhotos.photos`에서 걸러 지도·회고·몰아보기 공유. 설정 → `HiddenPhotosScreen`에서 장별 unhide | 화면별 숨김 / 앨범 삭제 | 사용자 2026-08-20 | 2026-08-20 |
 | 홈 로딩 = **접힌 종이 지도** (`PaperMapLoader`). 최대 2초 후 빈 지도 + "위치 확인 중". GPS가 길어도 로더를 붙잡지 않음 | 끝날 때까지 LoadingView | 사용자 2026-08-21 | 2026-09-13 |
